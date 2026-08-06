@@ -52,6 +52,22 @@ cited findings and the build agents implement them.
    register claims it says. **Downgrading a grade is a successful outcome**, not
    a regression.
 
+   **Every 🟢 and 🔵 row must name the study's species and sample.** This is the
+   cheapest possible check and it is not a formality — it is how this loop caught
+   `escape terrain ≥10% slope` sitting at 🟢 Measured on the strength of a study
+   about *humans wearing a Fitbit* across a university nature preserve. A row
+   that cannot state "n animals, which species, where" is not Measured, whatever
+   the citation looks like. Two traps this specifically catches:
+
+   - **A human-locomotion paper laundered into a deer model.** The engine already
+     carries one (Tobler); it acquired a second without anyone noticing, because
+     both are about moving across terrain and the abstract reads plausibly.
+   - **Units carried across from an abstract without dimensional analysis.** A
+     figure recorded as `5.9 kcal·kg⁻¹·m⁻¹` rather than `~23 J` is a 1000×
+     error that no biological intuition flags, because the number itself looks
+     unremarkable. Sanity-check every energetic against `mgh` and state the
+     implied efficiency; a value implying <5% or >60% efficiency is a units bug.
+
 4. **Check scope.** Most whitetail literature is regional. A Midwest-validated
    parameter may be wrong in the Appalachians, the Ozarks or Texas brush. Flag
    scope on every row. Separately: the product claims "deer or other large
@@ -75,8 +91,17 @@ cited findings and the build agents implement them.
   a defect equal to inventing a number.
 - Where studies conflict, report the range rather than picking a midpoint and
   presenting it as settled.
-- Use `WebSearch`/`WebFetch`, never `curl` — the sandbox egress policy rejects
-  arbitrary hosts at CONNECT, which looks like the journal is down.
+- **Know which channels reach a source before spending a pass on the network.**
+  Verified by hand: `curl https://raw.githubusercontent.com/...` returns 200 and
+  `git clone --depth 1 --filter=blob:none` works for any public repo (into the
+  scratchpad, never the working tree). `curl` to any other host returns `000` at
+  CONNECT — which looks exactly like the journal being down, and is not.
+  `WebSearch`/`WebFetch` are declared on the agent but come back
+  `No such tool available` in some sessions; that is an environment fact, not a
+  mistake, so drop to the channels that work rather than retrying.
+- When nothing reaches the literature, the honest output is
+  `no literature found — searched, unreachable`. **Never a citation you did not
+  read**, and never a grade upgraded on the strength of a remembered abstract.
 - A pass that moves nothing is still a result: record what was searched.
 
 ## Script outline
