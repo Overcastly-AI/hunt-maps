@@ -68,22 +68,27 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
 - [ ] Terrain readout on long-press (API exists; UI pending — rebuild as a
       peek-detent sheet with a map marker, not the current floating dialog)
 - [x] `apps/web/e2e/ui-invariants.spec.ts` — automated UI invariants suite:
-      **25 tests, all passing** (was 16/24 on its first run). Fixed and
+      **26 tests, all passing** (was 16/24 on its first run). Fixed and
       verified: chrome text now clears WCAG AA measured against a live map
       background (was 2.55:1 against the 4.5:1 requirement), touch targets
       meet the 44px gloved floor, the Layers button no longer moves when its
       own sheet opens, and the layers sheet and wind popover can be open
       together without colliding.
 
-      The suite's own helper was the last thing fixed (`67f0098`). It decided
+      The suite's own helper was fixed twice. First (`67f0098`) for deciding
       hit-testability against the viewport alone, so a row scrolled just past
       the *sheet's* clipped edge was hit-tested at its unpainted position and
       reported as visible-but-unclickable — a false failure indistinguishable
-      from the real clipping bug the suite is named after. It now intersects
+      from the real clipping bug the suite is named after; it now intersects
       against every clipping ancestor and hit-tests the centre of the visible
       region. Ground truth was measured before accepting the greener result:
       `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-      and no painted control fails a hit test.
+      and no painted control fails a hit test. Then (`7ff42cee`) two more
+      guards on the helper itself: a synthetic fixture pinning both branches
+      of the clipped-ancestor fix so neither can regress silently, and a check
+      that the collision matrix's "no collision" result means a selector
+      matched and did not overlap, not that a renamed selector stopped
+      matching anything.
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
       `apps/web` (`BACKLOG R10`)

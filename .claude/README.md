@@ -137,6 +137,34 @@ Four traps, each of which looks like a different bug than it is:
 - **Parallel Playwright workers get OOM-SIGKILLed here.** Always `--workers=1`;
   without it the suite looks flaky rather than starved.
 
+### Research channels, and one trap about granting them
+
+Verified by hand, in the order worth trying:
+
+| Channel | Works? |
+|---|---|
+| `WebSearch` | **Yes** — the primary research instrument |
+| `WebFetch` | **No** — 403 at the gateway for *every* host, Wikipedia included |
+| `curl https://raw.githubusercontent.com/...` | **Yes** |
+| `git clone --depth 1 --filter=blob:none` (any public repo) | **Yes** |
+| `curl` to anything else | **No** — `000` at CONNECT |
+
+A `WebFetch` 403 says nothing about whether a source exists, and a `curl`
+`000` looks exactly like the site being down. Neither is evidence. For
+algorithm work the clone channel is often *better* than search anyway: the
+algorithm research pass obtained every citation by reading the source of a
+reference implementation that cites it — GRASS, SAGA, WhiteboxTools, RichDEM,
+Circuitscape.jl, WindNinja — which is stronger than an abstract.
+
+**The trap: adding a tool to an agent's `tools:` frontmatter does not affect
+the session you add it in.** Agent definitions are read at session start.
+`terrain-scientist` was granted `WebSearch` mid-session and the very next
+dispatch reported `WebSearch exists but is not enabled in this context`. The
+grant is real and applies from the next session — so do not "fix" it twice,
+and do not conclude the tool is unavailable to that role. If a role needs a
+tool *now*, either dispatch a role that already has it, or brief the agent to
+use the clone channel instead.
+
 There is a sixth rule that is about process rather than product, and it is the
 one most often broken: **the orchestrator delegates.** A fifteen-agent org that
 gets bypassed because doing it inline felt faster is not an org — it is one
