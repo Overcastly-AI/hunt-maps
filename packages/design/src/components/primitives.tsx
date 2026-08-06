@@ -17,23 +17,10 @@
  */
 
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
-import { CloseIcon, ContourIcon, WindNeedle } from './icons';
+import { CloseIcon, WindNeedle } from './icons';
 
 function cx(...parts: Array<string | false | undefined>): string {
   return parts.filter(Boolean).join(' ');
-}
-
-// ---------------------------------------------------------------------------
-// Brand
-// ---------------------------------------------------------------------------
-
-export function Brand({ name = 'Ridgeline' }: { name?: string }) {
-  return (
-    <div className="rl-brand rl-glass">
-      <ContourIcon className="rl-brand__mark" />
-      <span className="rl-brand__name">{name}</span>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------

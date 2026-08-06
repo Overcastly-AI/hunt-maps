@@ -69,7 +69,14 @@ export const CloseIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** Contour lines — the app mark, and the vernacular of the whole product. */
+/**
+ * Contour lines — the app mark.
+ *
+ * Not used in the map chrome: a map app does not need to tell you which app you
+ * opened, and that corner is better spent on map. Kept here because it is the
+ * mark for the favicon, the PWA install icon and the install prompt, which are
+ * the places identity genuinely belongs.
+ */
 export const ContourIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M2 17c3.2-4.4 6-6.6 8.4-6.6 2.4 0 5 2.2 8.2 6.6" />

@@ -8,7 +8,6 @@ import {
   type TerrainPredicate,
 } from '@hunt-maps/terrain';
 import {
-  Brand,
   ConditionsBar,
   DownloadIcon,
   LayersIcon,
@@ -173,10 +172,6 @@ export default function App() {
       />
 
       <div className="map-chrome" data-sheet-open={panel !== null}>
-        <div className="chrome-topleft">
-          <Brand />
-        </div>
-
         <div className="chrome-topright">
           <Rail>
             <RailButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>

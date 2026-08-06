@@ -46,7 +46,7 @@
   grid-template-rows: auto 1fr auto;
   gap: var(--space-3);
   grid-template-areas:
-    'topleft    .  topright'
+    '.          .  topright'
     '.          .  .'
     'bottomleft .  bottomright';
 }
@@ -55,15 +55,6 @@
   pointer-events: auto;
 }
 
-.chrome-topleft {
-  grid-area: topleft;
-  align-self: start;
-  transition: transform var(--motion-sheet) var(--motion-ease);
-  /* Shrink-wrap. Without this the brand stretches to the width of the widest
-     item sharing the column — the bottom-left rail plus conditions bar — and
-     becomes a 600px empty slab. */
-  justify-self: start;
-}
 .chrome-topright {
   grid-area: topright;
   justify-self: end;
@@ -85,8 +76,7 @@
  * must stay readable at all times — it is the only thing telling the user which
  * wind the layers underneath are computed for.
  */
-.map-chrome[data-sheet-open='true'] .chrome-bottomleft,
-.map-chrome[data-sheet-open='true'] .chrome-topleft {
+.map-chrome[data-sheet-open='true'] .chrome-bottomleft {
   transform: translateX(calc(var(--layout-sheet-width) + var(--space-3)));
 }
 .chrome-bottomright {
@@ -103,8 +93,8 @@
 @media (max-width: 860px) {
   .map-chrome {
     grid-template-areas:
-      'topleft    .  topright'
-      '.          .  .'
+      '.       .       topright'
+      '.       .       .'
       'bottom  bottom  bottom';
   }
   .chrome-bottomleft {
@@ -116,8 +106,7 @@
 
   /* The mobile sheet rises from the bottom edge, so a sideways shift would be
      nonsense; the chrome simply hides behind it. */
-  .map-chrome[data-sheet-open='true'] .chrome-bottomleft,
-  .map-chrome[data-sheet-open='true'] .chrome-topleft {
+  .map-chrome[data-sheet-open='true'] .chrome-bottomleft {
     transform: none;
   }
   .chrome-bottomright {
