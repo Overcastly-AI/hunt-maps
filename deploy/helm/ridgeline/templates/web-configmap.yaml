@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ridgeline.web.fullname" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+data:
+  # This replaces the nginx.conf baked into the image.
+  #
+  # The image's copy hardcodes `proxy_pass http://api:3001/api/`, which is
+  # correct for docker-compose (where the service is literally called `api`)
+  # and wrong here, where the Service is named after the release. Rendering it
+  # as a ConfigMap keeps the release name free instead of forcing every
+  # install to be named so that the baked hostname happens to resolve.
+  default.conf: |
+    # Resolve the upstream at request time, not at startup.
+    #
+    # nginx resolves a literal hostname in proxy_pass once, when it loads its
+    # config, and exits if the name does not resolve. Helm gives no ordering
+    # guarantee between the web Deployment and the api Service, so on a cold
+    # install nginx can lose that race and CrashLoopBackOff on a cluster where
+    # nothing is actually wrong. Assigning the upstream to a variable defers
+    # resolution to each request and makes the pod tolerant of the API being
+    # slow, restarting, or briefly absent.
+    resolver {{ .Values.web.dnsResolver }} valid=10s ipv6=off;
+
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      index index.html;
+
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+
+      # The service worker must never be cached, or users get stuck on a stale
+      # shell and their "offline app" is last week's build.
+      location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        expires 0;
+      }
+
+      location /api/ {
+        set $ridgeline_api "{{ include "ridgeline.api.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.api.service.port }}";
+        # $request_uri, not a rewritten path. Once proxy_pass contains a
+        # variable, nginx stops substituting the location prefix for you, so
+        # the usual `proxy_pass http://upstream/api/` trick silently changes
+        # meaning. $request_uri passes the original path and query through
+        # unchanged, which is what the baked config resolved to anyway:
+        # location /api/ + proxy_pass .../api/ is the identity mapping.
+        proxy_pass http://$ridgeline_api$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # DEM tile requests can be slow on a cold cache.
+        proxy_read_timeout 60s;
+      }
+
+      location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+
+      gzip on;
+      gzip_types text/css application/javascript application/json image/svg+xml;
+    }

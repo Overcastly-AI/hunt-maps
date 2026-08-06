@@ -1,0 +1,102 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ridgeline.serviceAccountName" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ridgeline.fullname" . }}-redis
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+  selector:
+    app.kubernetes.io/name: {{ include "ridgeline.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ridgeline.fullname" . }}-redis
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ridgeline.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "ridgeline.labels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # No persistence configured on purpose. Nothing reads this cache
+          # yet, so there is nothing whose loss would matter; whoever adds the
+          # first consumer should decide whether it needs a volume.
+          args: ["redis-server", "--save", "", "--appendonly", "no", "--loglevel", "warning"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 10
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ridgeline.fullname" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # Everything goes to the web pod, including /api — nginx there
+          # already proxies to the API. Routing /api straight to the API
+          # Service from the Ingress would work too, but then the app has two
+          # different paths to the same endpoint that can drift, and only one
+          # of them is exercised by the docker-compose setup.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ridgeline.web.fullname" . }}
+                port:
+                  number: {{ .Values.web.service.port }}
+{{- end }}

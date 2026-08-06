@@ -1,0 +1,53 @@
+Ridgeline {{ .Chart.AppVersion }} is installed as "{{ .Release.Name }}".
+
+Watch it come up:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "ridgeline.api.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "ridgeline.web.fullname" . }}
+
+{{- if .Values.ingress.enabled }}
+
+Open http://{{ .Values.ingress.host }}/ — add it to /etc/hosts pointing at your
+ingress controller's address if it does not already resolve.
+{{- else }}
+
+Open the app:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ridgeline.web.fullname" . }} 8080:{{ .Values.web.service.port }}
+
+then browse to http://localhost:8080 — the API is proxied through the same
+origin at /api, so this one forward is all you need.
+{{- end }}
+
+Two things that will look like bugs and are not:
+
+  1. The satellite basemap needs outbound internet from your *browser*, not
+     from the cluster. Terrain analysis does not — it runs on-device from
+     cached DEM tiles, which is the whole offline premise. If imagery is blank
+     but hillshade and slope render, that is working as designed.
+
+  2. The DEM tile source is baked into the web bundle at build time
+     (VITE_DEM_TEMPLATE), not read from these values. Pointing Ridgeline at a
+     different elevation source means rebuilding the web image, not editing
+     values.yaml. See deploy/helm/README.md.
+{{- if not .Values.auth.existingSecret }}
+
+Secrets were generated and stored in Secret/{{ include "ridgeline.fullname" . }},
+which is annotated `helm.sh/resource-policy: keep` so an uninstall cannot strand
+a retained database volume behind a password nothing knows any more.
+
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "ridgeline.fullname" . }} \
+    -o jsonpath='{.data.jwt-secret}' | base64 -d
+{{- end }}
+{{- if and .Values.postgis.enabled (not .Values.postgis.persistence.enabled) (not .Values.externalDatabase.url) }}
+
+WARNING: postgis.persistence.enabled=false. The database is on an emptyDir and
+every stand, waypoint and saved filter is deleted when the pod restarts. Fine
+for a throwaway demo; never leave this set for anything you type real data into.
+{{- end }}
+{{- if and .Values.redis.enabled (not .Values.externalDatabase.url) }}
+
+NOTE: redis.enabled=true, but nothing in apps/api reads REDIS_URL yet — there
+is no redis client dependency and no import. You are running a cache with no
+consumer.
+{{- end }}
