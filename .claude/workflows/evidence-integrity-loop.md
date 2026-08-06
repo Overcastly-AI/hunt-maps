@@ -91,17 +91,26 @@ cited findings and the build agents implement them.
   a defect equal to inventing a number.
 - Where studies conflict, report the range rather than picking a midpoint and
   presenting it as settled.
-- **Know which channels reach a source before spending a pass on the network.**
-  Verified by hand: `curl https://raw.githubusercontent.com/...` returns 200 and
-  `git clone --depth 1 --filter=blob:none` works for any public repo (into the
-  scratchpad, never the working tree). `curl` to any other host returns `000` at
-  CONNECT — which looks exactly like the journal being down, and is not.
-  `WebSearch`/`WebFetch` are declared on the agent but come back
-  `No such tool available` in some sessions; that is an environment fact, not a
-  mistake, so drop to the channels that work rather than retrying.
-- When nothing reaches the literature, the honest output is
-  `no literature found — searched, unreachable`. **Never a citation you did not
-  read**, and never a grade upgraded on the strength of a remembered abstract.
+- **Search hard. `WebSearch` works and is the primary instrument** — many
+  varied queries per parameter, scientific names, author-and-year, and the
+  measurement rather than the concept. `WebFetch` is blocked at the gateway for
+  every host (verified against Springer, PMC and Wikipedia), so a 403 from it
+  says nothing about the source; fall back to mining search snippets rather
+  than retrying. `curl` to raw.githubusercontent.com and `git clone` of public
+  repos both work; `curl` to anything else returns `000` at CONNECT, which
+  looks exactly like the journal being down and is not.
+- **State and provincial agency documents are first-class and easier to reach
+  than journals** — habitat management guidelines and WHR species accounts
+  often carry the explicit slope/aspect numbers journal abstracts omit.
+- **A negative result must show its work.** "No literature found" is a real and
+  useful outcome, but only with the query list attached. Under a half-dozen
+  genuinely different phrasings is not a finished search, and a premature
+  "settled negative result" is worse than an open question because it tells the
+  next pass to stop looking. `idealSlopeDeg: 22` was closed this way once and
+  had to be reopened.
+- **Never a citation you did not read**, and never a grade upgraded on the
+  strength of a remembered abstract. A title from search with unreachable text
+  is `found but unread` — a lead for the next pass, not a grade.
 - A pass that moves nothing is still a result: record what was searched.
 
 ## Script outline

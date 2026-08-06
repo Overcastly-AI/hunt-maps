@@ -50,21 +50,45 @@ where it does not.
    monographs. Hunting blogs are evidence of *doctrine*, which is a real grade —
    just never label them `Measured`.
 
-   **Know which channels actually reach a source from this sandbox** before you
-   spend a pass fighting the network. In ranked order: `WebSearch`/`WebFetch`
-   first, but expect `No such tool available` in some sessions — they are
-   deferred tools and that is an environment fact, not your mistake; then
-   `curl https://raw.githubusercontent.com/...`, which works; then
-   `git clone --depth 1 --filter=blob:none` of any public repo, which also
-   works, into the scratchpad and never into the working tree. **`curl` to any
-   other host fails at CONNECT and returns `000`.** That looks identical to a
-   journal being down. It is not — the host is simply unreachable from here.
+   **You have internet search and you are expected to use it, heavily.** These
+   channels were tested by hand; do not re-derive them, and do not give up on a
+   parameter until you have actually worked `WebSearch`:
 
-   When no channel reaches the literature, that pass produces `no literature
-   found — searched, unreachable`, which is an honest and useful result. What it
-   must never produce is a citation you did not read. **Never invent a
+   - **`WebSearch` — works. This is your primary research instrument.** It
+     returns titles, URLs and substantive abstract-level content. Run *many*
+     queries per parameter and vary them: the species' scientific name
+     (`Odocoileus virginianus`), the author-and-year of a half-remembered
+     study, the regional agency phrasing, the measurement rather than the
+     concept (`bed-site slope degrees` beats `where deer bed`).
+   - **`WebFetch` — blocked at the egress gateway for every host**, verified
+     against Springer, PMC, and even Wikipedia. A 403 from it says nothing
+     about the source. Try it once on a promising URL, and when it 403s, do not
+     spend the pass retrying — go back to `WebSearch` and mine the snippets.
+   - **`curl https://raw.githubusercontent.com/...` and
+     `git clone --depth 1 --filter=blob:none` of any public repo — both work**
+     (clone into the scratchpad, never the working tree). Useful for open data
+     and agency code, not for journals.
+   - **`curl` to any other host returns `000` at CONNECT.** That looks exactly
+     like the journal being down. It is not.
+
+   **State agency and provincial documents are first-class sources and are
+   easier to reach than journals.** Deer habitat management guidelines, WHR
+   species accounts and technical reports frequently carry the explicit slope,
+   aspect and cover prescriptions that journal abstracts omit — and they are
+   published as open PDFs that surface well in search. Grade them on their own
+   evidence base: one that cites its own telemetry study is `Inferred` or
+   better; one that just asserts a number is `Doctrine`.
+
+   **A negative result requires evidence of a real search, not a short one.**
+   Before writing "no literature found", list the queries you ran. If that list
+   is under a half-dozen genuinely different phrasings, you have not finished.
+   A premature "settled negative result" is worse than an open question,
+   because it tells the next pass to stop looking.
+
+   What you must never produce is a citation you did not read. **Never invent a
    citation**, and never upgrade a grade on the strength of a remembered
-   abstract.
+   abstract. When search returns only a title and you cannot reach the text,
+   that is `found but unread` — a lead for the next pass, not a grade.
 3. **Prefer the closest species and the closest context.** Red deer treadmill
    energetics generalise to whitetail locomotion reasonably. Roe deer fawn
    bed-site selection in European meadows does not generalise to mature-buck
