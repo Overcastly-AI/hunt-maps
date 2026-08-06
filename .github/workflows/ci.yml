@@ -116,6 +116,36 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate compose config
         run: JWT_SECRET=ci-placeholder docker compose config --quiet
+
+      # A Dockerfile that installs before copying every workspace dependency's
+      # package.json cannot build at all — pnpm fails resolving `workspace:*`.
+      # `@hunt-maps/design` was missing from apps/web/Dockerfile from the day
+      # the design system was extracted, so the web image silently stopped
+      # building. This is cheaper to assert than to rediscover: it fails in
+      # under a second, where the real symptom was an 8-second build failure
+      # inside a job that only ran on push.
+      - name: Assert Dockerfiles copy every workspace dependency they need
+        run: |
+          node -e '
+            const fs = require("fs");
+            let bad = false;
+            for (const app of fs.readdirSync("apps")) {
+              const pkgPath = `apps/${app}/package.json`;
+              const dockerfile = `apps/${app}/Dockerfile`;
+              if (!fs.existsSync(pkgPath) || !fs.existsSync(dockerfile)) continue;
+              const deps = Object.keys(JSON.parse(fs.readFileSync(pkgPath, "utf8")).dependencies || {})
+                .filter((d) => d.startsWith("@hunt-maps/"));
+              const df = fs.readFileSync(dockerfile, "utf8");
+              for (const dep of deps) {
+                const name = dep.split("/")[1];
+                if (!df.includes(`packages/${name}/package.json`)) {
+                  console.error(`${dockerfile} never copies packages/${name}/package.json, but ${pkgPath} depends on ${dep} — pnpm install will fail resolving workspace:*`);
+                  bad = true;
+                }
+              }
+            }
+            process.exit(bad ? 1 : 0);
+          '
       - name: Build API image
         run: docker build -f apps/api/Dockerfile -t ridgeline-api .
       - name: Build web image
