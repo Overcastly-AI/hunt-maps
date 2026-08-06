@@ -49,6 +49,22 @@ where it does not.
    agency technical reports, university deer-lab publications, wildlife-society
    monographs. Hunting blogs are evidence of *doctrine*, which is a real grade —
    just never label them `Measured`.
+
+   **Know which channels actually reach a source from this sandbox** before you
+   spend a pass fighting the network. In ranked order: `WebSearch`/`WebFetch`
+   first, but expect `No such tool available` in some sessions — they are
+   deferred tools and that is an environment fact, not your mistake; then
+   `curl https://raw.githubusercontent.com/...`, which works; then
+   `git clone --depth 1 --filter=blob:none` of any public repo, which also
+   works, into the scratchpad and never into the working tree. **`curl` to any
+   other host fails at CONNECT and returns `000`.** That looks identical to a
+   journal being down. It is not — the host is simply unreachable from here.
+
+   When no channel reaches the literature, that pass produces `no literature
+   found — searched, unreachable`, which is an honest and useful result. What it
+   must never produce is a citation you did not read. **Never invent a
+   citation**, and never upgrade a grade on the strength of a remembered
+   abstract.
 3. **Prefer the closest species and the closest context.** Red deer treadmill
    energetics generalise to whitetail locomotion reasonably. Roe deer fawn
    bed-site selection in European meadows does not generalise to mature-buck

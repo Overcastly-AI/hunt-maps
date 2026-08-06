@@ -10,9 +10,16 @@ switch to this and never go back?**
 
 # 2026-08-06 — Interaction patterns from serious outdoor and map applications
 
-**Scope:** what Ridgeline's UI should learn from CalTopo, Gaia GPS, FATMAP,
-avalanche forecast products, Komoot/Strava, and the Google/Apple Maps baseline.
-Audited against the current `apps/web` UI as of this date.
+**Scope:** what Ridgeline's UI should learn from avalanche forecast products,
+offline-map downloaders, and the bottom-sheet baseline every user's muscle memory
+is trained on. Audited against the current `apps/web` UI as of this date.
+
+**Revised the same day, second pass.** The first pass had no network access and
+labelled itself accordingly. This revision found a working research channel for
+the most important comparison — the two reference avalanche products are open
+source — and has rewritten §2 and recommendation #8 from source rather than
+memory. It also **deletes or downgrades** the claims about closed products it
+still cannot check. Read the sourcing note before citing anything here.
 
 ## Sourcing note — read this before trusting a citation
 
@@ -350,8 +357,10 @@ per-pixel truth. We do not have per-pixel truth. Every judgement layer and the
 bedding rose should carry a one-line extent-and-resolution statement. It costs a
 sentence and it is the difference between a forecast product and a toy.
 
-This is exactly what `docs/EVIDENCE.md` already contains and exactly what the
-`Confidence` primitive was built for. And:
+**And here is where all of (i)–(v) lands against our own build.** The evidence
+grades are written, the vocabulary is chosen, the primitive exists —
+`docs/EVIDENCE.md` is precisely the register that (iv) describes, and the
+`Confidence` primitive is precisely the chip it should be rendered as. And:
 
 ```
 $ grep -rn "Confidence" apps/web/src/
@@ -434,7 +443,10 @@ its face. Cheap, and it is the difference between a tool and a toy.
 
 ### 3. Transient controls vs persistent panels
 
-**The rule the good apps converge on.** Stated as sharply as I can:
+**The rule the good apps converge on.** Stated as sharply as I can. The *rule* is
+my judgement; the **Examples** column is **[recalled]** except where noted, since
+Google Maps, Apple Maps, CalTopo and Gaia were unreachable. The bottom-sheet row
+is backed by the Material spec read today.
 
 | Surface | Use when | Examples |
 |---|---|---|
@@ -476,12 +488,31 @@ So on the device a hunter actually carries, opening the layers panel hides the
 wind and thermal state — precisely the state needed to interpret the layer being
 turned on. Apple and Google solved this fifteen years ago with detents.
 
-**The grip is a lie.** `Sheet` renders `<div className="rl-sheet__grip" />` and
-the mobile stylesheet gives it the exact 36×4 px pill of a native drag handle.
-There is no pointer handling anywhere in `primitives.tsx`. Every user trained on
-iOS or Android will drag it, and nothing will happen. An affordance that does
-not work is worse than no affordance, because it teaches the user the app is
-broken in the first ten seconds. Either implement detents or delete the pill
+**The grip is a lie — and the platform spec makes it worse than the first pass
+said.** `Sheet` renders `<div className="rl-sheet__grip" />` and the mobile
+stylesheet gives it the exact 36×4 px pill of a native drag handle. There is no
+pointer handling anywhere in `primitives.tsx`.
+
+Material's bottom-sheet documentation, which was read today, defines the states
+we are imitating — `STATE_COLLAPSED` ("visible but only showing its peek
+height"), `STATE_HALF_EXPANDED`, `STATE_EXPANDED`, `STATE_HIDDEN` — and, more
+pointedly, documents the drag handle as an **accessibility** component:
+
+> Drag handle … provides accessibility commands to expand and collapse the
+> attached bottom sheet … [screen reader users] can use the expanded and
+> collapsed states as well as double tapping to hide.
+> — [`docs/components/BottomSheet.md`](https://github.com/material-components/material-components-android/blob/master/docs/components/BottomSheet.md)
+
+So our pill is not merely a dead gesture target for sighted users; it is the
+visual signature of a control that is *supposed to carry* expand/collapse
+semantics, rendered as a bare `div` with no role, no actions and no handler. It
+fails sighted users and assistive-tech users in different ways at the same time.
+An affordance that does not work is worse than no affordance, because it teaches
+the user the app is broken in the first ten seconds.
+
+Material also specifies the handle's touch region as **at least 48 dp tall**;
+ours is a 4 px pill inside no padded hit area, which is below our own 44 px touch
+floor even if it were wired up. Either implement detents or delete the pill
 today — and detents are worth building, because a **peek** detent (active-layer
 summary + top-layer opacity, conditions bar still visible) is exactly the state
 a hunter wants while comparing a layer against the ground.
@@ -500,26 +531,62 @@ coordinate the user just tapped. `BACKLOG R6`.)
 
 **What a good one looks like, distilled.**
 
+Gaia and onX are closed and were unreachable, so their specifics are
+**[recalled]**. In their place I read the shipping user-facing strings of
+[Organic Maps](https://github.com/organicmaps/organicmaps/blob/master/data/strings/strings.txt),
+a mature offline-map app whose whole product is this flow. It is a *named-region*
+downloader rather than a draw-a-box one, so it evidences items 2 and 4–6 well and
+says nothing about 1, 3 or 7.
+
 1. **The region is drawn on the map by direct manipulation** — drag a box, or
-   buffer a route/boundary. Never picked from a list of named tiles. Gaia and
-   onX both do this.
-2. **Size, tile count and time estimated before commit**, in units the user
-   cares about: megabytes, and "about 4 minutes on this connection". Gaia shows
-   this pre-commit; it is the single most-copied thing in the flow.
+   buffer a route/boundary. Never picked from a list of named tiles. **[recalled]**
+   that Gaia and onX both do this; unevidenced here, and Organic Maps is a
+   counter-example that works fine because its regions are administrative.
+2. **Size and count stated before and during commit**, in units the user cares
+   about. Organic Maps ships `downloader_percent = "%@ (%@ of %@)"` — percentage
+   plus downloaded-of-total — and `downloader_of = "%1$d of %2$d"` for the queue.
+   Note that the existence of `country_status_download_without_size` ("Download
+   Map") as a *separate string from the default* means the sized variant is the
+   norm and the unsized one is the fallback when size is unknown.
+   It also pre-flights space (`downloader_no_space_title` = "Not enough space",
+   `downloader_no_space_message` = "Please delete any unnecessary data") and
+   pre-flights the *network*: `download_over_mobile_header` = "Download over a
+   cellular network connection?" / "This could be considerably expensive with
+   some plans or if roaming." A hunter on a truck hotspot at the trailhead cares
+   about that as much as about megabytes.
 3. **Detail depth expressed as a consequence, not a z-level.** "Detail down to
-   about 1:5,000 — individual trees" beats "max zoom 16". Every app that shows
-   the raw number makes users guess.
-4. **Progress survives backgrounding, and is resumable.** A 20-minute download
-   killed by a phone locking is the classic failure.
-5. **Failures are loud and specific.** "23 of 4,120 tiles failed — retry" beats
-   a silent partial region that reads as complete and is discovered blank in a
-   hollow. CLAUDE.md already names this as the worst failure this product has.
-6. **Storage accounting and eviction.** Total used, per-region size, sorted by
-   last used, one-tap delete.
+   about 1:5,000 — individual trees" beats "max zoom 16". My judgement, not
+   sourced; no reference product exposes a zoom ceiling to compare against.
+4. **Progress survives backgrounding, and is resumable.** Evidenced: Organic Maps
+   ships a dedicated notification channel for the downloader
+   (`notification_channel_downloader` = "Map downloader") and an explicit
+   `downloader_hide_screen` = "Hide Screen" — you are *invited* to leave, and the
+   download continues under a notification. A 20-minute download killed by a
+   phone locking is the classic failure and they designed it out.
+5. **Failures are loud, specific and retryable in place.**
+   `download_has_failed` = **"Download has failed. Tap to try again."** — the
+   error *is* the retry control. `downloader_status_failed` = "Failed" is a
+   first-class status in the region list alongside "Downloaded", "Queued" and
+   "Update", so a partially-failed region is visibly labelled in the manager and
+   never reads as complete. This is exactly the failure CLAUDE.md names as the
+   worst this product has.
+6. **Storage accounting and eviction.** `maps_storage_free_size` =
+   "%1$@ free of %2$@", a "Downloaded maps" list, a selectable storage volume
+   (internal / shared / SD / external), and a delete guarded by a consequence
+   warning — `downloader_delete_map_dialog` = "All of your map edits will be
+   deleted with the map."
 7. **Coverage drawn on the map itself** — a hatched or outlined overlay showing
-   which part of the current view is downloaded. This is the thing most apps do
-   badly and it is the thing that matters most, because it is the only way the
-   user can answer "am I covered where I am going" without guessing.
+   which part of the current view is downloaded. My judgement; not evidenced by
+   Organic Maps, whose regions are administrative polygons that are always drawn.
+   It matters most for us precisely *because* our regions are arbitrary boxes:
+   it is the only way a user can answer "am I covered where I am going" without
+   guessing.
+
+**One thing worth stealing that is not in the UI at all.** Organic Maps ships a
+developer setting called `setting_emulate_bad_storage` — "Emulate bad storage".
+A shipped fault-injection toggle for the exact failure class we have declared our
+worst. `offline-integrity-loop` should have one; a storage failure you can
+reproduce on demand is a storage failure you can test.
 
 **Where Ridgeline is.** Nothing exists in the UI:
 
@@ -550,8 +617,11 @@ missing" — this is the highest-priority item in this audit. It must become a
 per-viewport coverage query, and it should be paired with the map-level coverage
 overlay from (7) so the answer is spatial rather than binary.
 
-**The thing to say out loud in this flow.** Gaia and onX both make you choose
-*which layers* to download, because they cache rendered tiles. Ridgeline caches
+**The thing to say out loud in this flow.** **[recalled]** — Gaia and onX both
+make you choose *which layers* to download, because they cache rendered tiles.
+The architectural contrast is real regardless of their exact current UI: any
+product that caches *rendered* tiles must ask which ones, and any product that
+caches elevation does not. Ridgeline caches
 elevation, so there is no such step — one download unlocks every layer, any
 wind, any date. That is a structurally better flow *and* the clearest possible
 demonstration of architectural advantage #3. The download sheet should say it in
@@ -606,6 +676,7 @@ are the ones that decide it.
 |---|---|---|---|---|
 | 1 | Per-viewport offline coverage truth | S–M | `offline-steward` | The app currently lies about the one thing it cannot lie about |
 | 2 | Deploy `Confidence` + separate fact from judgement cartography | M | `frontend-builder` + `map-builder` + `game-biologist` | The moat is a markdown file; make it visible |
+| **2b** | **Scale-of-validity + base-rate line on every judgement layer** | **XS** | `frontend-builder` | **New this pass.** Two sentences. Directly lifted from EAWS's ">100 km², not a specific individual slope" and its per-level base rates. Best value-per-hour in this audit; ship it inside #2 |
 | 3 | "Read this ground" first-run analysis | M–L | `map-builder` + `frontend-builder` | Time to first insight goes to one tap; nobody else can build it |
 | 4 | Offline region picker (`R4`) with coverage overlay | M | `offline-steward` | Headline feature with no front door |
 | 5 | Uncouple wind/time from the layers sheet | S | `frontend-builder` | One line of state blocks the flagship interaction |
@@ -616,6 +687,7 @@ are the ones that decide it.
 | 10 | Collapse blurbs; group accordions; active-stack summary | S | `frontend-builder` | Bedding is three phone-screens deep |
 | 11 | Terrain readout as a peek sheet with a map marker | S–M | `map-builder` | Wrong surface; also `R6` |
 | 12 | Staleness/validity marking on modelled output | S | `frontend-builder` | Borrowed straight from forecast expiry |
+| **12b** | **Bedding *trend* — increasing / steady / decreasing** | **S** | `terrain-scientist` + `frontend-builder` | **New this pass.** Both reference products ship a forward-looking trend beside the current value (`DangerTrend` in the NAC schema, `tendency` in EAWS). Our thermal model already has the inputs; no hunting app can say "this is about to switch" |
 | 13 | Saved-filter search, favourites, recently-used | M | `frontend-builder` | Only after `R2` — build creation first |
 | 14 | Night mode / red-light theme | S–M | `frontend-builder` | 05:30 in the dark is the actual use case |
 
@@ -651,6 +723,22 @@ Three parts, and the third is the one nobody will think of:
    never reads a chip.
 
 Closes `BACKLOG N10` and materially advances `N11`.
+
+### 2b — Scale-of-validity and base-rate lines · XS · `frontend-builder`
+
+New this pass; the cheapest item in the audit, and it should ship inside #2. Two
+sentences on every judgement layer's legend and on the bedding rose:
+
+- **Validity.** *"Summarises the current view (≈1.4 km²) at 10 m resolution. Not
+  a per-slope prediction — check it on the ground."* Direct lift of EAWS's *"The
+  danger level always applies to a region with an area of >100 km² and not to a
+  specific individual slope … It should always be checked on site."*
+- **Base rate.** *"Prime covers 4 % of this ground."* Direct lift of EAWS
+  publishing how often each danger level is issued and what share of fatalities
+  it accounts for. It is also already a by-product of the availability
+  distribution we compute for selection analytics, so the number is nearly free.
+
+*Done when:* no judgement layer can be rendered without both lines present.
 
 ### 3 — "Read this ground" · M–L · `map-builder` + `frontend-builder`
 
@@ -702,13 +790,120 @@ continuous field is genuinely wanted for the corridor solver's attraction term,
 keep it internally and band it only for display — the honesty problem is a
 rendering problem.
 
+**Two additions from this pass's research.** First, **publish the class as a
+range when it is not resolvable to one level** — NWAC forecasters do exactly this
+for avalanche size (`SeverityNumberLine` takes `{from, to}` and draws a bar
+spanning cells) and it is a much more honest uncertainty encoding than a point
+estimate with a caveat attached. Never round up. Second, when naming the classes,
+add NAPADS's own warning against arithmetic on ordinals — *"the danger increases
+exponentially between levels"* — in whatever form suits us. If we number the
+bedding classes 1–4, someone will average them.
+
 ### 8 — Bedding rose · M · `map-builder` + `terrain-scientist`
 
-Eight aspect octants × three slope bands over the current viewport or boundary,
-shaded by modelled bedding likelihood, wind arrow overlaid, `Confidence` chip
-attached. Tapping a wedge filters the map to that aspect/slope combination.
-Direct lift from the avalanche danger rose, applied to a question no hunting app
-currently answers in one glance.
+Rewritten after reading the two reference implementations. **The first pass's
+encoding was wrong** — it proposed wedges shaded by continuous modelled
+likelihood, and neither NWAC nor EAWS shades a rose by magnitude (§2(ii)). This
+is the buildable spec.
+
+**Purpose.** One glance, one question: *on today's wind, which faces should I be
+looking at — and is that actually different from the ground I have?*
+
+**Geometry**
+
+- **8 aspect octants**, N at top, E at right, W at left. Matches both reference
+  products and the compass. `aspectOctant()` in
+  `packages/terrain/src/analysis/surface.ts` already returns exactly
+  `N/NE/E/SE/S/SW/W/NW` plus `'flat'`, so the binning is free.
+- **3 concentric rings = slope bands**, not elevation. Whitetail bedding is not
+  an elevation-banded problem. Suggested bands `<12°` / `12–25°` / `>25°`, which
+  puts the vision document's own example filter ("12–25°") on the middle ring.
+- **Ring order must be argued, not copied.** NWAC puts the *highest* elevation
+  band at the centre because the diagram is "a mountain seen from above" — a
+  metaphor that carries the inversion. Our rings are slope and we have no such
+  metaphor, so copying the inversion would be cargo-culting. Put **gentlest at
+  the centre, steepest outside** (radius reads as steepness, which is at least
+  weakly intuitive) **and label the rings on the diagram**. Justification: ring
+  order is the single thing NWAC's help text spends the most words explaining,
+  which is direct evidence that it is the part users get wrong.
+- 24 cells. **Every cell is always stroked, including empty ones.** The
+  denominator is always on screen. One line of code; it is the
+  use-vs-availability rule as a graphic.
+- **Never rotate the rose to the wind.** North stays at the top always. A rose
+  that rotates destroys the only fixed reference the user has.
+- **The rose is a read-out, not a control.** Deliberate cut from the first pass,
+  which proposed tapping a wedge to filter the map. Twenty-four targets inside a
+  ~120 px glyph cannot meet the 44 px touch floor, and the inner ring can never
+  meet it at any reasonable size. Aspect/slope selection already belongs to the
+  filter UI. Do not invent a gloved-hands hit-testing problem to save one tap.
+
+**Encoding**
+
+- **No continuous ramp.** Cell state is one of four: *unmarked*, *possible*,
+  *likely*, *prime* — the same banding as recommendation #7, so the rose and the
+  map speak one language.
+- **Fill pattern carries the class, not hue alone** (design-system rule: colour
+  is never load-bearing alone). Unmarked = outline only. Possible = light
+  stipple. Likely = solid at ~45 % tone. Prime = solid at full tone. **Three
+  fills is the ceiling** at ~16 px per cell; do not add a fourth.
+- **What a cell's value means, and this is the load-bearing decision: the share
+  of *that cell's own area* that meets the bedding threshold — not the cell's
+  share of all prime area.** If 40 % of the property faces SE, an unnormalised
+  rose lights up SE for no reason except that there is more SE. That is precisely
+  the sightings-by-slope-band error CLAUDE.md forbids, drawn as a flower. The
+  legend must say which one it is: *"% of this face that qualifies."*
+- **Wind arrow drawn outside the ring, on the perimeter**, never through the
+  centre (an arrow through the middle reads as an aspect selection). Label it
+  with the *from* bearing in words — "Wind from NW" — because EAWS found it
+  necessary to state the convention explicitly in its own glossary
+  (*"Wind direction indicates the direction the wind originates or comes from"*),
+  and getting this backwards inverts the entire product.
+
+**Legend and text — four channels, matching the danger scale's practice**
+
+1. The rose (*where*).
+2. An ordinal headline naming the best class present: *"Prime bedding on SE and S
+   faces, 12–25°."*
+3. **A decision sentence** — the hunting analogue of "Recommendations for
+   backcountry recreationists", which is the most valuable line on any avalanche
+   product. *"Approach from the NW; those faces are downwind of your entry."*
+   Without this the rose is a diagram; with it, it is an answer.
+4. A **base-rate line**, lifted from EAWS publishing how often each danger level
+   is issued: *"Prime covers 4 % of this ground."* A hunter who knows the class
+   is rare treats it differently from one who does not.
+5. A `Confidence` chip at the **weakest input grade** — for bedding that is 🔴
+   **Assumption** (`idealSlopeDeg: 22`), tappable to the evidence note.
+6. A **scale-of-validity line**, the direct lift of EAWS's ">100 km², not a
+   specific individual slope": *"Summarises the current view (≈1.4 km²) at 10 m
+   resolution. Not a per-slope prediction — check it on the ground."* Cheapest
+   high-value sentence in this entire audit.
+
+**How it degrades — four distinct cases, all with precedent**
+
+| Case | Behaviour | Precedent |
+|---|---|---|
+| **Wind unset** | Do not draw filled cells. Draw the empty 24-cell outline with *"Set today's wind to see bedding by aspect."* | Our own `blockedReason`, which is already right |
+| **Ground cannot discriminate** (e.g. <10 % of view over 12°) | **Remove the rose entirely.** Replace with words: *"This ground is too gentle for the bedding model to separate faces. Nothing here is prime."* Never draw 24 empty cells and let the user infer. | EAWS: *"If no particular avalanche problem predominates … this information is omitted and a favourable avalanche situation is declared."* |
+| **Class not resolvable to one level** | Publish a **range**, never round up. Headline reads *"possible–likely"*; the cell renders at the **lower** fill with a hatched outer edge. | `SeverityNumberLine`'s `{from, to}`: NWAC forecasters publish avalanche size as a span across ordinal cells |
+| **Too little of that face in view** | Distinct third state: outline with a centre dot = *"too little of this face here to say"*. Must not read as *"none"*. Confusing "no prime ground" with "no ground" is the classic error; `selectionRatioInterval()` in `packages/shared/src/analytics/selection.ts` already gives the interval machinery to pick the threshold. | The stroked-empty-cell convention in `DangerRose.tsx`, extended |
+
+**Dimensions**
+
+- Compact read-out: **112–128 px** diameter, on-map corner beside the active
+  layer legend when `bedding` is on. Ring labels omitted at this size; the
+  headline sentence carries the meaning.
+- Expanded: **240–280 px** in the "Read this ground" card and the terrain
+  readout, with ring labels, the base-rate line, the validity line and the chip.
+- `aspectRatio: 1`, SVG, no animation, no 3D. It must render identically in the
+  worker-driven offline path.
+
+**Non-goals.** No elevation ring. No fourth class. No rotation. No tap targets.
+No animated transitions when the wind changes — the fill states should snap, so
+that sweeping the wind through the compass reads as a *comparison*, not a movie.
+
+**Where it goes.** On-map corner element (output), and in "Read this ground"
+(#3). **Not** in `ConditionsBar` — that bar is input, and mixing the two is the
+mistake this UI has otherwise avoided.
 
 ### 9 — Delete the fake grip now; detents next · S then M · `frontend-builder`
 
@@ -735,6 +930,23 @@ from the wind's timestamp, or the time scrub is far from now, mark the
 conditions bar and any wind-dependent legend. Model output with a shelf life
 shown on its face is what separates a forecast product from a toy.
 
+### 12b — Bedding trend · S · `terrain-scientist` + `frontend-builder`
+
+New this pass. Both reference products publish a **direction of travel** next to
+the current value, not just the value: `DangerTrend` (`increasing / steady /
+decreasing`) in the NAC schema, and `tendency` in EAWS with the tooltip
+"expected trend for the following day".
+
+Ours is easier and more useful, because our driver is deterministic rather than
+forecast: thermal phase turns over twice a day at times the solar model already
+computes. Evaluate bedding at now and at now + 1 h, classify the delta into the
+same three words, and put it beside the class. *"Prime on SE faces — decreasing;
+the thermal switches in about 40 minutes"* is a sentence no hunting app on the
+market can produce, it costs one extra evaluation of an engine that already runs
+on-device, and it converts a static map into something with a clock on it.
+
+Sequence it after #7 — a trend on an unbanded continuous ramp is meaningless.
+
 ### 13 — Saved-filter management · M · `frontend-builder`
 
 Search, favourites, recently-used, colour swatch, per-filter opacity, reorder.
@@ -753,6 +965,12 @@ population that walks in before daylight by definition.
 
 ## What we should NOT copy
 
+**Sourcing:** this whole section describes *competitor* behaviour and is therefore
+**[recalled]** except where it cites our own repo. That is a weaker basis for
+"build this" than for "do not build this" — a decision not to build survives being
+wrong about a competitor's current UI. Where a claim rests on a fact about the
+world rather than about a product, it is flagged inline.
+
 **onX's and HuntStand's deer-movement forecast meters.** Solunar/lunar-derived
 activity dials. `docs/VISION.md` and `docs/EVIDENCE.md` already rule this out on
 the evidence — the register records moon-phase non-effect as a **measured
@@ -766,7 +984,9 @@ pattern, wrong cardinality. Search belongs on saved filters. Building a
 catalogue browser for ten items adds a navigation level in front of the thing
 the user came for.
 
-**FATMAP-grade 3D terrain.** Beautiful, and correct for its sport: in ski
+**FATMAP-grade 3D terrain.** **[recalled]** as to FATMAP; the argument is about
+our sport and our offline budget and stands without it. Beautiful, and correct
+for its sport: in ski
 mountaineering the terrain is visible from kilometres away and the planning
 problem is a whole-face, whole-couloir judgement. Whitetail hunting is a 2D,
 sub-100 m, sub-canopy problem where the decisive features — a bench, a saddle,
@@ -782,11 +1002,14 @@ from a stand answers a question a hunter asks every single time they hang one
 **Strava-style aggregated activity heatmaps.** Technically straightforward,
 commercially tempting, and an active harm. A heatmap of where hunters walk
 discloses stand locations, concentrates pressure on public land, and creates a
-safety and conflict problem on private ground. Strava's own military-base
-incident is the canonical warning about aggregate location data being
-individually identifying at low density — and hunting ground is *always* low
-density. Never build it, and say so in `VISION.md` alongside the lunar
-predictor.
+safety and conflict problem on private ground. The argument that aggregate
+location data becomes individually identifying at low density is a general
+property of the data, not a claim about any one product — and hunting ground is
+*always* low density, which is the whole point. (The first pass cited a specific
+Strava incident as the canonical example. **Unverifiable from here, so the
+citation is withdrawn**; the argument does not need it and is stronger without a
+fact I cannot check.) Never build it, and say so in `VISION.md` alongside the
+lunar predictor.
 
 **Komoot-style auto-routing as the primary route interaction.** Our corridor
 solver models **deer** movement. Komoot's grammar — a line with a start pin, an
@@ -808,9 +1031,10 @@ instinct; extend it to a deliberate low-power posture.
 it professionally. The blurbs in `layers.ts` are a real advantage over every
 competitor and should be defended — the fix in #10 is disclosure, not deletion.
 
-**Any pattern requiring an online account check.** Gaia and onX both gate
-downloaded maps behind subscription validation that phones home, and users have
-been burned by it offline. A self-hosted product must never ship a code path
+**Any pattern requiring an online account check.** **[recalled]** — Gaia and onX
+gate downloaded maps behind subscription validation that phones home. I could not
+verify the current behaviour of either, and the rule does not depend on it:
+a self-hosted product must never ship a code path
 where the map stops working because a server could not be reached. This is worth
 an explicit test in the offline-integrity loop, not just a principle.
 

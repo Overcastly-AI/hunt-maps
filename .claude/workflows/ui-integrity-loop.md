@@ -25,7 +25,7 @@ That is not a QA failure, it is a missing loop.
 
 1. **Run the automated floor.**
    ```bash
-   cd apps/web && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test ui-invariants
+   cd apps/web && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test ui-invariants --workers=1
    ```
    Hit-testability, trigger stability, touch targets, chrome collisions, focus
    visibility, horizontal overflow, contrast, panel density. Any failure is

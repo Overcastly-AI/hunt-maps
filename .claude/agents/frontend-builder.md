@@ -34,7 +34,7 @@ with gloves on**. Therefore:
 
 ## Definition of done
 
-**`ui-invariants` suite green** (`pnpm exec playwright test ui-invariants`) —
+**`ui-invariants` suite green** (`pnpm exec playwright test ui-invariants --workers=1`) —
 never tuned until it passes; a failing invariant is assumed to have found
 something real. Verified at 390px and desktop, keyboard-navigable, tests pass, and
 `docs/ROADMAP.md` + `docs/BACKLOG.md` ticked in the same commit.

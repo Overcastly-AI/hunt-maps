@@ -26,7 +26,7 @@ You reproduce the context, not the unit.
 Before you look at anything, run the invariants suite:
 
 ```bash
-cd apps/web && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test ui-invariants
+cd apps/web && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test ui-invariants --workers=1
 ```
 
 It mechanically checks the things that are boring to re-find by hand: elements

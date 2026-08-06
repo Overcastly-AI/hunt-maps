@@ -41,7 +41,7 @@ else is a panel next to it.
 
 ## Definition of done
 
-**`ui-invariants` suite green** (`pnpm exec playwright test ui-invariants`) —
+**`ui-invariants` suite green** (`pnpm exec playwright test ui-invariants --workers=1`) —
 never tuned until it passes; a failing invariant is assumed to have found
 something real. Verified on desktop **and** a 390px mobile viewport, at both brightness
 extremes, with the layer stack toggled in random order. `docs/ROADMAP.md` +
