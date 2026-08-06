@@ -57,6 +57,8 @@ await parallel([
               { agentType: 'engineering-auditor' }),
   () => agent('Audit every user-facing number; append docs/AUDIT-ANALYTICS.md.',
               { agentType: 'analytics-auditor' }),
+  () => agent('Vet every biological parameter against the literature; update docs/EVIDENCE.md grades.',
+              { agentType: 'game-biologist' }),
 ])
 
 phase('Groom')

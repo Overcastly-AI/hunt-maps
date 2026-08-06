@@ -214,8 +214,13 @@ from [obra/superpowers](https://github.com/obra/superpowers), MIT). Debugging:
 - `autonomous-dev-loop` — the org loop: audits → groom → build → repeat on
   completion.
 - `terrain-validation-loop` — continuously validate the engine against known
-  surfaces and real LiDAR ground truth.
+  surfaces and real LiDAR ground truth. Owns the **maths**.
+- `evidence-integrity-loop` — continuously vet every biological parameter against
+  the literature. Owns the **meaning**. Run by `game-biologist`, and never by
+  whoever wrote the parameter: having the author of a guess grade their own guess
+  is not an audit.
 - `offline-integrity-loop` — continuously prove the no-signal path still works.
+- `ui-integrity-loop` — automated UI invariants plus screenshot review.
 
 **The loop for every feature:** plan → implement (specialist) → review
 (`code-reviewer`) → **functional QA with `field-qa`, including an actual

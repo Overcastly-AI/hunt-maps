@@ -24,7 +24,13 @@ phase is how you get a beautiful layer that is quietly wrong.
    cold-start run**.
 8. **Analytics audit** (`analytics-auditor`) — mandatory if the slice shows any
    number to a user.
-9. **Docs** — ROADMAP + BACKLOG ticked in the same commit as the code.
+9. **Biology audit** (`game-biologist`) — mandatory if the slice added or changed
+   any biological parameter: a slope band, a threshold, a resistance value, a
+   timing window, a behavioural claim. It files a graded, cited row in
+   `docs/EVIDENCE.md`. **`terrain-scientist` verifying the maths is not a
+   substitute** — that confirms the number is applied correctly, not that it is
+   true.
+10. **Docs** — ROADMAP + BACKLOG ticked in the same commit as the code.
 
 ## The gate that is easy to skip and must not be
 
@@ -52,9 +58,12 @@ await parallel([
   () => agent(`Panel controls for: ${args.item}`, { agentType: 'frontend-builder' }),
 ])
 phase('Verify')
-const [review, qa] = await parallel([
+const [review, qa, biology] = await parallel([
   () => agent(`Review the diff for: ${args.item}`, { agentType: 'code-reviewer' }),
-  () => agent(`Field QA including an offline cold start: ${args.item}`, { agentType: 'field-qa' }),
+  () => agent(`Field QA: offline cold start + ui-invariants suite: ${args.item}`, { agentType: 'field-qa' }),
+  // Skipped only when the slice provably touched no biological parameter.
+  () => agent(`Grade any biological parameter this slice added or changed; file to docs/EVIDENCE.md: ${args.item}`,
+              { agentType: 'game-biologist' }),
 ])
-return { review, qa }
+return { review, qa, biology }
 ```

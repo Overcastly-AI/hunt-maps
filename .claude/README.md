@@ -48,8 +48,10 @@ and CI have them without the plugin installed:
 | `vision-steward` | Founder's ideas → VISION/ROADMAP/BACKLOG. Docs only. |
 | `doc-syncer` | Cheap commit-driven reconciler for README/ARCHITECTURE/CHANGELOG |
 
-The three auditors deliberately **do not** coordinate. Independence is the
-point — auditors who read each other's output converge on the same blind spots.
+The **four** auditors — product, engineering, analytics, biology — deliberately
+do not coordinate. Independence is the point: auditors who read each other's
+output converge on the same blind spots. They write to four separate docs, so
+they run fully parallel with no file contention.
 
 ## Workflows (`workflows/`)
 
@@ -60,16 +62,25 @@ point — auditors who read each other's output converge on the same blind spots
 | `terrain-validation-loop` | Standing loop that independently re-derives the engine's maths and cross-checks against desktop GIS |
 | `offline-integrity-loop` | Standing loop that proves the cold-start-offline path still works |
 | `ui-integrity-loop` | Standing loop: automated UI invariants + screenshot review across every overlay state |
+| `evidence-integrity-loop` | Standing loop: vet every biological parameter against the literature; keeps `docs/EVIDENCE.md` honest |
 
-The last three run **independently of feature work**, and that is deliberate.
-All three failure modes are silent:
+The last four run **independently of feature work**, and that is deliberate.
+All four failure modes are silent:
 
 - Terrain defects do not crash — the map just lies.
 - Offline support rots because everything is developed and reviewed online.
 - **UI defects do not fail tests** — the DOM reports success while the user
   cannot click the button.
+- **Biological defects are applied perfectly and simply are not true.**
+  `idealSlopeDeg: 22` passes every test in the repo and is a number somebody
+  invented.
 
 None of them is caught by reviewing the feature that broke it.
+
+The last two are easy to conflate, so the boundary is worth stating:
+`terrain-validation-loop` asks *is 22° applied correctly*;
+`evidence-integrity-loop` asks *does a whitetail actually bed at 22°*. A
+parameter is only trustworthy once both have passed on it.
 
 Workflows are documented as orchestration recipes; run them with the `Workflow`
 tool — each file carries its script outline.

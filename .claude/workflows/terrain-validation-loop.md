@@ -28,5 +28,16 @@ on whoever last touched it.
 5. **Check the seams.** Render a layer across a tile boundary at several zooms
    and confirm no discontinuity. Seams mean an undersized halo.
 
+## What this loop does NOT cover
+
+This loop proves the engine computes what it claims. It says nothing about
+whether what it claims is *true of deer*. `idealSlopeDeg: 22` will pass every
+check here — correct units, correct Gaussian, correct field — and remains a
+number somebody invented.
+
+That question belongs to `evidence-integrity-loop`, run by `game-biologist`.
+Keep the boundary sharp: **this loop owns the maths, that loop owns the
+meaning.** A parameter is only trustworthy when both have passed on it.
+
 File findings to `docs/AUDIT-ENGINEERING.md`. A pass that finds nothing is a
 real result — record it with what was checked, so coverage accumulates.
