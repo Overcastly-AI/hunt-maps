@@ -16,40 +16,60 @@ Audited against the current `apps/web` UI as of this date.
 
 ## Sourcing note — read this before trusting a citation
 
-**Live web research was not possible in this session.** Outbound HTTPS is
-restricted by egress policy to GitHub-family hosts; every attempt to reach
-`caltopo.com`, `avalanche.org`, `fatmap.com`, `en.wikipedia.org` or any search
-engine returned `403` at the CONNECT stage, and the GitHub search API is
-repository-scoped in this session. Proxy status confirms `connect_rejected` for
-each host.
+**Second pass, 2026-08-06.** The first pass could not do any live research and
+said so. This pass got partway. What changed and what did not:
 
-So this audit is written from prior working knowledge of these products, not
-from pages fetched and read today. Consequences, stated plainly because this
-project's whole thesis is not claiming more than it knows:
+**Still blocked.** Egress policy allows GitHub-family hosts only. `avalanche.org`,
+`caltopo.com`, `gaiagps.com`, `fatmap.com`, `en.wikipedia.org` and every search
+engine still return `403` at CONNECT; `WebSearch`/`WebFetch` are not enabled in
+this context; the GitHub search API is repository-scoped. Verified by probe, not
+assumed.
 
-- **URLs below are references, not evidence.** They point at where the described
-  behaviour lives. They were not opened in this session and no quotation is
-  taken from them.
-- **Product behaviour may have drifted.** Anything version-specific (Gaia's
-  layer-catalogue count, onX's offline-map expiry window, FATMAP's post-Strava
-  feature set) should be re-verified before it drives a build decision.
-- **The structural arguments do not depend on the fetches.** The reasoning about
-  fact-vs-judgement cartography, detented sheets, and coverage honesty stands on
-  its own and is checkable against our own code, which *was* read.
+**What worked.** `git clone` over HTTPS to `github.com` and
+`raw.githubusercontent.com` both succeed for arbitrary public repositories. That
+turned out to be enough for the section that matters most, because **the two
+reference avalanche products are open source**. Everything in the avalanche
+sections below is now quoted from source files and shipped help text that were
+cloned and read today, not recalled.
 
-A follow-up pass with network access should verify the items marked **[verify]**.
+Primary sources actually read (all cloned at `--depth 1` on 2026-08-06):
+
+| Source | What it is | Files read |
+|---|---|---|
+| [`NWACus/avy`](https://github.com/NWACus/avy) (MIT, © Northwest Avalanche Center) | The official NWAC / US National Avalanche Center forecast app. Implements NAPADS. | [`components/DangerRose.tsx`](https://github.com/NWACus/avy/blob/main/components/DangerRose.tsx), [`components/SeverityNumberLine.tsx`](https://github.com/NWACus/avy/blob/main/components/SeverityNumberLine.tsx), [`components/AvalancheProblemLikelihoodLine.tsx`](https://github.com/NWACus/avy/blob/main/components/AvalancheProblemLikelihoodLine.tsx), [`components/AvalancheProblemSizeLine.tsx`](https://github.com/NWACus/avy/blob/main/components/AvalancheProblemSizeLine.tsx), [`components/AvalancheProblemCard.tsx`](https://github.com/NWACus/avy/blob/main/components/AvalancheProblemCard.tsx), [`content/helpStrings.ts`](https://github.com/NWACus/avy/blob/main/content/helpStrings.ts), [`types/nationalAvalancheCenter/schemas.ts`](https://github.com/NWACus/avy/blob/main/types/nationalAvalancheCenter/schemas.ts) |
+| [`albina-euregio/albina-website`](https://github.com/albina-euregio/albina-website) | The EUREGIO `avalanche.report` platform (Tyrol / South Tyrol / Trentino). EAWS-conformant; its glossary content is republished from `avalanches.org`. | [`app/components/icons/exposition-icon.tsx`](https://github.com/albina-euregio/albina-website/blob/master/app/components/icons/exposition-icon.tsx), `app/components/icons/warn-level-icon.tsx`, `app/components/bulletin/bulletin-danger-rating.tsx`, `app/components/bulletin/bulletin-problem-item.tsx`, `public/content/education/danger-scale/en.html`, `public/content/education/handbook/en.html`, `app/components/bulletin/bulletin-glossary-en-content.json` |
+| [`material-components/material-components-android`](https://github.com/material-components/material-components-android) | The written spec behind the bottom-sheet muscle memory on Android. | [`docs/components/BottomSheet.md`](https://github.com/material-components/material-components-android/blob/master/docs/components/BottomSheet.md) |
+| [`organicmaps/organicmaps`](https://github.com/organicmaps/organicmaps) | A shipping offline-map app with a mature region-download flow. Used as a **stand-in** for Gaia/onX, which are closed. | [`data/strings/strings.txt`](https://github.com/organicmaps/organicmaps/blob/master/data/strings/strings.txt) |
+
+**Still unverified, and now marked as such in the text.** CalTopo, Gaia GPS,
+FATMAP, onX Hunt, HuntStand, Komoot, Strava, Google Maps and Apple Maps are all
+closed products with no reachable documentation from here. Claims about them are
+labelled **[recalled]** where they survive, and several first-pass claims have
+been **deleted outright** rather than left standing — including the Gaia
+layer-catalogue size and the FATMAP/Strava status. A `[recalled]` claim is
+prior working knowledge, is fine as a design prompt, and is **not** adequate
+grounds for a build decision on its own.
+
+**The research changed the headline recommendation.** The first pass proposed a
+"bedding rose" with wedges *shaded by modelled likelihood*. Both reference
+products deliberately do not do that — see §2, which has been rewritten, and the
+full spec in recommendation #8.
+
+**Findings about our own code were verified against the source in the first pass
+and are unchanged here.**
 
 ## What we studied
 
-| Product | Why it is the relevant comparison | Reference |
+| Product | Why it is the relevant comparison | Evidence status |
 |---|---|---|
-| **CalTopo** | The power-user backcountry mapping tool. Composable base layers, per-overlay opacity, custom layer URLs, unapologetic density. Users are SAR professionals. | https://caltopo.com · https://training.caltopo.com |
-| **Gaia GPS** | The mobile map-first pattern at scale: a large searchable layer catalogue separated from a short active stack, plus the most-copied offline-download flow in the category. | https://www.gaiagps.com · https://help.gaiagps.com |
-| **FATMAP** | 3D terrain and slope-angle shading for avalanche terrain. Notable for *restraint*: curated map modes rather than a catalogue, and a hard line between terrain fact and terrain judgement. Now folded into Strava. **[verify]** | https://fatmap.com |
-| **Avalanche forecast products** — avalanche.org, individual US centres (NWAC, CAIC, UAC), Avalanche Canada, EAWS in Europe | The closest analogue to our problem: modelled/judged risk presented honestly to people making life-safety decisions on terrain. The danger scale, the danger rose, the separation of likelihood from consequence, and the explicit forecaster confidence statement. | https://avalanche.org · https://avalanche.ca · https://www.avalanches.org (EAWS) |
-| **Komoot / Strava** | Route-planning interaction and elevation-profile presentation; the map↔profile crosshair link. | https://www.komoot.com · https://www.strava.com |
-| **Google Maps / Apple Maps** | The baseline every user's muscle memory is trained on. Bottom sheets with detents, floating controls, what a control that opens a panel is *expected* to do. | — |
-| **onX Hunt / HuntStand** | The incumbents we are trying to displace. Studied mainly for what not to copy. | https://www.onxmaps.com/hunt |
+| **Avalanche forecast products** — NAPADS as implemented by the US National Avalanche Center; EAWS as implemented by the EUREGIO `avalanche.report` platform | The closest analogue to our problem: modelled and judged risk presented honestly to people making life-safety decisions on terrain. The danger scale, the aspect/elevation rose, the separation of likelihood from size, and the scale-of-validity statement. **This is the important one and it is now fully sourced.** | ✅ **Read today** — [`NWACus/avy`](https://github.com/NWACus/avy), [`albina-euregio/albina-website`](https://github.com/albina-euregio/albina-website) |
+| **Google Maps / Apple Maps** | The baseline every user's muscle memory is trained on. Bottom sheets with detents, floating controls, what a control that opens a panel is *expected* to do. | ⚠️ Partially — the underlying **Material** bottom-sheet spec was read; the two products themselves were not reachable |
+| **Offline region download** | How size, progress and failure are communicated. Gaia and onX are the products hunters actually use; both are closed. | ⚠️ **Substituted** — [`organicmaps/organicmaps`](https://github.com/organicmaps/organicmaps) shipping strings read today. Gaia/onX specifics are **[recalled]** |
+| **CalTopo** | The power-user backcountry mapping tool. Composable base layers, per-overlay opacity, custom layer URLs, unapologetic density. Users are SAR professionals. | ❌ **[recalled]** — `caltopo.com` unreachable |
+| **Gaia GPS** | The mobile map-first pattern at scale: a large searchable layer catalogue separated from a short active stack. | ❌ **[recalled]** — `gaiagps.com` unreachable |
+| **FATMAP** | 3D terrain and slope-angle shading for avalanche terrain; curated map modes rather than a catalogue. | ❌ **[recalled]** — `fatmap.com` unreachable |
+| **Komoot / Strava** | Route-planning interaction and elevation-profile presentation; the map↔profile crosshair link. | ❌ **[recalled]** |
+| **onX Hunt / HuntStand** | The incumbents we are trying to displace. Studied mainly for what not to copy. | ❌ **[recalled]** |
 
 ## Ratings
 
@@ -68,28 +88,32 @@ A follow-up pass with network access should verify the items marked **[verify]**
 
 ### 1. Layer management at scale
 
-**What the good ones do.**
+**What the good ones do.** *Everything in this subsection is* **[recalled]** —
+CalTopo, Gaia and FATMAP were all unreachable. Treat it as a design prompt, not
+as evidence. The specific numbers the first pass carried (Gaia's catalogue size)
+have been deleted rather than left standing.
 
-The single most transferable idea is one Gaia GPS gets right and almost everyone
-else gets wrong: **separate "what is on" from "what exists".** Gaia's layer UI is
-two surfaces — a short, ordered, per-layer-opacity *active stack* you can
-reorder and delete from, and a large searchable, categorised *catalogue* you add
-from, with favourites. The active stack stays three to five items long forever.
-The catalogue can grow to hundreds without the panel becoming a wall, because
-you only visit it when you are adding something. **[verify: catalogue size]**
+The single most transferable idea is the one Gaia GPS gets right and almost
+everyone else gets wrong: **separate "what is on" from "what exists".** Gaia's
+layer UI is two surfaces — a short, ordered, per-layer-opacity *active stack* you
+can reorder and delete from, and a larger searchable, categorised *catalogue* you
+add from. The active stack stays a handful of items long forever; the catalogue
+can grow without the panel becoming a wall, because you only visit it when you
+are adding something.
 
 CalTopo takes the opposite bet and it also works, for a different reason. Its
-list is dense, flat, and nothing is hidden behind progressive disclosure — but
-its *top-level* list is short because layers are **compositional**. MapBuilder
-Topo is one entry with toggleable sub-layers (contours, shading, roads, land
-management, slope) rather than six top-level entries. CalTopo also blends two
-base layers with a percentage slider rather than making you choose. The lesson
-is not "be dense"; it is **density is fine, unpredictability is not**. CalTopo's
-users tolerate a wall because the wall never moves and every control is exactly
-one click deep.
+list is dense, flat, and little is hidden behind progressive disclosure — but its
+*top-level* list stays short because layers are **compositional**: one topo entry
+with toggleable sub-layers rather than six top-level entries. The lesson is not
+"be dense"; it is **density is fine, unpredictability is not**. CalTopo's users
+tolerate a wall because the wall never moves and every control is one click deep.
 
 FATMAP goes the third way: a handful of curated *modes*, not a layer list. Right
 answer for a mainstream audience, wrong answer for ours.
+
+**Deleted from the first pass:** a claim about FATMAP's current status inside
+Strava. It could not be verified from here, it was doing no work in the argument,
+and a product audit that cannot check a fact should not assert it.
 
 **Where Ridgeline actually is.**
 
@@ -147,54 +171,184 @@ slope under hillshade produces a worse map with no upside. Reorder matters for
 This is the section that matters most, and it is where Ridgeline currently
 scores worst against its own stated values.
 
-**What avalanche forecasting does, and why it is the right model.**
+**What avalanche forecasting actually does — now sourced.**
 
 Avalanche forecasting is the mature discipline for publishing a judgement about
-terrain to people who will act on it and can be killed by it being wrong. Five
-practices are directly transferable.
+terrain to people who will act on it and can be killed by it being wrong. The
+first pass reasoned about it from memory and got two things wrong. Here is what
+the shipping code and shipping help text say.
 
-**(i) Ordinal, never continuous; three redundant channels.** The North American
-Public Avalanche Danger Scale is five levels — Low / Moderate / Considerable /
-High / Extreme — each carrying a colour, a *numeral*, and a **travel-advice
-sentence**. Three channels for one value. Nobody publishes "danger = 0.62". The
-number would imply a precision the underlying judgement does not have, and it
-would invite arithmetic nobody can defend. EAWS uses the same five-level
-structure in Europe. **[verify: current EAWS matrix wording]**
+**(i) Ordinal, never continuous; four redundant channels.** Both scales are five
+levels, and both attach more than a colour to each level. NAPADS, quoted from
+NWAC's shipped `dangerScaleDetail` help string:
 
-Ridgeline currently renders `bedding` as a continuous colour ramp derived from a
-multiplicative composite of four terms, three of which are graded 🔴 **Assumed**
-in `docs/EVIDENCE.md` (`idealSlopeDeg: 22`, the 30° shelter saturation, the
-ruggedness/4 m cover term). A smooth ramp over that composite is a precision
-claim we cannot support. **Band it.** Three or four ordinal classes with names a
-hunter would use — "unlikely / possible / likely / prime" — and a sentence each.
-Banding is not dumbing down; it is refusing to publish decimal places we do not
-have.
+> The North American Public Avalanche Danger Scale (NAPADS) is a system that
+> rates avalanche danger and provides general travel advice based on the
+> likelihood, size, and distribution of expected avalanches. It consists of five
+> levels … 1 - Low, 2 - Moderate, 3 - Considerable, 4 - High, 5 - Extreme.
+> … Although the danger ratings are assigned numerical levels, **the danger
+> increases exponentially between levels.**
 
-**(ii) The danger rose.** Avalanche forecasts publish danger as a function of
-**aspect × elevation band**, drawn as an octant-and-ring diagram. One glance
-answers "which slopes today". This maps onto our problem almost perfectly: the
-leeward bedding model is fundamentally a function of aspect relative to wind,
-modulated by slope band.
+— [`avy/content/helpStrings.ts`](https://github.com/NWACus/avy/blob/main/content/helpStrings.ts)
 
-**A bedding rose is the single best idea in this audit.** For the current wind
-and the current viewport, draw eight aspect octants × three slope bands, shaded
-by modelled bedding likelihood, with the wind arrow overlaid. That is a direct,
-one-glance answer to *"where do I hang a stand for a NW wind"* — the exact
-question in this audit's brief — and it is a question the current UI answers
-only by turning on a layer and squinting at a hillside.
+That last clause is the sentence to steal. They number the levels and then
+immediately warn the reader **not to do arithmetic on the numbers**. An ordinal
+scale that looks like a cardinal one is a trap, and they defuse it in the help
+text rather than hoping nobody notices.
 
-**(iii) Likelihood is reported separately from consequence.** An avalanche
-problem carries a type, a location, a **likelihood**, and a **size** — never
-multiplied into one score. Ridgeline's `bedding` layer collapses "the terrain
-matches the model" and "the model is any good" into one colour. Those are
-different axes and users need both. The terrain match belongs in the ramp; the
-model quality belongs in a `Confidence` chip on the legend.
+EAWS resolves the first pass's `[verify]` marker and diverges in one place: level
+5 is **"Very high"**, not "Extreme". Each level carries a numeral, a name, a
+one-line *situation phrase*, a description, and a **"Recommendations for
+backcountry recreationists"** block:
 
-**(iv) Confidence is stated separately and justified.** Forecasters publish an
-explicit confidence — High/Moderate/Low — **with the reason**: "limited
-observations in this zone since Tuesday", "uncertain about the depth of the
-persistent weak layer". The confidence is about the *evidence available*, not
-about the hazard.
+> Danger level 3 – Considerable · *Critical avalanche situation* … **The most
+> critical situation for backcountry recreationists.** Use terrain efficiently
+> and select best possible route and with minimal exposure. Avoid very steep
+> slopes with the aspect and elevation indicated…
+
+— [`albina-website/public/content/education/danger-scale/en.html`](https://github.com/albina-euregio/albina-website/blob/master/public/content/education/danger-scale)
+
+**And EAWS publishes the base rate of every level.** Level 1: "Forecast for
+around 20 % of the winter season. Around 5 % of avalanche fatalities." Level 2:
+~50 % of the season, ~30 % of fatalities. Level 3: ~30 % of the season, **~50 %
+of fatalities**. Level 4: "only a few days throughout the winter", ~10 % of
+fatalities. Level 5: "Very rarely forecast."
+
+This is the most quietly radical thing in either product and no hunting app does
+anything like it. Publishing how often a class is issued *and* what share of bad
+outcomes it accounts for lets the user calibrate. It is the same instinct as this
+project's use-vs-availability rule, applied to the legend instead of the chart.
+**Ridgeline should publish the base rate of every bedding class on the current
+property**: "prime covers 4 % of this ground" is worth more than the colour.
+
+Ridgeline currently renders `bedding` as a continuous colour ramp over a
+multiplicative composite whose weakest inputs are graded 🔴 **Assumed** in
+`docs/EVIDENCE.md` (`idealSlopeDeg: 22`, the 30° shelter saturation, the
+ruggedness/4 m cover term; the leeward `cos(aspect − windFrom)` term is 🟡
+Doctrine). A smooth ramp over that is a precision claim we cannot support.
+**Band it** — three or four ordinal classes with hunter-language names and a
+sentence each. Banding is not dumbing down; it is refusing to publish decimal
+places we do not have.
+
+**(ii) The rose is a binary mask, not a heatmap. The first pass had this wrong.**
+
+This is the correction that matters. The first pass proposed a bedding rose with
+wedges "shaded by modelled bedding likelihood". **Neither reference product
+shades its rose by magnitude.** Both use it as a presence/absence mask over the
+terrain space, and put the ordinal magnitude somewhere else entirely.
+
+NWAC's rose is 8 aspects × 3 elevation bands = 24 sectors, and every sector is
+filled with one flat grey or left transparent:
+
+```tsx
+// avy/components/DangerRose.tsx
+<Path d={paths[location]} stroke={'rgb(81, 85, 88)'} strokeWidth={10}
+      fill={locations.includes(location) ? 'rgb(200, 202, 206)' : 'transparent'} />
+```
+
+The shipped explanation is unambiguous — *"The diagram **will be filled with
+black where the Avalanche Problem may exist**"* — and it also documents the ring
+order, which is inverted relative to what most people guess:
+
+> You can view the diagram as you would a mountain on a topographic map. The
+> **outer ring** represents the **Below Treeline** elevation band, middle ring
+> Near Treeline, and the **inner ring Above Treeline**. The diagram is oriented
+> like a compass, with the top wedges representing north aspects, the left wedges
+> representing west.
+
+EAWS is even more reduced: 8 aspects, **no elevation rings at all**, one flat
+blue fill (`#19ABFF`), and only N and S labelled
+([`exposition-icon.tsx`](https://github.com/albina-euregio/albina-website/blob/master/app/components/icons/exposition-icon.tsx)).
+Elevation is carried by a *separate* icon with an explicit threshold — "above
+2200 m", "treeline", or a band "1800–2400 m" — and danger level by a *third*
+icon, a mountain split above/below one elevation line showing at most two levels
+(`warn-level-icon.tsx`, `bulletin-danger-rating.tsx`). The EAWS handbook: *"The
+blue-marked segments of a wind rose are indicators of those aspects."*
+
+**Why they refuse to shade it.** The rose answers *where*; the scale answers *how
+bad*. Colouring 24 cells by magnitude produces a field nobody can read at a
+glance and implies the model resolves danger at 24 aspect×elevation combinations,
+which it does not. Our bedding model does not resolve at 24 combinations either.
+
+**Two details worth copying exactly.** First, **every cell is stroked, including
+the empty ones** — the unselected sectors are drawn as outlines, so the full
+24-cell grid is always present. You always see the denominator. That is the
+use-vs-availability principle rendered as a graphic, and it costs one line of
+code. Second, the elevation band *names* are a parameter
+(`ElevationBandNames` is passed into `AnnotatedDangerRose`), because different
+forecast centres use different vocabulary for the same bands.
+
+A bedding rose is still the single best idea in this audit. The encoding is
+different from what the first pass proposed. Full spec in recommendation #8.
+
+**(iii) Likelihood and size are separate axes — but distribution is not a third
+one.** The first pass said "likelihood is reported separately from consequence",
+which is right, and implied distribution is an independent third axis, which is
+wrong. NWAC's help text:
+
+> **Likelihood** … *combines* the spatial distribution of the Problem and the
+> sensitivity or ease of triggering an avalanche.
+
+So distribution is folded *into* likelihood, and *also* drawn separately on the
+rose — deliberately shown twice, once as a component of the ordinal and once as a
+map of where. Size is genuinely independent and never multiplied in.
+
+**The uncertainty encoding the first pass missed entirely: the ordinal is
+published as a range.** `AvalancheProblemSizeLine` takes `size: number[]` — a
+`[from, to]` pair — and `SeverityNumberLine` renders it as a **bar spanning
+several labels**, with every covered label bold and the rest greyed:
+
+```ts
+// avy/components/SeverityNumberLine.tsx
+export interface SeverityNumberLineRange { from: number; to: number; }
+```
+
+A forecaster who is unsure between "Large" and "Very Large" publishes *both* and
+the graphic shows a two-cell bar. This is a far better answer to model
+uncertainty than a confidence chip bolted onto a point estimate, and it is
+directly transferable to a banded bedding class. EAWS does the complementary
+thing and **truncates the top of the scale**: sizes 3, 4 and 5 all map to the
+same visual class (`textInfoToClass` in `bulletin-problem-item.tsx`), because
+above a point the distinction stops changing what you do.
+
+**(iv) Confidence — partially confirmed, and one first-pass claim corrected.**
+`High / Moderate / Low` is real and is in the national data model:
+
+```ts
+// avy/types/nationalAvalancheCenter/schemas.ts
+export const DangerConfidence = { High: 'high', Moderate: 'moderate', Low: 'low' } as const;
+export const DangerTrend      = { Increasing: …, Steady: …, Decreasing: … } as const;
+```
+
+Two corrections. It sits on the `danger_rating` object **alongside a trend**, and
+it is optional (`.or(z.string().length(0))`). And there is **no structured
+"reason" field** — the first pass asserted confidence is published "with the
+reason", and I could not verify that. The justification lives in free prose
+(`bottom_line`, `terrain_use`, `avalanche_problems_comments`). So: the three-level
+vocabulary is confirmed and worth adopting verbatim; the claim that a machine-
+readable justification accompanies it is withdrawn.
+
+The **trend** field is a free idea we should take. EAWS ships the same thing as
+`tendency` (*increasing / steady / decreasing*, "expected trend for the following
+day"). Bedding has an obvious analogue: thermal phase turns over twice a day and
+the wind forecast moves. "Bedding likelihood on these faces is **decreasing** —
+the thermal switches in 40 minutes" is a sentence no hunting app can currently
+produce and our engine already has the inputs for.
+
+**(v) The scale-of-validity statement — the best single sentence in either
+product, and we have no equivalent.**
+
+> The danger level always applies to a **region with an area of >100 km²** and
+> **not to a specific individual slope**. The avalanche danger described on
+> avalanche.report is always a forecast with uncertainties. **It should always be
+> checked on site.**
+
+They render a per-region colour on a map and then state in plain words the
+resolution at which that colour is meaningful — which is much coarser than the
+pixels imply. Ridgeline renders bedding at DEM resolution and implicitly claims
+per-pixel truth. We do not have per-pixel truth. Every judgement layer and the
+bedding rose should carry a one-line extent-and-resolution statement. It costs a
+sentence and it is the difference between a forecast product and a toy.
 
 This is exactly what `docs/EVIDENCE.md` already contains and exactly what the
 `Confidence` primitive was built for. And:
@@ -211,17 +365,32 @@ used in **zero** places in the application. The register grades nine parameters
 🔴 Assumed. A user of the current build sees none of that. The product's
 deepest claimed moat, "honest analytics", is presently a markdown file.
 
-**(v) The absence of a forecast is drawn, not interpolated.** avalanche.org
-shows unforecast zones as grey with "no forecast issued", never shading them
-from a neighbouring zone. Ridgeline gets this right already — `blockedReason`
-on `ToggleRow` and the missing-wind path are genuinely good, and better than
-most commercial products. Credit where due.
+**(vi) When the model has nothing to say, the graphic is removed — not drawn
+empty.** Verified, and it is more decisive than the first pass claimed. The EAWS
+handbook:
+
+> If no particular avalanche problem predominates (often the case at danger level
+> 1 – low) **this information is omitted** and a favourable avalanche situation
+> is declared.
+
+Not a greyed rose. Not 24 empty cells for the user to interpret. The diagram is
+withdrawn and replaced by a positive statement in words. This is the pattern for
+degradation, and it is the basis of the low-confidence behaviour in the rose spec
+below.
+
+Ridgeline already has the right instinct here — `blockedReason` on `ToggleRow`
+and the missing-wind path are genuinely good, and better than most commercial
+products. Credit where due. What is missing is the second half: when the *inputs*
+are present but the *model cannot discriminate*, we currently draw a flat map and
+say nothing.
 
 **The cartographic rule nobody in hunting apps follows, and we should.**
-
-FATMAP, CalTopo and Gaia all draw slope-angle shading as **terrain fact** with a
-hard-edged banded ramp and a legend — and keep it visually distinct from
-*judgement* products like ATES avalanche terrain ratings. Different visual
+**[recalled]** for the competitor half — I could not reach FATMAP, CalTopo or
+Gaia. What I *can* evidence is the discipline's own separation: EAWS draws the
+aspect rose, the elevation threshold and the danger level as **three separate
+graphics** (`exposition-icon`, `elevation-icon`, `warn-level-icon`) rather than
+one composite colour, and the terrain-fact products (slope-angle shading, ATES
+ratings) are published as different artefacts entirely. Different visual
 language, different layer, never composited into one colour.
 
 Ridgeline currently renders `slope` (Horn 1981, validated against closed-form
