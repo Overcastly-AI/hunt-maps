@@ -122,17 +122,61 @@ export async function auditInteractiveElements(
               if (label) effectiveRect = label.getBoundingClientRect();
             }
 
-            const isInViewport = (r: DOMRect) =>
-              r.right > 0 && r.bottom > 0 && r.left < window.innerWidth && r.top < window.innerHeight;
+            // The part of `el` that is actually painted somewhere: its own
+            // rect, intersected with every clipping ancestor's box (any
+            // ancestor with `overflow: hidden|auto|scroll` on the relevant
+            // axis — the Layers sheet's `.rl-sheet__body` is exactly this)
+            // and finally with the browser viewport itself. A first version
+            // of this helper checked only against the viewport, which missed
+            // exactly the case that mattered: a row scrolled just past the
+            // *sheet's own* clipped edge still has `rect.top < window
+            // .innerHeight`, so it read as "already visible" and was hit-
+            // tested at its unscrolled — and therefore actually invisible,
+            // clipped-away — position. That produced false failures that
+            // looked identical to the real clipping bug, which is exactly
+            // the kind of wrong-but-confident result this suite exists to
+            // prevent someone else from shipping.
+            const visibleRect = (element: Element) => {
+              const r = element.getBoundingClientRect();
+              let box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+              let ancestor = element.parentElement;
+              while (ancestor && ancestor !== document.documentElement) {
+                const cs = window.getComputedStyle(ancestor);
+                const clipsX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
+                const clipsY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
+                if (clipsX || clipsY) {
+                  const ar = ancestor.getBoundingClientRect();
+                  box = {
+                    left: clipsX ? Math.max(box.left, ar.left) : box.left,
+                    right: clipsX ? Math.min(box.right, ar.right) : box.right,
+                    top: clipsY ? Math.max(box.top, ar.top) : box.top,
+                    bottom: clipsY ? Math.min(box.bottom, ar.bottom) : box.bottom,
+                  };
+                }
+                ancestor = ancestor.parentElement;
+              }
+              box = {
+                left: Math.max(box.left, 0),
+                top: Math.max(box.top, 0),
+                right: Math.min(box.right, window.innerWidth),
+                bottom: Math.min(box.bottom, window.innerHeight),
+              };
+              return box;
+            };
+            const isVisible = (box: { left: number; top: number; right: number; bottom: number }) =>
+              box.right > box.left && box.bottom > box.top;
 
-            // `elementFromPoint` only ever sees the current viewport. A control
-            // below the fold of a scrolling panel (the Layers sheet body is a
-            // real, common case) is off-screen, not clipped — scroll it into
-            // view first, exactly like a real tap would have to, and only then
-            // ask whether it hit-tests to itself.
-            if (!isInViewport(rect)) {
+            let visible = visibleRect(el);
+
+            // Not currently painted anywhere — scroll it into view exactly
+            // like a real tap would have to (`scrollIntoView` walks every
+            // scrollable ancestor, not just the window, which is the whole
+            // reason it replaces the viewport-only check above), then ask
+            // again.
+            if (!isVisible(visible)) {
               el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
               rect = el.getBoundingClientRect();
+              visible = visibleRect(el);
               if (
                 el.tagName === 'INPUT' &&
                 (input.type === 'checkbox' || input.type === 'radio')
@@ -144,9 +188,13 @@ export async function auditInteractiveElements(
               }
             }
 
-            const reachable = isInViewport(rect);
-            const cx = rect.x + rect.width / 2;
-            const cy = rect.y + rect.height / 2;
+            const reachable = isVisible(visible);
+            // Hit-test the centre of the *visible* region, not the raw
+            // element box — a partially-clipped-but-still-tappable sliver at
+            // an edge is a real, reachable control, and its own untrimmed
+            // centre point can sit outside what is actually painted.
+            const cx = reachable ? (visible.left + visible.right) / 2 : rect.x + rect.width / 2;
+            const cy = reachable ? (visible.top + visible.bottom) / 2 : rect.y + rect.height / 2;
             const hit = reachable ? document.elementFromPoint(cx, cy) : null;
             const hitOk = reachable && Boolean(hit) && (hit === el || el.contains(hit));
 
@@ -160,11 +208,15 @@ export async function auditInteractiveElements(
               );
             }
 
+            // `??` only falls through on null/undefined, and `.textContent`
+            // on a childless `<input>` is `''` — not nullish — so an earlier
+            // version of this chain silently stopped there and never reached
+            // `.id`, leaving every checkbox in failure output unnamed.
             const name =
-              el.getAttribute('aria-label') ??
-              el.getAttribute('title') ??
-              (el.textContent ?? '').trim().slice(0, 40) ??
-              el.id ??
+              el.getAttribute('aria-label') ||
+              el.getAttribute('title') ||
+              (el.textContent ?? '').trim().slice(0, 40) ||
+              el.id ||
               '';
 
             out.push({
@@ -304,6 +356,17 @@ export interface ChromeRects {
   railTopRight: { x: number; y: number; width: number; height: number } | null;
   railBottomLeft: { x: number; y: number; width: number; height: number } | null;
   conditions: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * The bounding box of `.chrome-bottomleft` as a whole — the rail and the
+   * conditions bar together, plus the gap between them. Checking the rail and
+   * the conditions bar as two separate rects (below) does not cover that gap,
+   * and a sheet whose edge lands *inside* it would pass both of those checks
+   * while still visually overlapping the group and creating exactly the
+   * elementFromPoint trap this invariant exists to catch. This closes that
+   * measurement gap without replacing the two finer-grained checks, which
+   * still give a more specific failure message when only one piece collides.
+   */
+  bottomLeftGroup: { x: number; y: number; width: number; height: number } | null;
   sheet: { x: number; y: number; width: number; height: number } | null;
   popover: { x: number; y: number; width: number; height: number } | null;
 }
@@ -321,6 +384,7 @@ export async function collectChromeRects(page: Page): Promise<ChromeRects> {
       railTopRight: rectOf('.chrome-topright .rl-rail'),
       railBottomLeft: rectOf('.chrome-bottomleft .rl-rail'),
       conditions: rectOf('.rl-conditions'),
+      bottomLeftGroup: rectOf('.chrome-bottomleft'),
       sheet: rectOf('.rl-sheet'),
       popover: rectOf('.rl-popover'),
     };
