@@ -39,8 +39,24 @@ export interface InteractiveElementInfo {
    * this element or a descendant of it — the direct test for the bug this
    * whole suite is named after: a control that paints on top but hit-tests
    * to something else underneath.
+   *
+   * Only meaningful when `reachable` is true. `elementFromPoint` is
+   * viewport-relative and returns `null` for any point outside the current
+   * viewport, so a control below the fold in a scrolling panel (e.g. the
+   * Layers sheet body) would otherwise report a false "unclickable" — that
+   * failure has nothing to do with clipping, it just has not been scrolled
+   * to yet. See `reachable`.
    */
   hitOk: boolean;
+  /**
+   * False only when the element's centre is still outside the viewport
+   * *after* scrolling it into view (`scrollIntoView({ block: 'center' })`) —
+   * i.e. no scrollable ancestor exists that can ever bring it on screen. That
+   * is a real, distinct defect (present in the DOM, permanently unreachable
+   * by any input method) and callers should report it separately from a
+   * `hitOk: false` clipping failure so the two causes are never confused.
+   */
+  reachable: boolean;
   /**
    * True when this element sits behind the currently open sheet/popover and
    * is not part of it — i.e. it is *deliberately* unreachable right now
@@ -79,7 +95,7 @@ export async function auditInteractiveElements(
 
             const style = window.getComputedStyle(el);
             if (style.display === 'none' || style.visibility === 'hidden') continue;
-            const rect = el.getBoundingClientRect();
+            let rect = el.getBoundingClientRect();
             if (rect.width <= 0 || rect.height <= 0) continue;
 
             let effectiveRect = rect;
@@ -92,10 +108,33 @@ export async function auditInteractiveElements(
               if (label) effectiveRect = label.getBoundingClientRect();
             }
 
+            const isInViewport = (r: DOMRect) =>
+              r.right > 0 && r.bottom > 0 && r.left < window.innerWidth && r.top < window.innerHeight;
+
+            // `elementFromPoint` only ever sees the current viewport. A control
+            // below the fold of a scrolling panel (the Layers sheet body is a
+            // real, common case) is off-screen, not clipped — scroll it into
+            // view first, exactly like a real tap would have to, and only then
+            // ask whether it hit-tests to itself.
+            if (!isInViewport(rect)) {
+              el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+              rect = el.getBoundingClientRect();
+              if (
+                el.tagName === 'INPUT' &&
+                (input.type === 'checkbox' || input.type === 'radio')
+              ) {
+                const label = el.closest('label');
+                effectiveRect = label ? label.getBoundingClientRect() : rect;
+              } else {
+                effectiveRect = rect;
+              }
+            }
+
+            const reachable = isInViewport(rect);
             const cx = rect.x + rect.width / 2;
             const cy = rect.y + rect.height / 2;
-            const hit = document.elementFromPoint(cx, cy);
-            const hitOk = Boolean(hit) && (hit === el || el.contains(hit));
+            const hit = reachable ? document.elementFromPoint(cx, cy) : null;
+            const hitOk = reachable && Boolean(hit) && (hit === el || el.contains(hit));
 
             let coveredByOpenOverlay = false;
             if (overlay && overlayRect && !overlay.contains(el)) {
@@ -130,6 +169,7 @@ export async function auditInteractiveElements(
                 height: effectiveRect.height,
               },
               hitOk,
+              reachable,
               coveredByOpenOverlay,
             });
           }
@@ -146,6 +186,7 @@ export async function auditInteractiveElements(
         rect: { x: number; y: number; width: number; height: number };
         effectiveRect: { x: number; y: number; width: number; height: number };
         hitOk: boolean;
+        reachable: boolean;
         coveredByOpenOverlay: boolean;
       }
     },

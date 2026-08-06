@@ -35,7 +35,19 @@ interface FilterEntry extends SavedFilterSummary {
   outline: boolean;
 }
 
-type Panel = 'layers' | 'wind' | 'time' | null;
+/**
+ * The wind/time editors, independently of the Layers sheet.
+ *
+ * Was folded into one `Panel` union with `'layers'`, which made the sheet and
+ * a popover mutually exclusive: opening the wind editor force-closed the
+ * layers list. That is actively hostile to this product's flagship move —
+ * sweeping the wind dial and watching leeward bedding likelihood repaint
+ * live — which needs the layer toggle and the wind editor open at once. The
+ * popovers are self-sized and anchored (`packages/design`'s `Popover`), so
+ * there is no longer a layout reason to force them apart; the sheet's own
+ * open/closed state is tracked separately below.
+ */
+type Popover = 'wind' | 'time' | null;
 
 export default function App() {
   const [active, setActive] = useState<Set<string>>(
@@ -46,7 +58,8 @@ export default function App() {
   const [atUtc, setAtUtc] = useState(() => new Date());
   const [offlineReady, setOfflineReady] = useState(false);
   const [inspect, setInspect] = useState<{ lng: number; lat: number } | null>(null);
-  const [panel, setPanel] = useState<Panel>('layers');
+  const [sheetOpen, setSheetOpen] = useState(true);
+  const [popover, setPopover] = useState<Popover>(null);
   const [center, setCenter] = useState({ lng: -82.54, lat: 39.43 });
 
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -153,7 +166,7 @@ export default function App() {
       atUtc={atUtc}
       onWindChange={setWindFromDeg}
       onTimeChange={setAtUtc}
-      onClose={() => setPanel(null)}
+      onClose={() => setPopover(null)}
     />
   );
 
@@ -182,7 +195,7 @@ export default function App() {
         onMove={setCenter}
       />
 
-      <div className="map-chrome" data-sheet-open={panel === 'layers'}>
+      <div className="map-chrome">
         <div className="chrome-topright">
           <Rail>
             <RailButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>
@@ -201,8 +214,8 @@ export default function App() {
           <Rail>
             <RailButton
               label="Layers"
-              active={panel === 'layers'}
-              onClick={() => setPanel(panel === 'layers' ? null : 'layers')}
+              active={sheetOpen}
+              onClick={() => setSheetOpen((open) => !open)}
             >
               <LayersIcon />
             </RailButton>
@@ -219,15 +232,15 @@ export default function App() {
             windOctant={windFromDeg === null ? null : octant(windFromDeg)}
             atLabel={formatWhen(atUtc)}
             thermal={thermal}
-            onWindClick={() => setPanel(panel === 'wind' ? null : 'wind')}
-            onTimeClick={() => setPanel(panel === 'time' ? null : 'time')}
-            windEditor={panel === 'wind' ? editor('wind') : null}
-            timeEditor={panel === 'time' ? editor('time') : null}
+            onWindClick={() => setPopover(popover === 'wind' ? null : 'wind')}
+            onTimeClick={() => setPopover(popover === 'time' ? null : 'time')}
+            windEditor={popover === 'wind' ? editor('wind') : null}
+            timeEditor={popover === 'time' ? editor('time') : null}
           />
         </div>
       </div>
 
-      {panel === 'layers' && (
+      {sheetOpen && (
         <LayersSheet
           active={active}
           opacities={opacities}
@@ -237,7 +250,7 @@ export default function App() {
           onToggle={handleToggle}
           onOpacity={handleOpacity}
           onToggleFilter={handleToggleFilter}
-          onClose={() => setPanel(null)}
+          onClose={() => setSheetOpen(false)}
         />
       )}
 
