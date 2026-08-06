@@ -70,9 +70,8 @@ docker build -t ridgeline/web:dev \
   -f apps/web/Dockerfile .
 ```
 
-(That build arg does not exist in `apps/web/Dockerfile` yet — it currently
-bakes the default. Adding it is a small change and worth doing before anyone
-needs a private 3DEP mirror.)
+(The build arg exists in `apps/web/Dockerfile`. Left unset it falls back to the
+public AWS Terrarium tiles.)
 
 ## What the chart does that compose does not
 
@@ -100,7 +99,7 @@ hostname once at startup and *exits* if it does not resolve — and Helm gives n
 ordering guarantee between the web Deployment and the api Service, so a cold
 install can CrashLoopBackOff on a cluster where nothing is wrong.
 
-**Redis is off.** `docker-compose.yml` starts Redis and passes `REDIS_URL`, but
+**Redis is off.** `docker-compose.dev.yml` starts Redis and passes `REDIS_URL`, but
 nothing consumes it: no redis/ioredis/bull dependency in `apps/api/package.json`
 and no import anywhere in `apps/api/src`. Turning it on gives you a cache with
 no reader. Enable it in the same change that adds a consumer.
