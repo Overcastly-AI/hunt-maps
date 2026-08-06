@@ -16,6 +16,7 @@
  * instead of re-deriving them badly.
  */
 
+import { useEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 import { CloseIcon, WindNeedle } from './icons';
 
@@ -108,6 +109,14 @@ export interface ConditionsBarProps {
   thermal?: { phase: string; note: string } | null;
   onWindClick: () => void;
   onTimeClick: () => void;
+  /**
+   * Editors render inside their own cell, so each popover's caret points at the
+   * control that opened it. Anchoring to the bar as a whole would leave the
+   * time editor's caret pointing at the wind cell — a small lie about which
+   * control you are editing.
+   */
+  windEditor?: ReactNode;
+  timeEditor?: ReactNode;
 }
 
 /**
@@ -127,9 +136,12 @@ export function ConditionsBar({
   thermal,
   onWindClick,
   onTimeClick,
+  windEditor,
+  timeEditor,
 }: ConditionsBarProps) {
   return (
     <div className="rl-conditions rl-glass">
+      <div className="rl-popover-anchor">
       <button type="button" className="rl-conditions__cell" onClick={onWindClick}>
         <WindNeedle
           fromDeg={windFromDeg}
@@ -147,13 +159,18 @@ export function ConditionsBar({
           </span>
         </span>
       </button>
+        {windEditor}
+      </div>
 
-      <button type="button" className="rl-conditions__cell" onClick={onTimeClick}>
-        <span>
-          <span className="rl-conditions__label">Date &amp; time</span>
-          <span className="rl-conditions__value">{atLabel}</span>
-        </span>
-      </button>
+      <div className="rl-popover-anchor">
+        <button type="button" className="rl-conditions__cell" onClick={onTimeClick}>
+          <span>
+            <span className="rl-conditions__label">Date &amp; time</span>
+            <span className="rl-conditions__value">{atLabel}</span>
+          </span>
+        </button>
+        {timeEditor}
+      </div>
 
       {thermal && (
         <div className="rl-conditions__cell" title={thermal.note}>
@@ -472,4 +489,83 @@ export function Confidence({ grade, note }: { grade: EvidenceGrade; note?: strin
       {label[grade]}
     </Chip>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Popover
+// ---------------------------------------------------------------------------
+
+export interface PopoverProps {
+  title: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+/**
+ * A small editor anchored to the control that opened it.
+ *
+ * ## Why this exists separately from `Sheet`
+ *
+ * The wind and time editors were originally full-height drawers, and that was
+ * wrong three ways:
+ *
+ *  1. **Scale.** ~300px of content in a 1200px chassis. A drawer is built for a
+ *     long scrolling list; these are four controls.
+ *  2. **It moved its own trigger.** The drawer pushes the bottom chrome aside,
+ *     so opening the wind editor slid the conditions bar — the thing the user
+ *     had just clicked — out from under their cursor.
+ *  3. **No spatial relationship.** A control launched from the bottom of the
+ *     screen appeared as a panel on the far left.
+ *
+ * A popover fixes all three: sized to its content, anchored above its trigger,
+ * and it moves nothing. `Sheet` stays for the layer list, which really is long.
+ *
+ * Positioning is CSS-only — the popover renders inside a `position: relative`
+ * anchor next to the trigger, so it follows the trigger wherever the layout puts
+ * it. No measuring, no reflow on resize, nothing to get stale.
+ */
+export function Popover({ title, onClose, children }: PopoverProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    const onPointer = (e: PointerEvent) => {
+      const el = ref.current;
+      if (!el || el.contains(e.target as Node)) return;
+      // The trigger toggles on click; closing here too would immediately
+      // reopen it. Ignore pointer events that landed on a conditions cell.
+      if ((e.target as HTMLElement).closest?.('.rl-conditions__cell')) return;
+      onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="rl-popover rl-glass"
+      role="dialog"
+      aria-label={typeof title === 'string' ? title : 'Editor'}
+    >
+      <header className="rl-popover__head">
+        <h2 className="rl-popover__title">{title}</h2>
+        <RailButton label="Close" onClick={onClose}>
+          <CloseIcon width={16} height={16} />
+        </RailButton>
+      </header>
+      <div className="rl-popover__body">{children}</div>
+    </div>
+  );
+}
+
+/** Wraps a trigger so a `Popover` can anchor above it with no JS positioning. */
+export function PopoverAnchor({ children }: { children: ReactNode }) {
+  return <div className="rl-popover-anchor">{children}</div>;
 }

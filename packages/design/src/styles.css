@@ -285,7 +285,30 @@ body {
   align-items: stretch;
   gap: 1px;
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  /*
+   * Deliberately NOT `overflow: hidden`.
+   *
+   * The obvious way to round a segmented bar is to clip it, and that is exactly
+   * what broke the wind and time editors: they anchor *inside* a cell so their
+   * caret points at the right control, and clipping the bar clipped them out of
+   * existence. They still painted (a bounding box is not affected by an
+   * ancestor's clip) but `elementFromPoint` returned the map underneath, so the
+   * buttons were visible and unclickable — the worst kind of broken.
+   *
+   * Corners are rounded on the end children instead.
+   */
+}
+
+.rl-conditions > *:first-child,
+.rl-conditions > *:first-child .rl-conditions__cell {
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.rl-conditions > *:last-child,
+.rl-conditions > *:last-child .rl-conditions__cell {
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 .rl-conditions__cell {
@@ -734,4 +757,115 @@ body {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-xs) !important;
   padding: 2px var(--space-2) !important;
+}
+
+/* --------------------------------------------------------------------------
+ * Popover — small editors anchored to the control that opened them
+ *
+ * Sized to content, positioned by CSS against a relative anchor, and it moves
+ * nothing else on screen. See the `Popover` doc comment for why the wind and
+ * time editors are not drawers.
+ * -------------------------------------------------------------------------- */
+
+.rl-popover-anchor {
+  position: relative;
+  /* Inside the conditions bar these replace the cells as flex children, so they
+     must stretch the same way or the divider rhythm breaks. */
+  display: flex;
+  align-items: stretch;
+}
+
+.rl-popover {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 25;
+  width: max-content;
+  min-width: 268px;
+  max-width: min(320px, calc(100vw - var(--space-6)));
+  border-radius: var(--radius-lg);
+  animation: rl-popover-in var(--motion-base) var(--motion-ease);
+  transform-origin: bottom left;
+}
+
+@keyframes rl-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A caret tying the popover to its trigger. Without it the panel reads as
+   floating debris rather than as belonging to the button below it. */
+.rl-popover::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: var(--space-6);
+  width: 12px;
+  height: 12px;
+  background: var(--glass-bg);
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.rl-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.rl-popover__title {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+}
+
+.rl-popover__body {
+  padding: var(--space-4);
+}
+
+/* On a phone the conditions bar spans the viewport, so the popover matches it
+   rather than hanging off one end. */
+@media (max-width: 860px) {
+  .rl-popover {
+    left: 0;
+    right: 0;
+    max-width: none;
+  }
+}
+
+/* Compact compass + cardinal grid for the wind editor. */
+.rl-compass {
+  display: flex;
+  justify-content: center;
+  padding-bottom: var(--space-3);
+  color: var(--color-accent);
+}
+
+.rl-cardinals {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.rl-cardinals .rl-btn {
+  padding: 0;
+  min-height: var(--space-10);
+  font-family: var(--font-condensed);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--track-label);
 }

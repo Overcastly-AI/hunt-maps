@@ -82,7 +82,7 @@ test.describe('Ridgeline screenshots', () => {
     await page.screenshot({ path: `${OUT}/02b-desktop-map-only.png` });
   });
 
-  test('desktop — wind dialog and bedding likelihood', async ({ page }) => {
+  test('desktop — wind popover and bedding likelihood', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${VIEW}`);
     await expect(page.getByTestId('map-canvas')).toBeVisible();
@@ -93,19 +93,22 @@ test.describe('Ridgeline screenshots', () => {
     await expect(bedding).toBeDisabled();
     await page.screenshot({ path: `${OUT}/04-desktop-blocked-layer.png` });
 
-    // Set a NW wind from the conditions bar. The drawer must be dismissed
-    // first — the bar slides clear of it, but Playwright still resolves the
-    // click against the pre-transition position otherwise.
-    await page.getByRole('button', { name: 'Close panel' }).click();
-    await page.waitForTimeout(600);
+    // The wind editor is a popover anchored to the conditions bar, so the bar
+    // stays exactly where it was — no need to dismiss the drawer first, and
+    // nothing moves out from under the pointer.
     await page.getByRole('button', { name: /Wind from/ }).click();
+    // Opening the wind editor closes the layers drawer, so the bar animates
+    // back to its unshifted position. Let it settle before clicking into the
+    // popover, or Playwright chases a moving target.
+    await page.waitForTimeout(700);
     await page.getByRole('button', { name: 'NW', exact: true }).click();
-    // Changing the wind invalidates every wind-dependent tile, so wait for the
-    // re-render to settle rather than capturing a half-painted map.
     await waitForTiles(page);
-    await page.screenshot({ path: `${OUT}/04b-desktop-wind-dialog.png` });
+    await page.screenshot({ path: `${OUT}/04b-desktop-wind-popover.png` });
 
-    await page.getByRole('button', { name: 'Close panel' }).click();
+    // Escape dismisses the popover.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+
     await openLayers(page);
     await expect(bedding).toBeEnabled();
     await bedding.click();

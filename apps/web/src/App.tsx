@@ -20,7 +20,7 @@ import {
 } from '@hunt-maps/design';
 import { MapView } from './components/MapView';
 import { LayersSheet, type SavedFilterSummary } from './components/LayersSheet';
-import { WindDialog } from './components/WindDialog';
+import { ConditionsEditor } from './components/ConditionsEditors';
 import { toggleLayer } from './lib/layers';
 import { TerrainProtocol } from './lib/map/terrainProtocol';
 import { openTileStore, requestPersistentStorage } from './lib/offline/tileStore';
@@ -146,6 +146,17 @@ export default function App() {
     setFilters((prev) => prev.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f)));
   }, []);
 
+  const editor = (mode: 'wind' | 'time') => (
+    <ConditionsEditor
+      mode={mode}
+      windFromDeg={windFromDeg}
+      atUtc={atUtc}
+      onWindChange={setWindFromDeg}
+      onTimeChange={setAtUtc}
+      onClose={() => setPanel(null)}
+    />
+  );
+
   const locate = useCallback(() => {
     navigator.geolocation?.getCurrentPosition((pos) => {
       mapRef.current?.flyTo({
@@ -171,7 +182,7 @@ export default function App() {
         onMove={setCenter}
       />
 
-      <div className="map-chrome" data-sheet-open={panel !== null}>
+      <div className="map-chrome" data-sheet-open={panel === 'layers'}>
         <div className="chrome-topright">
           <Rail>
             <RailButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>
@@ -210,6 +221,8 @@ export default function App() {
             thermal={thermal}
             onWindClick={() => setPanel(panel === 'wind' ? null : 'wind')}
             onTimeClick={() => setPanel(panel === 'time' ? null : 'time')}
+            windEditor={panel === 'wind' ? editor('wind') : null}
+            timeEditor={panel === 'time' ? editor('time') : null}
           />
         </div>
       </div>
@@ -224,17 +237,6 @@ export default function App() {
           onToggle={handleToggle}
           onOpacity={handleOpacity}
           onToggleFilter={handleToggleFilter}
-          onClose={() => setPanel(null)}
-        />
-      )}
-
-      {(panel === 'wind' || panel === 'time') && (
-        <WindDialog
-          mode={panel}
-          windFromDeg={windFromDeg}
-          atUtc={atUtc}
-          onWindChange={setWindFromDeg}
-          onTimeChange={setAtUtc}
           onClose={() => setPanel(null)}
         />
       )}
