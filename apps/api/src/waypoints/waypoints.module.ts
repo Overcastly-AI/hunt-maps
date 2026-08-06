@@ -120,10 +120,11 @@ export class WaypointsService {
       },
     });
 
-    // `location` is nullable in the Prisma schema only because Prisma Client
-    // cannot create rows carrying required `Unsupported()` columns. The
-    // migration reinstates NOT NULL in SQL, and the write below runs in the
-    // same request, so a row never survives without geometry.
+    // `location` is nullable because Prisma Client cannot create rows carrying
+    // required `Unsupported()` columns. It stays nullable in the database too —
+    // a bare NOT NULL would reject the insert above and cannot be deferred to
+    // COMMIT. The write below runs in the same request; see backlog I5 for the
+    // transaction + deferred-constraint-trigger version.
 
     await this.writeLocation(created.id, location);
     await this.attachElevation(created.id, location);

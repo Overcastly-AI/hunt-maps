@@ -1,0 +1,59 @@
+services:
+  db:
+    # PostGIS, not plain Postgres. Every meaningful query in this app is
+    # spatial; the extension is a hard requirement, not an add-on.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ridgeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ridgeline}
+      POSTGRES_DB: ${POSTGRES_DB:-ridgeline}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ridgeline}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--save', '60', '1', '--loglevel', 'warning']
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ridgeline}:${POSTGRES_PASSWORD:-ridgeline}@db:5432/${POSTGRES_DB:-ridgeline}
+      REDIS_URL: redis://redis:6379
+      # No default. The app refuses to boot without a real secret rather than
+      # shipping a weak one to production.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET — generate with: openssl rand -base64 48}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      DEM_3DEP_TEMPLATE: ${DEM_3DEP_TEMPLATE:-}
+      NODE_ENV: production
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${API_PORT:-3001}:3001'
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  redis-data:

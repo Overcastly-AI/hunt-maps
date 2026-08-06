@@ -9,7 +9,14 @@ import { PropertyAccessService } from './property-access.service';
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({ secret: requireJwtSecret() }),
+    // `registerAsync`, not `register`. The synchronous form evaluates its
+    // options object when the decorator runs — i.e. at *import* time — so a
+    // missing JWT_SECRET would throw the moment anything transitively imported
+    // this module, including a unit test for an unrelated pure function. The
+    // factory defers the check to DI instantiation, which is where a
+    // configuration failure belongs: still fail-fast at boot, without making
+    // the secret a precondition for importing a file.
+    JwtModule.registerAsync({ useFactory: () => ({ secret: requireJwtSecret() }) }),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, PropertyAccessService],
