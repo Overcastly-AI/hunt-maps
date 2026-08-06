@@ -1,0 +1,521 @@
+// Ridgeline data model.
+//
+// PostGIS is a hard requirement, not a nice-to-have: every meaningful query in
+// this product is spatial ("stands within 400 m of predicted bedding",
+// "observations inside this saved filter's polygon", "which offline region
+// covers this point"), and doing that with lat/lng float columns and bounding
+// boxes falls apart the moment a property is not axis-aligned.
+//
+// Prisma has no native geometry type, so geometry columns are declared as
+// `Unsupported("geometry(...)")`. They are readable/writable through
+// `$queryRaw`, and every module that touches them goes through
+// `GeometryService` so the raw SQL lives in exactly one place.
+
+generator client {
+  provider        = "prisma-client-js"
+  // `postgresqlExtensions` lets the datasource declare PostGIS, so
+  // `prisma migrate` emits `CREATE EXTENSION postgis` instead of leaving a
+  // fresh database to fail on the first spatial query.
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Units follow the user, not the property — a hunter with land in two states
+  // still thinks in one system.
+  unitSystem   UnitSystem @default(IMPERIAL)
+
+  memberships  PropertyMembership[]
+  ownedProperties Property[]     @relation("PropertyOwner")
+  observations Observation[]
+  savedFilters SavedFilter[]
+  offlineRegions OfflineRegion[]
+  refreshTokens RefreshToken[]
+  tracks       Track[]
+
+  @@index([email])
+}
+
+enum UnitSystem {
+  IMPERIAL
+  METRIC
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Stored hashed. A stolen database must not hand over live sessions.
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Properties
+// ---------------------------------------------------------------------------
+
+model Property {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User     @relation("PropertyOwner", fields: [ownerId], references: [id])
+
+  // Property outline. Drives every "available area" denominator in the
+  // selection analytics — without it, preference vs abundance cannot be
+  // separated, so this is required rather than optional.
+  boundary    Unsupported("geometry(MultiPolygon, 4326)")?
+  centroid    Unsupported("geometry(Point, 4326)")?
+
+  areaHectares Float?
+  /// Cached property-centre latitude, used for solar and rut modelling.
+  centerLat   Float?
+  centerLng   Float?
+  /// Per-property rut calibration in days, learned from logged observations.
+  rutOffsetDays Int?
+
+  timezone    String   @default("UTC")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships   PropertyMembership[]
+  waypoints     Waypoint[]
+  observations  Observation[]
+  savedFilters  SavedFilter[]
+  corridors     Corridor[]
+  offlineRegions OfflineRegion[]
+  tracks        Track[]
+  terrainProfile TerrainProfile?
+
+  @@index([ownerId])
+}
+
+enum PropertyRole {
+  OWNER
+  MANAGER
+  /// Can see and log, but not reorganise the property or invite others.
+  HUNTER
+  /// Read-only. For landowners who want visibility without edit rights.
+  OBSERVER
+}
+
+model PropertyMembership {
+  id         String       @id @default(uuid())
+  propertyId String
+  property   Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       PropertyRole @default(HUNTER)
+  createdAt  DateTime     @default(now())
+
+  @@unique([propertyId, userId])
+  @@index([userId])
+}
+
+/// Cached per-property terrain summary.
+///
+/// This is the availability distribution the selection analytics divide by. It
+/// is expensive to compute (a full raster pass over the property) and changes
+/// only when the boundary or the DEM source changes, so it is materialised
+/// rather than recomputed per request.
+model TerrainProfile {
+  id             String   @id @default(uuid())
+  propertyId     String   @unique
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  demSource      String
+  demZoom        Int
+  cellSizeM      Float
+  minElevationM  Float
+  maxElevationM  Float
+  meanSlopeDeg   Float
+
+  /// Area share per slope band, aspect octant and landform class.
+  slopeShares    Json
+  aspectShares   Json
+  landformShares Json
+  /// Share of the property flagged as bench.
+  benchShare     Float?
+
+  computedAt     DateTime @default(now())
+  /// Bumped when the DEM source or boundary changes; invalidates the cache.
+  sourceVersion  String
+}
+
+// ---------------------------------------------------------------------------
+// Waypoints
+// ---------------------------------------------------------------------------
+
+model Waypoint {
+  id         String       @id @default(uuid())
+  propertyId String
+  property   Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  type       WaypointType
+  name       String
+  notes      String?
+
+  location   Unsupported("geometry(Point, 4326)")?
+  elevationM Float?
+
+  /// Stand-specific: height above ground and the arc it covers.
+  standHeightM     Float?
+  shootingLanesDeg Int[]  @default([])
+  /// Winds this stand is huntable on, as compass octants. The single most
+  /// consulted field on a stand record.
+  huntableWinds    String[] @default([])
+
+  /// Trail-camera specific.
+  cameraDirectionDeg Float?
+  lastCheckedAt      DateTime?
+
+  archived   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  /// Optimistic-concurrency version for offline sync conflict detection.
+  version    Int      @default(1)
+  /// Device-generated id, so a record created offline has a stable identity.
+  clientId   String?  @unique
+
+  observations Observation[]
+
+  @@index([propertyId, type])
+  @@index([propertyId, archived])
+}
+
+enum WaypointType {
+  STAND
+  BLIND
+  TRAIL_CAMERA
+  FOOD_PLOT
+  MINERAL_SITE
+  WATER_SOURCE
+  PARKING
+  ACCESS_ROUTE
+  PROPERTY_MARKER
+  NOTE
+}
+
+// ---------------------------------------------------------------------------
+// Observations — the ground truth the analytics rest on
+// ---------------------------------------------------------------------------
+
+model Observation {
+  id         String          @id @default(uuid())
+  propertyId String
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User            @relation(fields: [userId], references: [id])
+  waypointId String?
+  waypoint   Waypoint?       @relation(fields: [waypointId], references: [id], onDelete: SetNull)
+
+  kind       ObservationKind
+  species    Species?
+  sex        AnimalSex?
+  estimatedAge Float?
+  count      Int             @default(1)
+  signType   SignType?
+
+  location   Unsupported("geometry(Point, 4326)")?
+  travelHeadingDeg Float?
+
+  observedAt DateTime
+  rutPhase   RutPhase?
+
+  /// Conditions captured at observation time. Reconstructing hyperlocal
+  /// historical weather afterwards is unreliable, and every weather-correlation
+  /// analytic depends on this being real.
+  temperatureC     Float?
+  pressureHpa      Float?
+  pressureTrend3h  Float?
+  windSpeedKph     Float?
+  windFromDeg      Float?
+  humidityPct      Float?
+  cloudCover       Float?
+  precipitationMm  Float?
+  moonPhase        Float?
+
+  /// Terrain sampled at the point when the observation was recorded.
+  /// Denormalised so habitat-selection queries do not re-run raster analysis
+  /// over the entire observation history.
+  elevationM    Float?
+  slopeDeg      Float?
+  aspectDeg     Float?
+  landformClass Int?
+  morphometry   Int?
+  isBench       Boolean?
+  ruggedness    Float?
+  windExposure  Float?
+  insolation    Float?
+
+  /// A logged sit with zero sightings. Recording blanks is what makes
+  /// sightings-per-sit meaningful instead of a measure of how often the hunter
+  /// went out.
+  isBlankSit Boolean @default(false)
+  sitMinutes Int?
+
+  notes      String?
+  photoUrls  String[] @default([])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  version    Int      @default(1)
+  clientId   String?  @unique
+
+  @@index([propertyId, observedAt])
+  @@index([propertyId, kind])
+  @@index([propertyId, species, sex])
+  @@index([waypointId])
+}
+
+enum ObservationKind {
+  SIGHTING
+  TRAIL_CAMERA
+  HARVEST
+  SIGN
+  SIT
+}
+
+enum Species {
+  WHITETAIL
+  MULE_DEER
+  BLACKTAIL
+  ELK
+  MOOSE
+  PRONGHORN
+  BEAR
+  TURKEY
+  HOG
+  OTHER
+}
+
+enum AnimalSex {
+  BUCK
+  DOE
+  UNKNOWN
+}
+
+enum SignType {
+  RUB
+  SCRAPE
+  BED
+  TRACK
+  SCAT
+  TRAIL
+  BROWSE
+  SHED_ANTLER
+  WALLOW
+}
+
+enum RutPhase {
+  OFF_SEASON
+  PRE_RUT
+  SEEKING
+  CHASING
+  PEAK_BREEDING
+  POST_RUT
+  SECOND_RUT
+  LATE_SEASON
+}
+
+/// A recorded GPS track — walking in, blood-trailing, or a scouting loop.
+model Track {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  purpose    TrackPurpose @default(SCOUTING)
+  path       Unsupported("geometry(LineString, 4326)")?
+  distanceM  Float?
+  ascentM    Float?
+  startedAt  DateTime
+  endedAt    DateTime?
+  createdAt  DateTime @default(now())
+  version    Int      @default(1)
+  clientId   String?  @unique
+
+  @@index([propertyId, startedAt])
+}
+
+enum TrackPurpose {
+  SCOUTING
+  ACCESS
+  BLOOD_TRAIL
+  RECOVERY
+  OTHER
+}
+
+// ---------------------------------------------------------------------------
+// Saved terrain filters — the headline feature
+// ---------------------------------------------------------------------------
+
+/// A named, persisted terrain query.
+///
+/// The predicate is a validated JSON AST (see `@hunt-maps/terrain`), never
+/// executable code — filters are shareable between users, and a shared filter
+/// must be inert data.
+model SavedFilter {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Null for a filter in the user's personal library rather than pinned to
+  /// one property — filters are portable across ground by design.
+  propertyId  String?
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  predicate   Json
+  color       String   @default("#e8a33d")
+  opacity     Float    @default(0.5)
+  outline     Boolean  @default(true)
+
+  /// Materialised match geometry, so the filter renders instantly offline and
+  /// can be intersected with observations without re-running raster analysis.
+  matchedArea Unsupported("geometry(MultiPolygon, 4326)")?
+  matchedAreaShare Float?
+  computedAt  DateTime?
+  /// Invalidates `matchedArea` when the analysis inputs change.
+  computeKey  String?
+
+  isPreset    Boolean  @default(false)
+  sharedPublicly Boolean @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(1)
+  clientId    String?  @unique
+
+  @@index([ownerId])
+  @@index([propertyId])
+}
+
+/// A computed movement corridor between two areas.
+model Corridor {
+  id          String   @id @default(uuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String
+
+  /// The two endpoints/areas the corridor connects — typically bedding and food.
+  sourceArea  Unsupported("geometry(MultiPolygon, 4326)")?
+  targetArea  Unsupported("geometry(MultiPolygon, 4326)")?
+
+  /// The corridor band and its traced centrelines.
+  band        Unsupported("geometry(MultiPolygon, 4326)")?
+  centerlines Unsupported("geometry(MultiLineString, 4326)")?
+  /// Pinch points, where every route squeezes together. The stand-placement
+  /// output — the reason the corridor is worth computing over a single path.
+  pinchPoints Unsupported("geometry(MultiPoint, 4326)")?
+
+  toleranceFraction Float @default(0.15)
+  /// Resistance model inputs, recorded so a corridor can be explained and rerun.
+  parameters  Json
+  optimalCost Float?
+
+  computedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([propertyId])
+}
+
+// ---------------------------------------------------------------------------
+// Offline
+// ---------------------------------------------------------------------------
+
+model OfflineRegion {
+  id          String   @id @default(uuid())
+  name        String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId  String?
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  bounds      Unsupported("geometry(Polygon, 4326)")?
+  minZoom     Int      @default(10)
+  maxZoom     Int      @default(16)
+  layers      String[]
+
+  status      OfflineStatus @default(PENDING)
+  sizeBytes   BigInt?
+  tileCount   Int?
+  /// Path to the packaged PMTiles archive, relative to the tile store root.
+  archivePath String?
+  packagedAt  DateTime?
+  error       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+enum OfflineStatus {
+  PENDING
+  PACKAGING
+  READY
+  FAILED
+  STALE
+}
+
+/// Server-side DEM tile cache.
+///
+/// Upstream DEM providers rate-limit and go down. Caching decoded tiles means a
+/// corridor solve does not re-fetch hundreds of tiles, and — more importantly —
+/// that packaging an offline region for a user in the field does not depend on
+/// a third party being up at that moment.
+model DemTile {
+  z          Int
+  x          Int
+  y          Int
+  source     String
+  /// Raw encoded PNG bytes as fetched upstream.
+  data       Bytes
+  fetchedAt  DateTime @default(now())
+  /// Bumped when the upstream source publishes new data for this tile.
+  etag       String?
+
+  @@id([source, z, x, y])
+  @@index([fetchedAt])
+}
+
+/// Append-only change log powering offline sync pull.
+///
+/// A cursor over this table is what lets a device that has been off-grid for a
+/// week catch up incrementally instead of re-downloading the whole property.
+model ChangeLog {
+  id         BigInt   @id @default(autoincrement())
+  propertyId String?
+  entity     String
+  entityId   String
+  op         String
+  version    Int
+  payload    Json
+  actorId    String?
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId, id])
+  @@index([createdAt])
+}
