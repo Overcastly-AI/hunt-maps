@@ -14,8 +14,8 @@
   --color-line: #26323d;
   --color-line-strong: #374757;
   --color-text: #e8edf2;
-  --color-text-dim: #93a3b3;
-  --color-text-faint: #68788a;
+  --color-text-dim: #b2bfcb;
+  --color-text-faint: #94a3b0;
   --color-accent: #c9a253;
   --color-accent-dim: #6f5525;
   --color-accent-bright: #e3bd76;
@@ -40,8 +40,8 @@
   --map-pinch: #ff5a1f;
 
   /* glass */
-  --glass-bg: rgb(18 26 34 / 0.86);
-  --glass-bg-strong: rgb(10 15 20 / 0.94);
+  --glass-bg: rgb(18 26 34 / 0.92);
+  --glass-bg-strong: rgb(10 15 20 / 0.97);
   --glass-blur: blur(18px) saturate(140%);
   --glass-border: rgb(255 255 255 / 0.09);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);

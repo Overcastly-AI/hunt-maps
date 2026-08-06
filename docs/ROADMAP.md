@@ -55,13 +55,28 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [ ] **P0 — fix `offlineReady`, a global boolean sampled once at mount that
+      tells a hunter an area is downloaded when it is not** (verified defect,
+      `BACKLOG R8`; this is the exact field failure CLAUDE.md calls the worst
+      this product has)
 - [ ] Property boundary drawing and editing on the map *(🔴 scorecard gap)*
 - [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
 - [ ] Observation capture optimised for gloved, one-handed, in-the-field use
 - [ ] Saved-filter editor: build a predicate visually, see match share live
 - [ ] Offline region picker with the estimate and warnings surfaced
 - [ ] Corridor UI: pick two areas, solve, see band + pinch points
-- [ ] Terrain readout on long-press (API exists; UI pending)
+- [ ] Terrain readout on long-press (API exists; UI pending — rebuild as a
+      peek-detent sheet with a map marker, not the current floating dialog)
+- [ ] `apps/web/e2e/ui-invariants.spec.ts` — automated UI invariants suite now
+      exists and runs: 24 tests, 16 passing. Found 6 real defects (Layers
+      button shifting 372px when the sheet it belongs to opens, 32px toggle
+      rows and a 22px link below the 44px gloved-touch floor, chrome text at
+      2.55–3.48:1 against the 4.5:1 AA requirement). Fixes are in flight with
+      two agents as of this pass; suite not yet fully green, not yet
+      committed.
+- [ ] Deploy the `Confidence` primitive into the app — it exists in
+      `packages/design`, is documented, and is used in **zero** places in
+      `apps/web` (`BACKLOG R10`)
 
 ## ⬜ Phase 3 — Closing the scorecard gaps
 

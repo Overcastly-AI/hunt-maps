@@ -178,14 +178,18 @@ test.describe('2. Trigger stability', () => {
     expect(boxDelta(before, after), `Wind trigger moved ${boxDelta(before, after).toFixed(1)}px on click`).toBeLessThanOrEqual(4);
   });
 
-  // --- The two cases below are expected to currently FAIL. See the summary
-  // for the real defect they catch: `.chrome-bottomleft` (Rail + ConditionsBar
-  // together) is translated 372px by `apps/web/src/index.css` whenever the
-  // Layers sheet is open, and both the Layers button and the Wind button live
-  // inside that same translated group. Opening *or* closing the sheet moves
-  // its own trigger — the exact failure class this suite exists to catch,
-  // reproduced via a different code path than the one already fixed for the
-  // wind/time editors themselves.
+  // --- Regression guards for a real defect this suite caught. `.chrome-
+  // bottomleft` (Rail + ConditionsBar together) used to be translated 372px
+  // by `apps/web/src/index.css` whenever the Layers sheet opened, and both
+  // the Layers button and the Wind button lived inside that same translated
+  // group — so opening *or* closing the sheet moved its own trigger, the
+  // exact failure class this suite exists to catch, reproduced via a
+  // different code path than the one already fixed for the wind/time
+  // editors themselves. Fixed by reserving vertical clearance for the sheet
+  // instead of displacing the trigger's group (`apps/web/src/index.css`) and
+  // by decoupling the sheet's open state from the popovers' (`App.tsx`), so
+  // opening one no longer force-closes the other. These two tests now pass
+  // honestly; keep them, they are what would catch a repeat.
 
   test('opening the Layers sheet must not move the Layers button itself', async ({ page }) => {
     await gotoAndSettle(page, DESKTOP);
@@ -199,30 +203,31 @@ test.describe('2. Trigger stability', () => {
 
     expect(
       boxDelta(before, after),
-      `Layers button moved ${boxDelta(before, after).toFixed(1)}px horizontally when the sheet it ` +
-        `opens slid its own trigger sideways with it (apps/web/src/index.css, the ` +
-        `"data-sheet-open" translateX rule on .chrome-bottomleft).`,
+      `Layers button moved ${boxDelta(before, after).toFixed(1)}px horizontally when the sheet it opens ` +
+        `slid its own trigger sideways with it.`,
     ).toBeLessThanOrEqual(4);
   });
 
   test('opening the wind popover while the Layers sheet is open must not move the Wind trigger', async ({ page }) => {
-    // Default load state: `panel === 'layers'`, sheet already open.
+    // Default load state: sheet already open. Opening the wind popover no
+    // longer force-closes it (App.tsx tracks them independently), and both
+    // should now end up open at once — the flagship "sweep the wind while
+    // watching the layer list" move this app is built around.
     await gotoAndSettle(page, DESKTOP);
     await waitForRectStable(page.locator('.chrome-bottomleft'));
 
     const trigger = page.getByRole('button', { name: /Wind from/ });
     const before = await measureBox(trigger);
-    await trigger.click(); // panel switches to 'wind', which closes the sheet underneath it
+    await trigger.click();
     await waitForRectStable(trigger);
     const after = await measureBox(trigger);
 
     expect(
       boxDelta(before, after),
-      `Wind trigger moved ${boxDelta(before, after).toFixed(1)}px because opening it closed the ` +
-        `Layers sheet and retracted the same 372px translate that opening the sheet applies — the ` +
-        `historical "wind editor slid the conditions bar out from under the cursor" bug, now caused ` +
-        `by the Layers trigger's own open/close instead of anything wind-specific.`,
+      `Wind trigger moved ${boxDelta(before, after).toFixed(1)}px when its popover opened.`,
     ).toBeLessThanOrEqual(4);
+    await expect(page.locator('.rl-sheet'), 'the Layers sheet should stay open').toBeVisible();
+    await expect(page.locator('.rl-popover'), 'the wind popover should have opened').toBeVisible();
   });
 });
 
@@ -281,7 +286,9 @@ test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
 // underneath one becomes an elementFromPoint trap for whatever is on top.
 // Desktop only: on a phone the Layers sheet is designed to cover the bottom
 // rail while open rather than push it aside (see the hit-testability comment
-// above), which is an *intentional* overlap, not a collision to flag.
+// above), which is an *intentional* overlap, not a collision to flag. The
+// last case below covers the sheet and a popover open together — see that
+// test for the one pair excluded from the check and why.
 test.describe('4. No chrome collisions (desktop)', () => {
   test('nothing open', async ({ page }) => {
     await gotoAndSettle(page, DESKTOP);
@@ -302,9 +309,31 @@ test.describe('4. No chrome collisions (desktop)', () => {
     await waitForRectStable(page.locator('.rl-popover'));
     await assertNoCollisions(page);
   });
+
+  // Layers and a popover are now independent state (App.tsx) and can both be
+  // open at once — the product's flagship move is sweeping the wind dial
+  // while watching the layer list. The three *persistent* chrome groups (both
+  // rails, the conditions bar) must still never collide with anything, sheet
+  // included. The one pair excluded here is the sheet and the popover
+  // themselves: a popover is, by definition, a transient overlay anchored to
+  // its trigger and free to float over other panels — the same way a native
+  // `<select>` dropdown is allowed to cover page content beneath it. That is
+  // a different thing from two *persistent* glass panels landing on top of
+  // one another, which is what this invariant exists to catch.
+  test('layers sheet and wind popover both open', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP); // sheet already open by default
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
+    await expect(page.locator('.rl-sheet')).toBeVisible();
+    await assertNoCollisions(page, { allow: [['layers sheet', 'wind/time popover']] });
+  });
 });
 
-async function assertNoCollisions(page: Page): Promise<void> {
+async function assertNoCollisions(
+  page: Page,
+  opts: { allow?: Array<[string, string]> } = {},
+): Promise<void> {
+  const allow = new Set((opts.allow ?? []).map(([a, b]) => [a, b].sort().join('|')));
   const rects = await collectChromeRects(page);
   const named: Array<[string, typeof rects.sheet]> = [
     ['rail (top-right)', rects.railTopRight],
@@ -317,6 +346,7 @@ async function assertNoCollisions(page: Page): Promise<void> {
     for (let j = i + 1; j < named.length; j++) {
       const [nameA, rectA] = named[i];
       const [nameB, rectB] = named[j];
+      if (allow.has([nameA, nameB].sort().join('|'))) continue;
       expect(
         rectsOverlap(rectA, rectB),
         `${nameA} and ${nameB} overlap: ${JSON.stringify(rectA)} vs ${JSON.stringify(rectB)}`,

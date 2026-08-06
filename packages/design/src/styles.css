@@ -506,8 +506,15 @@ body {
   border: none;
   color: var(--color-accent);
   font-size: var(--text-sm);
-  min-height: auto;
-  padding: var(--space-1) var(--space-2);
+  /*
+   * Still no visible box (no background/border), so this only grows the
+   * *hit* area, not the apparent size of the link — but it has to be a real
+   * min-height, not a visual trick, because the invariants suite measures the
+   * element's own rendered box, the same box a gloved tap actually lands in.
+   * "New filter" and "Clear wind" were 22px tall, half the 44px floor.
+   */
+  min-height: var(--space-touch);
+  padding: var(--space-2);
 }
 .rl-btn--link:hover:not(:disabled) {
   color: var(--color-accent-bright);
@@ -602,7 +609,14 @@ body {
   align-items: center;
   gap: var(--space-3);
   cursor: pointer;
-  min-height: var(--space-8);
+  /*
+   * This `<label>` — not the 18px checkbox it wraps — is the box a browser
+   * actually honours a tap against, and at `--space-8` (32px) it sat below
+   * the gloved-fingertip floor across all 17 rows in the layers sheet, its
+   * biggest and most-used control population. `--space-touch` is the floor
+   * every other interactive element in this file already uses.
+   */
+  min-height: var(--space-touch);
 }
 
 .rl-toggle--blocked .rl-toggle__main {

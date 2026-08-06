@@ -62,8 +62,21 @@ export const color = {
   'line': '#26323d',
   'line-strong': '#374757',
   'text': '#e8edf2',
-  'text-dim': '#93a3b3',
-  'text-faint': '#68788a',
+  /*
+   * `text-dim` / `text-faint` were tuned against `color.ground`, a flat swatch
+   * — that is what the token test still checks, and it is the wrong surface.
+   * Every real consumer (`.rl-toggle__blurb`, `.rl-conditions__label`,
+   * `.rl-hint`, `.rl-section-heading__hint`) sits on *glass over a live map*,
+   * and `ui-invariants.spec.ts` samples actual rendered pixels there, not
+   * computed CSS. Measured against that glass the old values fell as low as
+   * 2.55:1 where WCAG AA needs 4.5:1 — a blurb a hunter cannot read at 05:30.
+   * Lightened both a full step so they clear 4.5:1 with margin even over the
+   * brightest patches of basemap the blur can pull in; paired with raising
+   * the glass opacity floor below, which does the other half of the work by
+   * capping how much the map can brighten the glass beneath the text.
+   */
+  'text-dim': '#b2bfcb',
+  'text-faint': '#94a3b0',
   /** Survey brass. The single accent. */
   'accent': '#c9a253',
   'accent-dim': '#6f5525',
@@ -106,8 +119,21 @@ export const mapColor = {
  * away.
  */
 export const glass = {
-  'bg': 'rgb(18 26 34 / 0.86)',
-  'bg-strong': 'rgb(10 15 20 / 0.94)',
+  /*
+   * Opacity floors raised (0.86 → 0.92, 0.94 → 0.97) alongside the `text-dim`
+   * / `text-faint` lightening above. `backdrop-filter: blur() saturate(140%)`
+   * means the glass's *effective* colour depends on whatever part of the map
+   * sits behind it, and the layers sheet is tall enough that the same label
+   * can end up over a bright basemap patch depending on scroll position — the
+   * contrast test caught exactly this, sampling one blurb at 2.55:1 while a
+   * heading nearby measured 4.10:1 against nominally the same glass. Only
+   * lightening the text would have needed near-white values to survive the
+   * brightest patch and flattened the hierarchy against primary text; capping
+   * how much the map can bleed through is the other half of the fix and lets
+   * the text values stay reasonable. Still visibly glass — not opaque.
+   */
+  'bg': 'rgb(18 26 34 / 0.92)',
+  'bg-strong': 'rgb(10 15 20 / 0.97)',
   'blur': 'blur(18px) saturate(140%)',
   'border': 'rgb(255 255 255 / 0.09)',
   'highlight': 'inset 0 1px 0 rgb(255 255 255 / 0.06)',

@@ -76,8 +76,22 @@ export async function auditInteractiveElements(
 ): Promise<InteractiveElementInfo[]> {
   return page.evaluate(
     ({ roots, selector }: { roots: string[]; selector: string }) => {
-      const overlay =
-        document.querySelector('.rl-sheet') ?? document.querySelector('.rl-popover');
+      // The Layers sheet and a wind/time popover can now be open at once
+      // (App.tsx tracks them as independent state, on purpose — sweeping the
+      // wind dial while the layer list is open is the product's flagship
+      // move). When both are present, the popover is the one actually
+      // painted on top (it has the higher `z-index`, `packages/design/src
+      // /styles.css`), so *it* is what a covered sheet control is really
+      // hidden behind. Picking "whichever selector matches first" here would
+      // silently pick the sheet and then wrongly assert hit-testability for
+      // sheet controls that the popover is genuinely, intentionally sitting
+      // on top of right now.
+      const overlayCandidates = Array.from(document.querySelectorAll('.rl-sheet, .rl-popover'));
+      const overlay = overlayCandidates.sort(
+        (a, b) =>
+          parseInt(window.getComputedStyle(b).zIndex, 10) -
+          parseInt(window.getComputedStyle(a).zIndex, 10),
+      )[0];
       const overlayRect = overlay ? overlay.getBoundingClientRect() : null;
 
       const seen = new Set<Element>();

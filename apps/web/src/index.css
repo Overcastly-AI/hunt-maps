@@ -67,22 +67,45 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  transition: transform var(--motion-sheet) var(--motion-ease);
 }
 
-/*
- * When the drawer is open, slide the bottom-left controls clear of it rather
- * than letting the sheet sit on top of them. The conditions bar in particular
- * must stay readable at all times — it is the only thing telling the user which
- * wind the layers underneath are computed for.
- */
-.map-chrome[data-sheet-open='true'] .chrome-bottomleft {
-  transform: translateX(calc(var(--layout-sheet-width) + var(--space-3)));
-}
 .chrome-bottomright {
   grid-area: bottomright;
   justify-self: end;
   align-self: end;
+}
+
+/*
+ * Desktop: give the Layers drawer enough vertical clearance that it never
+ * reaches down into the bottom-left rail + conditions bar row, instead of
+ * sliding that row sideways out of the drawer's way.
+ *
+ * This used to be a `transform: translateX(...)` on `.chrome-bottomleft`
+ * whenever the sheet was open (see git history) — but the Layers button that
+ * *opens* the sheet lives inside that same translated group, so the click
+ * that opened the drawer slid its own trigger 372px sideways out from under
+ * the finger that just pressed it, and closing it snapped back the same way.
+ * That is the exact "trigger moves out from under the pointer" defect this
+ * app already fixed once for the wind/time editors (see `Popover`'s doc
+ * comment in `packages/design`), reintroduced here by a different code path.
+ * Reserving space instead of displacing anything means the trigger — and
+ * everything else in the row — never moves at all, whether the sheet is open
+ * or not.
+ *
+ * This overrides `.rl-sheet--drawer`'s own `bottom` offset
+ * (`packages/design/src/styles.css`), which only budgets for a single
+ * touch-target-tall control. This app's own rail stacks three buttons in
+ * that corner (`--space-touch` x3 plus a gap on each side), so the sheet
+ * needs three times the clearance — a fact about *this app's* specific
+ * chrome arrangement, not about the sheet component itself, which is why the
+ * override lives here rather than in the design package. Scoped to widths
+ * above the sheet's own mobile breakpoint so it never fights the intentional
+ * full-width bottom-sheet behaviour below that.
+ */
+@media (min-width: 861px) {
+  .rl-sheet--drawer {
+    bottom: calc(var(--space-touch) * 3 + var(--space-6) * 2);
+  }
 }
 
 /*
@@ -104,11 +127,13 @@
     justify-self: stretch;
   }
 
-  /* The mobile sheet rises from the bottom edge, so a sideways shift would be
-     nonsense; the chrome simply hides behind it. */
-  .map-chrome[data-sheet-open='true'] .chrome-bottomleft {
-    transform: none;
-  }
+  /*
+   * The mobile bottom sheet rises from the bottom edge and covers this row
+   * outright while open, rather than making room for it — there is no
+   * "sideways" on a full-width sheet. That is a deliberate, temporary
+   * occlusion by a panel the user can dismiss, not the trigger-displacement
+   * bug described above: nothing here moves, it is only painted over.
+   */
   .chrome-bottomright {
     display: none;
   }
