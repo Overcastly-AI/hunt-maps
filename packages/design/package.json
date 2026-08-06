@@ -2,7 +2,7 @@
   "name": "@hunt-maps/design",
   "version": "0.1.0",
   "private": true,
-  "description": "Ridgeline design system — tokens, primitives and styles. Decoupled from any app so UI changes land in one place.",
+  "description": "Ridgeline design system \u2014 tokens, primitives and styles. Decoupled from any app so UI changes land in one place.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -11,9 +11,15 @@
       "default": "./dist/index.js"
     },
     "./tokens.css": "./src/tokens.css",
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./fonts.css": "./src/fonts.css"
   },
-  "files": ["dist", "src/tokens.css", "src/styles.css"],
+  "files": [
+    "dist",
+    "src/tokens.css",
+    "src/styles.css",
+    "src/fonts.css"
+  ],
   "scripts": {
     "build:tokens": "tsx scripts/build-tokens.ts",
     "build": "pnpm build:tokens && tsc -p tsconfig.json",
@@ -29,5 +35,10 @@
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0"
   }
 }

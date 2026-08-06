@@ -2,73 +2,24 @@
  * App-shell layout only.
  *
  * Everything visual — colour, spacing, type, radii, component styling — lives
- * in `@hunt-maps/design`. What remains here is genuinely app-specific: how the
- * map and the panel are arranged, and how the map surface itself behaves.
+ * in `@hunt-maps/design`. What remains here is genuinely app-specific: where the
+ * floating chrome sits over the map.
  *
  * The rule that keeps this decoupled: **no literal colours, sizes or radii in
- * this file.** Everything reads a token. If you find yourself wanting a new
- * value, add it to `packages/design/src/tokens.ts` — that is what makes a
- * palette change a one-file edit instead of a search across the app.
+ * this file.** Everything reads a token. If you want a new value, add it to
+ * `packages/design/src/tokens.ts` — that is what makes a palette change a
+ * one-file edit instead of a search across the app.
  */
 
+@import '@hunt-maps/design/fonts.css';
 @import '@hunt-maps/design/tokens.css';
 @import '@hunt-maps/design/styles.css';
 
+/* The map is the product: it fills the viewport and nothing takes width from it. */
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--layout-panel-width) 1fr;
-  height: 100%;
-}
-
-/* On a phone the map is the product; the panel becomes a bottom sheet. */
-@media (max-width: 860px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-  }
-  .layer-panel {
-    order: 2;
-    max-height: var(--layout-sheet-max-height);
-    border-right: none;
-    border-top: 1px solid var(--color-line);
-  }
-  .map-area {
-    order: 1;
-  }
-}
-
-.layer-panel {
-  background: var(--color-bg-panel);
-  border-right: 1px solid var(--color-line);
-  overflow-y: auto;
-  padding: var(--space-4);
-  /* Respect the notch and the home indicator — this is used one-handed. */
-  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
-}
-
-.layer-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.layer-panel__head h2 {
-  font-size: var(--text-md);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin: 0;
-  color: var(--color-text-dim);
-}
-
-.layer-group {
-  margin-bottom: var(--space-5);
-}
-
-.map-area {
   position: relative;
-  min-height: 0;
+  height: 100%;
+  width: 100%;
 }
 
 .map-canvas {
@@ -76,33 +27,149 @@
   inset: 0;
 }
 
+/*
+ * Chrome floats in four corners over the map.
+ *
+ * `pointer-events: none` on the layer, re-enabled on each control, so the whole
+ * map stays draggable through the gaps between them. Without that, the corners
+ * become dead zones where a pan silently does nothing.
+ */
+.map-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  padding: var(--space-3);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-3);
+  grid-template-areas:
+    'topleft    .  topright'
+    '.          .  .'
+    'bottomleft .  bottomright';
+}
+
+.map-chrome > * {
+  pointer-events: auto;
+}
+
+.chrome-topleft {
+  grid-area: topleft;
+  align-self: start;
+  transition: transform var(--motion-sheet) var(--motion-ease);
+  /* Shrink-wrap. Without this the brand stretches to the width of the widest
+     item sharing the column — the bottom-left rail plus conditions bar — and
+     becomes a 600px empty slab. */
+  justify-self: start;
+}
+.chrome-topright {
+  grid-area: topright;
+  justify-self: end;
+  align-self: start;
+}
+.chrome-bottomleft {
+  grid-area: bottomleft;
+  align-self: end;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  transition: transform var(--motion-sheet) var(--motion-ease);
+}
+
+/*
+ * When the drawer is open, slide the bottom-left controls clear of it rather
+ * than letting the sheet sit on top of them. The conditions bar in particular
+ * must stay readable at all times — it is the only thing telling the user which
+ * wind the layers underneath are computed for.
+ */
+.map-chrome[data-sheet-open='true'] .chrome-bottomleft,
+.map-chrome[data-sheet-open='true'] .chrome-topleft {
+  transform: translateX(calc(var(--layout-sheet-width) + var(--space-3)));
+}
+.chrome-bottomright {
+  grid-area: bottomright;
+  justify-self: end;
+  align-self: end;
+}
+
+/*
+ * On a phone the conditions bar spans the full width and sits above the sheet.
+ * Wind and time are the two things a hunter re-checks constantly, so they get
+ * the bottom edge — the only part of a large phone a thumb reaches reliably.
+ */
+@media (max-width: 860px) {
+  .map-chrome {
+    grid-template-areas:
+      'topleft    .  topright'
+      '.          .  .'
+      'bottom  bottom  bottom';
+  }
+  .chrome-bottomleft {
+    grid-area: bottom;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    justify-self: stretch;
+  }
+
+  /* The mobile sheet rises from the bottom edge, so a sideways shift would be
+     nonsense; the chrome simply hides behind it. */
+  .map-chrome[data-sheet-open='true'] .chrome-bottomleft,
+  .map-chrome[data-sheet-open='true'] .chrome-topleft {
+    transform: none;
+  }
+  .chrome-bottomright {
+    display: none;
+  }
+}
+
+/* Terrain readout, anchored above the conditions bar. */
 .inspect-card {
   position: absolute;
-  bottom: var(--space-4);
-  left: var(--space-4);
-  right: var(--space-4);
-  max-width: 380px;
-  background: var(--color-bg-panel);
-  border: 1px solid var(--color-line);
+  left: var(--space-3);
+  bottom: calc(var(--space-touch) + var(--space-6));
+  width: min(340px, calc(100% - var(--space-6)));
   border-radius: var(--radius-lg);
   padding: var(--space-4);
-  box-shadow: var(--shadow-card);
+  z-index: 15;
+}
+
+.inspect-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .inspect-card h3 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-base);
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
 }
 
-.inspect-card__close {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  background: none;
-  border: none;
+/* Readout rows: label left, monospace figure right, so values align in a column. */
+.readout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.readout dt {
   color: var(--color-text-dim);
-  font-size: var(--text-xl);
-  line-height: 1;
-  cursor: pointer;
-  padding: var(--space-1) var(--space-2);
+}
+
+.readout dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
 }

@@ -47,18 +47,42 @@ describe('token values honour the field constraints', () => {
   });
 
   it('keeps the base surface dark — a white panel at 05:30 kills night vision', () => {
-    expect(luminance(color.bg)).toBeLessThan(0.05);
-    expect(luminance(color['bg-panel'])).toBeLessThan(0.08);
+    expect(luminance(color.ground)).toBeLessThan(0.05);
+    expect(luminance(color.surface)).toBeLessThan(0.08);
+  });
+
+  it('biases the neutrals cold rather than defaulting to grey', () => {
+    // The ground is the sky forty minutes before shooting light, not a neutral
+    // near-black. Blue must lead red on every neutral surface, or the palette
+    // has drifted back to an unconsidered grey.
+    for (const neutral of [color.ground, color.surface, color.raised, color.line]) {
+      const [r, , b] = rgb(neutral);
+      expect(b, neutral).toBeGreaterThan(r);
+    }
   });
 
   it('meets WCAG AA contrast for body text on every surface', () => {
-    for (const surface of [color.bg, color['bg-panel'], color['bg-raised']]) {
+    for (const surface of [color.ground, color.surface, color.raised]) {
       expect(contrast(color.text, surface)).toBeGreaterThanOrEqual(4.5);
     }
   });
 
   it('meets WCAG AA large-text contrast for dimmed text', () => {
-    expect(contrast(color['text-dim'], color.bg)).toBeGreaterThanOrEqual(3);
+    expect(contrast(color['text-dim'], color.ground)).toBeGreaterThanOrEqual(3);
+    expect(contrast(color['text-faint'], color.ground)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps text on the accent legible — brass is light enough to need dark ink', () => {
+    expect(contrast(color['accent-ink'], color.accent)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the accent distinguishable from the blaze it must never be confused with', () => {
+    // Blaze is hunter-safety orange and means danger. If the everyday accent
+    // reads as the same colour, the one signal every user already understands
+    // stops meaning anything.
+    const [ar, ag, ab] = rgb(color.accent);
+    const [br, bg, bb] = rgb(color.blaze);
+    expect(Math.hypot(ar - br, ag - bg, ab - bb)).toBeGreaterThan(90);
   });
 
   it('separates map feature colours by luminance, not just hue', () => {
@@ -86,6 +110,15 @@ describe('token values honour the field constraints', () => {
     expect(hexes).toEqual([]);
   });
 });
+
+function rgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
 
 function srgbToLinear(c: number): number {
   const s = c / 255;

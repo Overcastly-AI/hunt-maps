@@ -13,6 +13,10 @@ export interface MapViewProps {
   /** Id of the saved-filter stack registered on the protocol, if any. */
   filterStackId?: string;
   onPointInspect?: (lngLat: { lng: number; lat: number }) => void;
+  /** Hands the map instance to the app so the floating rail can drive it. */
+  onReady?: (map: maplibregl.Map) => void;
+  /** Map centre, so solar and thermal readouts follow the ground being viewed. */
+  onMove?: (center: { lng: number; lat: number }) => void;
   protocol: TerrainProtocol;
 }
 
@@ -49,6 +53,8 @@ export function MapView({
   atUtc,
   filterStackId,
   onPointInspect,
+  onReady,
+  onMove,
   protocol,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -65,7 +71,7 @@ export function MapView({
         layers: [
           // Token, not a literal — the map canvas and the app chrome must be the
           // same black, and a drifted pair is very visible at low brightness.
-          { id: 'background', type: 'background', paint: { 'background-color': color.bg } },
+          { id: 'background', type: 'background', paint: { 'background-color': color.ground } },
           // Anchor layers. Empty placeholders that never render but give every
           // real layer a stable `beforeId` to insert against.
           ...ANCHORS.map((id) => ({
@@ -92,17 +98,17 @@ export function MapView({
       pitchWithRotate: false,
     });
 
-    instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-left');
-    instance.addControl(
-      new maplibregl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: true,
-      }),
-      'top-right',
-    );
+    // Zoom and locate live in our own rail, so MapLibre's default controls are
+    // deliberately not added — two stacks of buttons doing the same job is how
+    // a map UI starts feeling unowned. Scale and attribution stay: one is a
+    // reading aid, the other a licence requirement.
+    instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-right');
 
     instance.on('contextmenu', (e) => onPointInspect?.(e.lngLat));
+    instance.on('moveend', () => {
+      const c = instance.getCenter();
+      onMove?.({ lng: c.lng, lat: c.lat });
+    });
     map.current = instance;
 
     // E2E / debugging hook. Screenshot and QA runs need a reliable "tiles have
@@ -113,6 +119,7 @@ export function MapView({
     (window as unknown as { __ridgeline?: { map: maplibregl.Map } }).__ridgeline = {
       map: instance,
     };
+    onReady?.(instance);
 
     return () => {
       instance.remove();

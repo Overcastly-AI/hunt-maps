@@ -13,19 +13,29 @@
  * by `scripts/build-tokens.ts`, and a test fails CI if the committed CSS drifts
  * from the TypeScript. Change a value in one place; both consumers follow.
  *
- * ## The constraints these values answer to
+ * ## The visual direction
  *
- * Ridgeline is used in two contexts that pull in opposite directions:
+ * Map-first, like the category leaders — the map is the product and chrome
+ * floats over it rather than competing for width. Where we deliberately differ:
+ *
+ *  - **The ground is blue hour, not neutral black.** Every neutral carries a
+ *    cold blue bias, because that is the actual colour of the sky forty minutes
+ *    before shooting light, which is when this app gets opened. A neutral grey
+ *    would read as unconsidered; this one is chosen.
+ *  - **The accent is survey brass, not alert orange.** Warm and instrument-like
+ *    — the colour of a USGS benchmark disc — rather than the saturated orange
+ *    the category defaults to. Chrome should read as a tool, not a warning.
+ *  - **Blaze orange is semantic only.** Hunter-safety orange means *danger* in
+ *    this world, and spending it on decoration would waste the one colour whose
+ *    meaning every user already knows.
+ *
+ * ## The constraints these values answer to
  *
  *  - **Pre-dawn, in a truck or a stand, at minimum screen brightness.** Dark by
  *    default. A white panel at 05:30 destroys night vision and announces your
  *    position from a hundred yards.
  *  - **Midday, gloved, in direct sun.** Large hit targets, high contrast, and
  *    nothing important conveyed by hue alone.
- *
- * The chrome is deliberately desaturated. Map overlays carry all the saturation
- * in this product; chrome that competes with them makes terrain harder to read,
- * which is the one thing this interface must never do.
  */
 
 export interface TokenGroup {
@@ -35,27 +45,36 @@ export interface TokenGroup {
 /**
  * Colour.
  *
- * One accent (amber). Semantic colours are used for state only, never as the
- * sole carrier of meaning — roughly 8% of men are red-green colourblind and
- * this is a male-skewed user base.
+ * Neutrals run cold (hue ≈ 210°) so the chrome sits behind the map rather than
+ * in front of it. Semantic colours are used for state only, never as the sole
+ * carrier of meaning — roughly 8% of men are red-green colourblind and this is
+ * a male-skewed user base.
  */
 export const color = {
-  'bg': '#0f1216',
-  'bg-panel': '#161a20',
-  'bg-raised': '#1e242c',
-  'bg-overlay': '#0b0e11',
-  'line': '#2a323c',
-  'line-strong': '#3b4552',
-  'text': '#e6e3dc',
-  'text-dim': '#9aa3ad',
-  'text-faint': '#6b747e',
-  'accent': '#e8a33d',
-  'accent-dim': '#8a6222',
-  'accent-bright': '#f5bd68',
-  'ok': '#5fd08a',
-  'warn': '#e2be5a',
-  'danger': '#d8574b',
-  'info': '#3fb6d8',
+  /** Blue hour. The base the map floats on. */
+  'ground': '#0a0f14',
+  /** Floating chrome: rails, sheets, bars. */
+  'surface': '#121a22',
+  /** Raised within a surface: active rows, inputs. */
+  'raised': '#1b242e',
+  /** Scrim behind an open sheet. */
+  'scrim': 'rgb(6 10 14 / 0.62)',
+  'line': '#26323d',
+  'line-strong': '#374757',
+  'text': '#e8edf2',
+  'text-dim': '#93a3b3',
+  'text-faint': '#68788a',
+  /** Survey brass. The single accent. */
+  'accent': '#c9a253',
+  'accent-dim': '#6f5525',
+  'accent-bright': '#e3bd76',
+  /** Ink for text sitting on the accent. */
+  'accent-ink': '#120d03',
+  'ok': '#4fc3a1',
+  'warn': '#e0b64a',
+  /** Hunter safety orange. Reserved for critical states only. */
+  'blaze': '#ff5a1f',
+  'info': '#5b9dd9',
 } as const satisfies TokenGroup;
 
 /**
@@ -67,18 +86,31 @@ export const color = {
  * `@hunt-maps/terrain` ships defaults; the app overrides them from here.
  */
 export const mapColor = {
-  'slope-flat': '#488cb0',
-  'slope-sidehill': '#60ba9a',
-  'slope-bedding': '#e2be5a',
-  'slope-steep': '#d87642',
-  'slope-wall': '#9c303e',
-  'feature-saddle': '#40d6e2',
-  'feature-channel': '#4c9cc4',
-  'feature-ridge': '#e8964e',
-  'feature-peak': '#e26054',
-  'feature-bench': '#e8a33d',
-  'corridor': '#5fd08a',
-  'pinch': '#e26054',
+  'slope-flat': '#3d7fa6',
+  'slope-sidehill': '#4fae93',
+  'slope-bedding': '#dcb455',
+  'slope-steep': '#d4703c',
+  'slope-wall': '#963040',
+  'feature-saddle': '#3fd6e0',
+  'feature-channel': '#4894c4',
+  'feature-ridge': '#e08d47',
+  'feature-peak': '#dd5a4e',
+  'feature-bench': '#c9a253',
+  'corridor': '#4fc3a1',
+  'pinch': '#ff5a1f',
+} as const satisfies TokenGroup;
+
+/**
+ * Glass. Floating chrome over a map needs to read as *above* the map without
+ * hiding it — the imagery underneath is evidence, and a solid panel throws it
+ * away.
+ */
+export const glass = {
+  'bg': 'rgb(18 26 34 / 0.86)',
+  'bg-strong': 'rgb(10 15 20 / 0.94)',
+  'blur': 'blur(18px) saturate(140%)',
+  'border': 'rgb(255 255 255 / 0.09)',
+  'highlight': 'inset 0 1px 0 rgb(255 255 255 / 0.06)',
 } as const satisfies TokenGroup;
 
 /**
@@ -104,15 +136,30 @@ export const space = {
 
 export const radius = {
   'sm': '4px',
-  'md': '6px',
-  'lg': '8px',
-  'xl': '12px',
+  'md': '8px',
+  'lg': '12px',
+  'xl': '18px',
   'pill': '999px',
 } as const satisfies TokenGroup;
 
+/**
+ * Typefaces.
+ *
+ * **Barlow** for the interface: a low-contrast grotesque with slightly squared
+ * terminals and transit-signage heritage. Wayfinding is literally this app's
+ * job, and Barlow reads as a sign rather than as a website. **Barlow Condensed**
+ * for eyebrows and map marginalia, where density is the point. **IBM Plex Mono**
+ * for coordinates, elevations and bearings — figures that must align and be
+ * read aloud correctly.
+ *
+ * Self-hosted via `@fontsource` and imported by `fonts.css`. Never a CDN link:
+ * a font that silently falls back is a design that silently stops existing, and
+ * the production CSP restricts `font-src` to `'self'` anyway.
+ */
 export const font = {
-  'sans': "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
-  'mono': "ui-monospace, 'SF Mono', 'Cascadia Code', monospace",
+  'sans': "'Barlow', ui-sans-serif, system-ui, -apple-system, sans-serif",
+  'condensed': "'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif",
+  'mono': "'IBM Plex Mono', ui-monospace, 'SF Mono', monospace",
 } as const satisfies TokenGroup;
 
 /**
@@ -127,49 +174,64 @@ export const fontSize = {
   'base': '14px',
   'md': '15px',
   'lg': '18px',
-  'xl': '22px',
+  'xl': '24px',
+  'display': '32px',
 } as const satisfies TokenGroup;
 
 export const fontWeight = {
   'normal': '400',
   'medium': '500',
-  'bold': '600',
+  'semibold': '600',
+  'bold': '700',
 } as const satisfies TokenGroup;
 
 export const lineHeight = {
-  'tight': '1.25',
+  'tight': '1.2',
   'normal': '1.45',
   'loose': '1.6',
 } as const satisfies TokenGroup;
 
+/** Letter-spacing. Uppercase labels need air; display sizes need the opposite. */
+export const tracking = {
+  'display': '-0.02em',
+  'normal': '0',
+  'label': '0.09em',
+  'eyebrow': '0.14em',
+} as const satisfies TokenGroup;
+
 export const shadow = {
-  'card': '0 8px 32px rgb(0 0 0 / 0.5)',
+  'rail': '0 4px 20px rgb(0 0 0 / 0.45)',
+  'sheet': '0 16px 48px rgb(0 0 0 / 0.6)',
   'raised': '0 2px 8px rgb(0 0 0 / 0.35)',
 } as const satisfies TokenGroup;
 
 export const layout = {
-  'panel-width': '340px',
-  'sheet-max-height': '45vh',
-  'panel-breakpoint': '860px',
+  'sheet-width': '360px',
+  'sheet-max-height': '62vh',
+  'rail-gap': '12px',
+  'breakpoint-compact': '860px',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */
 export const motion = {
   'fast': '120ms',
-  'base': '200ms',
-  'ease': 'cubic-bezier(0.2, 0, 0, 1)',
+  'base': '220ms',
+  'sheet': '280ms',
+  'ease': 'cubic-bezier(0.32, 0.72, 0, 1)',
 } as const satisfies TokenGroup;
 
 /** Every token group, keyed by the CSS custom-property prefix it generates. */
 export const TOKEN_GROUPS: Record<string, TokenGroup> = {
   color,
   map: mapColor,
+  glass,
   space,
   radius,
   font,
   text: fontSize,
   weight: fontWeight,
   leading: lineHeight,
+  track: tracking,
   shadow,
   layout,
   motion,

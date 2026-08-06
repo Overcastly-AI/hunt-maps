@@ -43,22 +43,24 @@ async function toggle(page: Page, label: string): Promise<void> {
   await page.getByRole('checkbox', { name: label, exact: false }).first().click();
 }
 
+async function openLayers(page: Page): Promise<void> {
+  const btn = page.getByRole('button', { name: 'Layers' });
+  if ((await btn.getAttribute('aria-pressed')) !== 'true') await btn.click();
+}
+
 test.describe('Ridgeline screenshots', () => {
   test('desktop — relief, slope, hunting layers', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${VIEW}`);
     await expect(page.getByTestId('map-canvas')).toBeVisible();
-
-    // Default view: satellite + multi-directional LiDAR relief.
     await waitForTiles(page);
     await page.screenshot({ path: `${OUT}/01-desktop-relief.png` });
 
-    // Slope-angle bands.
+    await openLayers(page);
     await toggle(page, 'Slope angle');
     await waitForTiles(page);
     await page.screenshot({ path: `${OUT}/02-desktop-slope.png` });
 
-    // Saddles + benches stacked over relief.
     await toggle(page, 'Slope angle');
     await toggle(page, 'Saddles & draws');
     await toggle(page, 'Benches');
@@ -66,55 +68,62 @@ test.describe('Ridgeline screenshots', () => {
     await page.screenshot({ path: `${OUT}/03-desktop-saddles-benches.png` });
   });
 
-  test('desktop — wind set, bedding likelihood unlocked', async ({ page }) => {
+  test('desktop — map with panels dismissed', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${VIEW}`);
+    await expect(page.getByTestId('map-canvas')).toBeVisible();
+    await openLayers(page);
+    await toggle(page, 'Saddles & draws');
+    await waitForTiles(page);
+
+    // Close the sheet: the map is the product, and this is the resting state.
+    await page.getByRole('button', { name: 'Close panel' }).click();
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${OUT}/02b-desktop-map-only.png` });
+  });
+
+  test('desktop — wind dialog and bedding likelihood', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${VIEW}`);
     await expect(page.getByTestId('map-canvas')).toBeVisible();
 
-    // Bedding is disabled until a wind direction exists — the design system
-    // enforces "say when you do not know" rather than rendering a default.
+    // Bedding is disabled until a wind direction exists.
+    await openLayers(page);
     const bedding = page.getByRole('checkbox', { name: /Bedding likelihood/ });
     await expect(bedding).toBeDisabled();
     await page.screenshot({ path: `${OUT}/04-desktop-blocked-layer.png` });
 
-    // Set a NW wind, which unlocks it.
-    const wind = page.getByLabel(/Wind direction in degrees/);
-    await wind.fill('315');
-    await wind.dispatchEvent('change');
-    await expect(bedding).toBeEnabled();
+    // Set a NW wind from the conditions bar. The drawer must be dismissed
+    // first — the bar slides clear of it, but Playwright still resolves the
+    // click against the pre-transition position otherwise.
+    await page.getByRole('button', { name: 'Close panel' }).click();
+    await page.waitForTimeout(600);
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await page.getByRole('button', { name: 'NW', exact: true }).click();
+    // Changing the wind invalidates every wind-dependent tile, so wait for the
+    // re-render to settle rather than capturing a half-painted map.
+    await waitForTiles(page);
+    await page.screenshot({ path: `${OUT}/04b-desktop-wind-dialog.png` });
 
+    await page.getByRole('button', { name: 'Close panel' }).click();
+    await openLayers(page);
+    await expect(bedding).toBeEnabled();
     await bedding.click();
     await waitForTiles(page);
+    await page.getByRole('button', { name: 'Close panel' }).click();
+    await page.waitForTimeout(700);
     await page.screenshot({ path: `${OUT}/05-desktop-bedding-nw-wind.png` });
   });
 
-  test('desktop — saved terrain filters', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/${VIEW}`);
-    await expect(page.getByTestId('map-canvas')).toBeVisible();
-
-    await page.getByRole('checkbox', { name: /Saddles & crossings/ }).click();
-    await page.getByRole('checkbox', { name: /Midslope drainages/ }).click();
-    await waitForTiles(page);
-
-    // Scroll the panel to the saved-filter section for the capture.
-    await page.getByText('Saved filters').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `${OUT}/06-desktop-saved-filters.png` });
-  });
-
-  test('mobile — 390x844, panel as bottom sheet', async ({ page }) => {
+  test('mobile — 390x844, bottom sheet', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/${VIEW}`);
     await expect(page.getByTestId('map-canvas')).toBeVisible();
     await waitForTiles(page);
-    await page.screenshot({ path: `${OUT}/07-mobile-default.png` });
+    await page.screenshot({ path: `${OUT}/07-mobile-sheet.png` });
 
-    await toggle(page, 'Saddles & draws');
-    await waitForTiles(page);
-    await page.screenshot({ path: `${OUT}/08-mobile-saddles.png` });
-
-    // The layer list scrolled down — this is the one-handed reach case.
-    await page.getByText('Hunting layers').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `${OUT}/09-mobile-panel.png` });
+    await page.getByRole('button', { name: 'Close panel' }).click();
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${OUT}/08-mobile-map.png` });
   });
 });
