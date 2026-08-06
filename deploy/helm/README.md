@@ -4,24 +4,44 @@ A Helm chart for kind / minikube / k3d / Docker Desktop. `docker compose up`
 is still the shortest path to a running app; use this when you want to work
 against the same shape the thing will actually deploy in.
 
-## Quick start
+## Quick start — published images
+
+The chart defaults to the images built by `.github/workflows/publish-images.yml`.
 
 ```bash
-# 1. Build the images. There is no published registry yet.
+helm install ridgeline ./deploy/helm/ridgeline --namespace ridgeline --create-namespace
+kubectl -n ridgeline port-forward svc/ridgeline-web 8080:80
+```
+
+**GHCR packages are private by default.** Until the package is made public in
+the repo's Packages settings, the pull fails with `ImagePullBackOff` and an
+"unauthorized" event — which looks like a missing tag rather than a permissions
+problem. Either flip the package to public, or:
+
+```bash
+kubectl -n ridgeline create secret docker-registry ghcr \
+  --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT with read:packages>
+helm upgrade ridgeline ./deploy/helm/ridgeline -n ridgeline --set image.pullSecrets[0].name=ghcr
+```
+
+For production, **pin an immutable tag** — a `v*` release or `sha-<commit>` —
+rather than `latest`. `latest` moving under a running cluster is how two
+replicas end up on two different builds.
+
+## Quick start — local images
+
+```bash
 docker build -t ridgeline/api:dev -f apps/api/Dockerfile .
 docker build -t ridgeline/web:dev -f apps/web/Dockerfile .
 
-# 2. Get them onto the cluster's nodes (pick your flavour)
 kind load docker-image ridgeline/api:dev ridgeline/web:dev
 # minikube: minikube image load ridgeline/api:dev && minikube image load ridgeline/web:dev
 # k3d:      k3d image import ridgeline/api:dev ridgeline/web:dev
 # Docker Desktop: nothing to do, it shares the daemon
 
-# 3. Install
-helm install ridgeline ./deploy/helm/ridgeline --namespace ridgeline --create-namespace
-
-# 4. Open it
-kubectl -n ridgeline port-forward svc/ridgeline-web 8080:80
+helm install ridgeline ./deploy/helm/ridgeline -n ridgeline --create-namespace \
+  --set api.image.repository=ridgeline/api --set api.image.tag=dev \
+  --set web.image.repository=ridgeline/web --set web.image.tag=dev
 ```
 
 Then http://localhost:8080. The API is proxied at `/api` through the same

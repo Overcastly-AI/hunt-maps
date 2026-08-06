@@ -9,23 +9,27 @@ fullnameOverride: ""
 # -----------------------------------------------------------------------------
 # Images
 # -----------------------------------------------------------------------------
-# These are built from the repo, not pulled from a registry — there is no
-# published image yet. See deploy/helm/README.md for the build-and-load step
-# for your cluster flavour.
+# Published by .github/workflows/publish-images.yml on every push to main and
+# to claude/** branches, and on v* tags.
 #
-# `pullPolicy: IfNotPresent` is deliberate and load-bearing for local work:
-# with `Always`, a kind/minikube node will try to reach a registry for an image
-# you just side-loaded, fail, and leave you staring at ErrImagePull for a tag
-# that is already on the node.
+# `IfNotPresent` rather than `Always`: for local work with a side-loaded image,
+# `Always` makes a kind/minikube node reach for a registry copy of a tag that
+# is already on the node, fail, and leave you staring at ErrImagePull. For
+# production, pin an immutable tag (a `v*` release or a `sha-<commit>`) rather
+# than relying on a pull policy to chase `latest` — `latest` moving under a
+# running cluster is how you get two replicas on two different builds.
 image:
   pullPolicy: IfNotPresent
-  # Set if your images live in a private registry.
+  # GHCR packages are private by default. Either make the package public in
+  # the repo's Packages settings, or create a pull secret and name it here:
+  #   kubectl create secret docker-registry ghcr \
+  #     --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
   pullSecrets: []
 
 api:
   image:
-    repository: ridgeline/api
-    tag: dev
+    repository: ghcr.io/overcastly-ai/hunt-maps-api
+    tag: latest
   replicaCount: 1
   service:
     port: 3001
@@ -53,8 +57,8 @@ api:
 
 web:
   image:
-    repository: ridgeline/web
-    tag: dev
+    repository: ghcr.io/overcastly-ai/hunt-maps-web
+    tag: latest
   replicaCount: 1
   service:
     port: 80
