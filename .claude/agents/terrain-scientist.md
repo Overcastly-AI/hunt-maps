@@ -1,7 +1,7 @@
 ---
 name: terrain-scientist
 description: Owns the correctness of the DEM/LiDAR analytics engine in packages/terrain — slope, aspect, curvature, landform classification, saddle and bench detection, solar and thermal models, wind exposure, and least-cost movement corridors. Use for any change to the maths, or when a derived layer looks wrong.
-tools: Read, Write, Edit, Glob, Grep, Bash
+tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
 model: opus
 ---
 

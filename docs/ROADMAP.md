@@ -67,13 +67,23 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
 - [ ] Corridor UI: pick two areas, solve, see band + pinch points
 - [ ] Terrain readout on long-press (API exists; UI pending — rebuild as a
       peek-detent sheet with a map marker, not the current floating dialog)
-- [ ] `apps/web/e2e/ui-invariants.spec.ts` — automated UI invariants suite now
-      exists and runs: 24 tests, 16 passing. Found 6 real defects (Layers
-      button shifting 372px when the sheet it belongs to opens, 32px toggle
-      rows and a 22px link below the 44px gloved-touch floor, chrome text at
-      2.55–3.48:1 against the 4.5:1 AA requirement). Fixes are in flight with
-      two agents as of this pass; suite not yet fully green, not yet
-      committed.
+- [x] `apps/web/e2e/ui-invariants.spec.ts` — automated UI invariants suite:
+      **25 tests, all passing** (was 16/24 on its first run). Fixed and
+      verified: chrome text now clears WCAG AA measured against a live map
+      background (was 2.55:1 against the 4.5:1 requirement), touch targets
+      meet the 44px gloved floor, the Layers button no longer moves when its
+      own sheet opens, and the layers sheet and wind popover can be open
+      together without colliding.
+
+      The suite's own helper was the last thing fixed (`67f0098`). It decided
+      hit-testability against the viewport alone, so a row scrolled just past
+      the *sheet's* clipped edge was hit-tested at its unpainted position and
+      reported as visible-but-unclickable — a false failure indistinguishable
+      from the real clipping bug the suite is named after. It now intersects
+      against every clipping ancestor and hit-tests the centre of the visible
+      region. Ground truth was measured before accepting the greener result:
+      `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+      and no painted control fails a hit test.
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
       `apps/web` (`BACKLOG R10`)
