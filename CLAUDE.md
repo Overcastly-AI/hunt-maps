@@ -141,7 +141,9 @@ pnpm dev                        # api + web with hot reload
 pnpm build                      # topological build (terrain → shared → api/web)
 pnpm lint && pnpm test
 pnpm db:migrate                 # prisma migrate dev
-docker compose up -d --build    # full stack incl. PostGIS
+docker compose up -d --build    # full stack incl. PostGIS — self-contained,
+                                # no .env. Builds images from source; the
+                                # GHCR images are not reliably published.
 ```
 
 ## Conventions (important)

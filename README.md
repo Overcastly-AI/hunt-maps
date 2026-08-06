@@ -65,7 +65,7 @@ cp .env.example .env
 # JWT_SECRET is required — the app refuses to boot without one
 echo "JWT_SECRET=$(openssl rand -base64 48)" >> .env
 
-docker compose up -d --build
+docker compose up -d --build   # then http://localhost:8080
 # web  → http://localhost:8080
 # api  → http://localhost:3001/api/docs
 ```
