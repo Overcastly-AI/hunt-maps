@@ -1,0 +1,352 @@
+/**
+ * Ridgeline visual system.
+ *
+ * Designed for the two contexts this app is actually used in, which pull in
+ * opposite directions:
+ *
+ *  - **Pre-dawn, in a truck or a stand**, at minimum screen brightness. The
+ *    shell is dark by default because a white panel at 05:30 destroys night
+ *    vision and announces your position from a hundred yards.
+ *  - **Midday, gloved, in direct sun.** Hit targets are large, contrast is high,
+ *    and nothing important is conveyed by hue alone.
+ *
+ * The palette is deliberately desaturated — near-black slate, bone text, a
+ * single amber accent. Map overlays carry all the saturation in the product;
+ * a chrome that competes with them makes terrain harder to read, which is the
+ * one thing this interface must never do.
+ */
+
+:root {
+  --bg: #0f1216;
+  --bg-panel: #161a20;
+  --bg-raised: #1e242c;
+  --line: #2a323c;
+  --text: #e6e3dc;
+  --text-dim: #9aa3ad;
+  --accent: #e8a33d;
+  --accent-dim: #8a6222;
+  --ok: #5fd08a;
+  --warn: #e2be5a;
+  --danger: #d8574b;
+  --radius: 8px;
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: 100%;
+}
+
+/* On a phone the map is the product; the panel becomes a bottom sheet. */
+@media (max-width: 860px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  .layer-panel {
+    order: 2;
+    max-height: 45vh;
+    border-right: none;
+    border-top: 1px solid var(--line);
+  }
+  .map-area {
+    order: 1;
+  }
+}
+
+.layer-panel {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  padding: 16px;
+  /* Respect the notch and the home indicator — this app is used one-handed. */
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.layer-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.layer-panel__head h2 {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.chip--ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+.chip--warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.control-block {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.control-block label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.control-block__value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.control-block input[type='range'],
+.layer-row__opacity {
+  width: 100%;
+  accent-color: var(--accent);
+  /* Generous target: this is dragged with gloves on. */
+  height: 28px;
+}
+
+.control-block input[type='datetime-local'] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.layer-group {
+  margin-bottom: 20px;
+}
+
+.layer-group h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin: 0 0 10px;
+}
+
+.layer-group__hint {
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+}
+
+.layer-row {
+  padding: 8px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+}
+
+.layer-row--on {
+  background: var(--bg-raised);
+  border-color: var(--accent-dim);
+}
+
+.layer-row__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.layer-row__main input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.layer-row__main input:disabled + .layer-row__label {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+.layer-row__label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.layer-row__blurb {
+  margin: 4px 0 0 26px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.legend {
+  list-style: none;
+  margin: 8px 0 0 26px;
+  padding: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.legend__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgb(255 255 255 / 0.15);
+}
+
+.callout {
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.callout--warn {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  color: var(--warn);
+}
+
+.callout p {
+  margin: 0 0 4px;
+}
+
+.hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin: 8px 0 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+  text-decoration: underline;
+}
+
+.map-area {
+  position: relative;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.inspect-card {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  max-width: 380px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.5);
+}
+
+.inspect-card h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.inspect-card__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  margin: 0;
+}
+
+/* Visible keyboard focus everywhere — this is also used on a laptop at camp. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

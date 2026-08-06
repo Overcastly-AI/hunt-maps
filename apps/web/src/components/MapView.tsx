@@ -1,0 +1,213 @@
+import { useEffect, useRef } from 'react';
+import maplibregl from 'maplibre-gl';
+import type { AnalysisLayer } from '@hunt-maps/terrain';
+import { LAYERS, layerById } from '../lib/layers';
+import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
+
+export interface MapViewProps {
+  activeLayers: Set<string>;
+  opacities: Record<string, number>;
+  windFromDeg: number | null;
+  atUtc: Date;
+  /** Id of the saved-filter stack registered on the protocol, if any. */
+  filterStackId?: string;
+  onPointInspect?: (lngLat: { lng: number; lat: number }) => void;
+  protocol: TerrainProtocol;
+}
+
+const BASE_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom: number }> = {
+  satellite: {
+    tiles: [
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    ],
+    attribution: 'Imagery: Esri, Maxar, Earthstar Geographics',
+    maxzoom: 19,
+  },
+  topo: {
+    tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'],
+    attribution: '© OpenTopoMap, © OpenStreetMap contributors',
+    maxzoom: 17,
+  },
+};
+
+/**
+ * The map.
+ *
+ * Layer ordering is the fiddly part and it is enforced here rather than left to
+ * insertion order: base imagery at the bottom, relief above it, then the
+ * analysis ramp, then discrete hunting layers, then saved filters, then
+ * waypoints and sign on top. MapLibre inserts before a named layer, so every
+ * `addLayer` call passes an explicit `beforeId` anchor. Without that, toggling
+ * a layer off and on again quietly moves it to the top of the stack and the map
+ * reorders itself under the user.
+ */
+export function MapView({
+  activeLayers,
+  opacities,
+  windFromDeg,
+  atUtc,
+  filterStackId,
+  onPointInspect,
+  protocol,
+}: MapViewProps) {
+  const container = useRef<HTMLDivElement>(null);
+  const map = useRef<maplibregl.Map | null>(null);
+
+  useEffect(() => {
+    if (!container.current || map.current) return;
+
+    const instance = new maplibregl.Map({
+      container: container.current,
+      style: {
+        version: 8,
+        sources: {},
+        layers: [
+          { id: 'background', type: 'background', paint: { 'background-color': '#0f1216' } },
+          // Anchor layers. Empty placeholders that never render but give every
+          // real layer a stable `beforeId` to insert against.
+          ...ANCHORS.map((id) => ({
+            id,
+            type: 'background' as const,
+            paint: { 'background-opacity': 0 },
+          })),
+        ],
+      },
+      center: [-84.2, 39.65],
+      zoom: 13,
+      maxZoom: 18,
+      // Terrain reading is a north-up activity; free rotation mostly produces
+      // disoriented users and screenshots nobody can interpret.
+      dragRotate: false,
+      pitchWithRotate: false,
+    });
+
+    instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-left');
+    instance.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+      }),
+      'top-right',
+    );
+
+    instance.on('contextmenu', (e) => onPointInspect?.(e.lngLat));
+    map.current = instance;
+
+    return () => {
+      instance.remove();
+      map.current = null;
+    };
+    // Mount-only: the map instance outlives prop changes, which are applied by
+    // the sync effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the protocol's notion of "now" and "wind" in step with the UI, and
+  // re-sync the rendered layers.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+
+    const apply = () => syncLayers(instance, activeLayers, opacities, windFromDeg, atUtc, filterStackId);
+    if (instance.isStyleLoaded()) apply();
+    else instance.once('load', apply);
+  }, [activeLayers, opacities, windFromDeg, atUtc, filterStackId, protocol]);
+
+  return <div ref={container} className="map-canvas" data-testid="map-canvas" />;
+}
+
+/** Bottom-to-top insertion anchors. */
+const ANCHORS = [
+  'anchor-base',
+  'anchor-relief',
+  'anchor-analysis',
+  'anchor-hunting',
+  'anchor-saved',
+  'anchor-features',
+] as const;
+
+const GROUP_ANCHOR: Record<string, string> = {
+  base: 'anchor-relief',
+  relief: 'anchor-analysis',
+  analysis: 'anchor-hunting',
+  hunting: 'anchor-saved',
+  saved: 'anchor-features',
+};
+
+function syncLayers(
+  map: maplibregl.Map,
+  active: Set<string>,
+  opacities: Record<string, number>,
+  windFromDeg: number | null,
+  atUtc: Date,
+  filterStackId?: string,
+): void {
+  const wanted = new Set(active);
+  if (filterStackId) wanted.add('__filters');
+
+  // Remove layers that are no longer wanted.
+  for (const layer of map.getStyle().layers ?? []) {
+    if (!layer.id.startsWith('rl-')) continue;
+    const id = layer.id.slice(3);
+    if (!wanted.has(id)) {
+      map.removeLayer(layer.id);
+      if (map.getSource(layer.id)) map.removeSource(layer.id);
+    }
+  }
+
+  for (const id of wanted) {
+    const sourceId = `rl-${id}`;
+    const def = id === '__filters' ? undefined : layerById(id);
+    const group = id === '__filters' ? 'saved' : (def?.group ?? 'analysis');
+
+    const tiles = [
+      id === '__filters'
+        ? terrainTileUrl('filters', {
+            windFromDeg: windFromDeg ?? undefined,
+            atUtc,
+            stackId: filterStackId,
+          })
+        : BASE_SOURCES[id]
+          ? BASE_SOURCES[id].tiles[0]
+          : terrainTileUrl(id as AnalysisLayer, {
+              windFromDeg: windFromDeg ?? undefined,
+              atUtc: def?.requiresTime ? atUtc : undefined,
+            }),
+    ];
+
+    const existing = map.getSource(sourceId) as maplibregl.RasterTileSource | undefined;
+    if (existing) {
+      // Wind or date changed → the tile URL changed. `setTiles` re-requests
+      // without tearing the layer out of the stack, which is what keeps the
+      // ordering stable when the user scrubs a wind dial.
+      const current = (existing as unknown as { tiles?: string[] }).tiles?.[0];
+      if (current !== tiles[0]) existing.setTiles(tiles);
+    } else {
+      map.addSource(sourceId, {
+        type: 'raster',
+        tiles,
+        tileSize: 256,
+        maxzoom: BASE_SOURCES[id]?.maxzoom ?? 15,
+        attribution: BASE_SOURCES[id]?.attribution ?? 'Elevation: USGS / AWS Terrain Tiles',
+      });
+      map.addLayer(
+        {
+          id: sourceId,
+          type: 'raster',
+          source: sourceId,
+          paint: { 'raster-opacity': opacities[id] ?? def?.defaultOpacity ?? 0.6 },
+        },
+        GROUP_ANCHOR[group],
+      );
+    }
+
+    map.setPaintProperty(
+      sourceId,
+      'raster-opacity',
+      opacities[id] ?? def?.defaultOpacity ?? 0.6,
+    );
+  }
+}
+
+export { LAYERS };
