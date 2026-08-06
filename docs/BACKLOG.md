@@ -42,6 +42,7 @@ The build loop pulls from **Ready**.
 | N10 | Surface `Confidence` chips on bedding, thermal and scent outputs | P1 | S | Three headline layers rest on 🔴 Assumed parameters. The design system primitive exists; the layers do not use it. Claiming more than we know is the one thing that costs us the trust moat. |
 | N11 | Source or honestly grade the scent-dispersion model | P2 | M | 400 m at a 25° half-angle has no source. Either find a dispersion model or grade it Assumed in the UI. |
 | N12 | Handle mobile vs sedentary bucks | P2 | M | GPS-collar work: ~⅓ of bucks are "mobile" (mean 6,530 ha) and will not be described by any property-scoped model. The app currently implies every deer is resident. |
+| N14 | Curvature noise floor tied to DEM vertical accuracy | P2 | S | The scale-aware Wood threshold fixed the speckle on dissected terrain (8.4% → 56% planar), but a coarse DEM over low-relief farmland still over-classifies ridge/channel because resampling noise dominates real curvature there. |
 | N13 | Scope models per species, or narrow the claim to whitetail | P1 | M | Every biological parameter in the engine is whitetail-derived, but the product claims "deer or other large game". Silent borrowing across mule deer/elk/blacktail is wrong. |
 
 ## Investigate

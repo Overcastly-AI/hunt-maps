@@ -75,9 +75,17 @@ export function MapView({
           })),
         ],
       },
-      center: [-84.2, 39.65],
+      // Hocking Hills, Ohio — real whitetail hill country. Sharp relief means a
+      // new user's first view actually shows what the analysis layers do,
+      // rather than opening on farmland where every layer looks the same.
+      center: [-82.54, 39.43],
       zoom: 13,
       maxZoom: 18,
+      // `#zoom/lat/lng` in the address bar. Makes a map position shareable and
+      // deep-linkable — "meet me at this saddle" is a message hunters send —
+      // and survives a reload, which matters when the app is a PWA that may be
+      // resumed hours later in the field.
+      hash: true,
       // Terrain reading is a north-up activity; free rotation mostly produces
       // disoriented users and screenshots nobody can interpret.
       dragRotate: false,
@@ -96,6 +104,15 @@ export function MapView({
 
     instance.on('contextmenu', (e) => onPointInspect?.(e.lngLat));
     map.current = instance;
+
+    // E2E / debugging hook. Screenshot and QA runs need a reliable "tiles have
+    // settled" signal, and MapLibre's own `areTilesLoaded()` is the honest one —
+    // sniffing the GL framebuffer gives false negatives because the drawing
+    // buffer is cleared between frames unless preserveDrawingBuffer is set,
+    // which would cost real performance in production.
+    (window as unknown as { __ridgeline?: { map: maplibregl.Map } }).__ridgeline = {
+      map: instance,
+    };
 
     return () => {
       instance.remove();

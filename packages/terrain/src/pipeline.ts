@@ -154,7 +154,14 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
   }
 
   if (want.has('weiss')) result.weiss = classifyWeiss(grid, surface, request.weiss);
-  if (want.has('wood') && curvature) result.wood = classifyWood(surface, curvature, request.wood);
+  if (want.has('wood') && curvature) {
+    // Pass the grid resolution so the classifier's threshold is scale-aware.
+    // Without it the same terrain classifies differently at every zoom level.
+    result.wood = classifyWood(surface, curvature, {
+      cellSize: grid.cellSize,
+      ...request.wood,
+    });
+  }
   if (want.has('bench')) result.bench = detectBenches(grid, surface, request.bench);
 
   if (want.has('hillshade')) {

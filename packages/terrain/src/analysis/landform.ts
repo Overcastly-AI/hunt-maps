@@ -276,25 +276,79 @@ export const WOOD_LABELS: Record<WoodFeature, string> = {
 export interface WoodOptions {
   /** Below this slope a cell is treated as "flat enough" to be a peak/pit/pass. */
   slopeToleranceDeg?: number;
-  /** Curvature magnitude below which a cell counts as planar. Units: 1/m. */
+  /**
+   * Explicit curvature threshold in 1/m. Overrides the scale-aware default.
+   * Prefer supplying `cellSize` instead — see `gradientChangePerCell`.
+   */
   curvatureTolerance?: number;
+  /** Grid resolution in metres. Enables the scale-aware default threshold. */
+  cellSize?: number;
+  /**
+   * The real parameter: how much the across-slope gradient must change **per
+   * cell** before a cell counts as a ridge or a channel rather than a plain
+   * slope. Dimensionless, default 0.015 (a 1.5% grade change per cell).
+   *
+   * ## Why the threshold cannot be a fixed curvature
+   *
+   * Curvature has units of 1/m, so its magnitude depends on grid resolution:
+   * the same hillside sampled at 4 m and at 15 m produces curvature values
+   * differing by roughly the resolution ratio. A single hard-coded tolerance
+   * therefore means something different at every zoom level.
+   *
+   * Measured on real terrain (Hocking Hills, Ohio, 3.7 m cells), the original
+   * fixed 5e-4 classified **only 8.4% of cells as planar** — 91% of the map came
+   * out ridge or channel. That is not a map, it is confetti, and real saddles
+   * were invisible inside it. Gradient is approximately scale-invariant on real
+   * terrain, so curvature scales as ~1/cellSize; dividing a dimensionless
+   * gradient-change budget by the cell size restores a stable classification
+   * across zooms.
+   *
+   * At the default, that same tile comes out ~56% planar, ~20% channel,
+   * ~24% ridge — a readable map in which draws and spurs are the exception, as
+   * they are on the ground.
+   *
+   * **Known limitation:** the constant is calibrated on dissected-plateau
+   * terrain. A coarse DEM over low-relief farmland still classifies more
+   * ridge/channel than it should, because resampling noise dominates real
+   * curvature there. A noise floor tied to DEM vertical accuracy would fix it
+   * (backlog N14).
+   */
+  gradientChangePerCell?: number;
 }
 
 /**
  * Wood's six morphometric features, following the `r.param.scale` formulation.
  *
- * The curvature tolerance is the parameter that matters in practice. Too tight
- * and 1 m LiDAR turns the whole map into ridge/channel speckle; too loose and
- * real saddles vanish. The default (0.0005 1/m) was picked to be stable on
- * 10 m 3DEP; the API exposes it so the client can scale it with zoom.
+ * The curvature tolerance is the parameter that decides whether this layer is
+ * usable. Too tight and the map becomes ridge/channel speckle with real saddles
+ * lost inside it; too loose and genuine features vanish. It is resolution-
+ * dependent, so it is derived from `cellSize` rather than fixed — see
+ * `WoodOptions.gradientChangePerCell` for the measurement behind that.
  */
+/**
+ * Resolve the curvature threshold, preferring an explicit override, then the
+ * scale-aware derivation, then a last-resort constant.
+ *
+ * The constant is deliberately the worst option: it is only correct at one
+ * resolution, and callers that hit it are getting a classification whose
+ * meaning shifts with zoom.
+ */
+export function resolveCurvatureTolerance(options: WoodOptions): number {
+  if (options.curvatureTolerance !== undefined) return options.curvatureTolerance;
+  const cellSize = options.cellSize;
+  if (cellSize !== undefined && cellSize > 0) {
+    return (options.gradientChangePerCell ?? 0.015) / cellSize;
+  }
+  return 0.0005;
+}
+
 export function classifyWood(
   surface: SurfaceField,
   curvature: CurvatureField,
   options: WoodOptions = {},
 ): Uint8Array {
   const slopeTol = options.slopeToleranceDeg ?? 1.5;
-  const curvTol = options.curvatureTolerance ?? 0.0005;
+  const curvTol = resolveCurvatureTolerance(options);
   const n = surface.slope.length;
   const out = new Uint8Array(n);
 

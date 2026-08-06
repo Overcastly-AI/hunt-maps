@@ -43,6 +43,9 @@ The analytics engine, validated against analytically-known surfaces.
 - [x] `packages/design` — design system decoupled from the app: tokens as the
       single source of truth, `tokens.css` generated from `tokens.ts`, drift
       guarded in CI, WCAG-AA and colourblind luminance separation asserted by test
+- [x] Deep-linkable map positions (`#zoom/lat/lng`) and a Playwright screenshot
+      suite that doubles as the only end-to-end proof of the DEM → worker →
+      canvas → MapLibre pipeline
 - [x] `game-biologist` agent + `docs/EVIDENCE.md` — every biological parameter
       graded Measured / Inferred / Doctrine / Assumed with sources
 

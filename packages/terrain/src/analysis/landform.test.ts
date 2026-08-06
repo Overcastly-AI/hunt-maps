@@ -5,6 +5,7 @@ import {
   computeTpi,
   detectBenches,
   removeSmallBlobs,
+  resolveCurvatureTolerance,
   standardize,
   WeissLandform,
   WoodFeature,
@@ -210,5 +211,66 @@ describe('removeSmallBlobs', () => {
     expect(out[0]).toBe(0);
     expect(out[5 * w + 5]).toBe(1);
     expect(out.reduce((a, b) => a + b, 0)).toBe(16);
+  });
+});
+
+describe('resolveCurvatureTolerance', () => {
+  it('prefers an explicit override', () => {
+    expect(resolveCurvatureTolerance({ curvatureTolerance: 1e-6, cellSize: 10 })).toBe(1e-6);
+  });
+
+  it('scales inversely with cell size', () => {
+    // Curvature magnitude tracks ~1/cellSize on real terrain, so a fixed
+    // threshold means something different at every zoom. Measured on Hocking
+    // Hills at 3.7 m cells, the old fixed 5e-4 left only 8.4% of the map
+    // planar — 91% came out ridge or channel, and real saddles were invisible
+    // inside the speckle.
+    const fine = resolveCurvatureTolerance({ cellSize: 3.69 });
+    const coarse = resolveCurvatureTolerance({ cellSize: 15.07 });
+    expect(fine).toBeGreaterThan(coarse);
+    expect(fine / coarse).toBeCloseTo(15.07 / 3.69, 5);
+  });
+
+  it('honours the gradient-change budget', () => {
+    expect(resolveCurvatureTolerance({ cellSize: 10, gradientChangePerCell: 0.02 })).toBeCloseTo(
+      0.002,
+      9,
+    );
+  });
+
+  it('falls back to a constant only when no cell size is known', () => {
+    expect(resolveCurvatureTolerance({})).toBe(0.0005);
+    expect(resolveCurvatureTolerance({ cellSize: 0 })).toBe(0.0005);
+  });
+});
+
+describe('classifyWood — planar majority on realistic terrain', () => {
+  it('leaves most of a rolling surface planar rather than speckling it', () => {
+    // A synthetic dissected surface: a regional tilt with superimposed
+    // drainage-scale undulation. Most cells are plain slope; ridges and draws
+    // are the exception, as on the ground. Before the scale-aware threshold,
+    // this classified almost entirely as ridge/channel.
+    const size = 61;
+    const cellSize = 4;
+    const grid = syntheticGrid(
+      (x, y) => 500 + 0.25 * y + 6 * Math.sin(x / 90) + 4 * Math.cos(y / 110),
+      { size, halo: 4, cellSize },
+    );
+    const surface = computeSurface(grid);
+    const curvature = computeCurvature(grid);
+    const cls = classifyWood(surface, curvature, { cellSize });
+
+    let planar = 0;
+    for (const v of cls) if (v === WoodFeature.Planar) planar++;
+    expect(planar / cls.length).toBeGreaterThan(0.5);
+  });
+
+  it('still finds a genuine saddle at the scale-aware threshold', () => {
+    // Loosening the threshold must not cost us the headline feature.
+    const size = 41;
+    const cellSize = 4;
+    const grid = syntheticGrid(saddle(0.004), { size, halo: 4, cellSize });
+    const cls = classifyWood(computeSurface(grid), computeCurvature(grid), { cellSize });
+    expect(cls[centerIndex(size)]).toBe(WoodFeature.Pass);
   });
 });
