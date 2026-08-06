@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PRESET_FILTERS, type TerrainPredicate } from '@hunt-maps/terrain';
+import { Button } from '@hunt-maps/design';
 import { MapView } from './components/MapView';
 import { LayerPanel, type SavedFilterSummary } from './components/LayerPanel';
 import { toggleLayer } from './lib/layers';
@@ -130,14 +131,19 @@ export default function App() {
         />
         {inspect && (
           <div className="inspect-card" role="dialog" aria-label="Terrain readout">
-            <button type="button" className="inspect-card__close" onClick={() => setInspect(null)}>
+            <Button
+              variant="link"
+              className="inspect-card__close"
+              aria-label="Close terrain readout"
+              onClick={() => setInspect(null)}
+            >
               ×
-            </button>
+            </Button>
             <h3>Terrain at this point</h3>
-            <p className="mono">
+            <p className="rl-mono">
               {inspect.lat.toFixed(5)}, {inspect.lng.toFixed(5)}
             </p>
-            <p className="hint">
+            <p className="rl-hint">
               Long-press readouts resolve against the elevation tiles on this device, so they work
               with no signal.
             </p>

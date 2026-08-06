@@ -47,6 +47,7 @@ import {
   type DemEncoding,
   type TerrainPredicate,
 } from '@hunt-maps/terrain';
+import { mapColor } from '@hunt-maps/design';
 
 export interface RenderTileMessage {
   id: number;
@@ -189,7 +190,7 @@ function renderTile(msg: RenderTileMessage): Uint8ClampedArray {
         result.bench ?? new Uint8Array(n),
         tileSize,
         tileSize,
-        '#e8a33d',
+        mapColor['feature-bench'],
         0.55,
         true,
       );

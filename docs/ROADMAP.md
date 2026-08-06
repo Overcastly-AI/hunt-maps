@@ -40,6 +40,11 @@ The analytics engine, validated against analytically-known surfaces.
 - [x] OPFS tile store with IndexedDB fallback; persistent-storage request
 - [x] Layer catalogue with exclusivity rules and missing-input handling
 - [x] Docker Compose (PostGIS + Redis + API + web); CI
+- [x] `packages/design` — design system decoupled from the app: tokens as the
+      single source of truth, `tokens.css` generated from `tokens.ts`, drift
+      guarded in CI, WCAG-AA and colourblind luminance separation asserted by test
+- [x] `game-biologist` agent + `docs/EVIDENCE.md` — every biological parameter
+      graded Measured / Inferred / Doctrine / Assumed with sources
 
 ## 🚧 Phase 2 — Property workflows and field capture
 

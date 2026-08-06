@@ -64,7 +64,19 @@ no layer, because it is trusted.
   latitude), never lunar — the research is clear and a lunar predictor would
   make every downstream analytic worse.
 
-### 3. Analytics compare use against availability
+### 3. Every biological parameter carries an evidence grade
+
+The engine is full of numbers that look authoritative and mostly are not —
+`idealSlopeDeg: 22`, a Tobler function fitted to humans, a 400 m scent cone.
+Each renders a confident colour on a map somebody uses to decide where to sit.
+
+`docs/EVIDENCE.md` grades every one: 🟢 Measured, 🔵 Inferred, 🟡 Doctrine,
+🔴 Assumed. **An `Assumed` grade is not a failure — hiding one is.** Adding a
+parameter without registering it, or labelling hunting media as `Measured`, both
+count as defects. `game-biologist` owns the register; the `Confidence` primitive
+in `@hunt-maps/design` is how grades reach the UI.
+
+### 4. Analytics compare use against availability
 
 The single most common failure in hunting "analytics" is a histogram of
 sightings by slope band. If 70% of the property is gentle slope, 70% of
@@ -81,12 +93,19 @@ chi-square test. Never ship a raw-count chart of habitat use.
   Keep it that way; it ships into a service worker.
 - **Backend:** NestJS + Prisma + **PostgreSQL/PostGIS**, REST
 - **Frontend:** React + Vite + TypeScript + **MapLibre GL**, PWA via vite-plugin-pwa
-- **Monorepo:** pnpm workspaces — `apps/api`, `apps/web`, `packages/terrain`, `packages/shared`
+- **Design:** `packages/design` — tokens are the single source of truth, and
+  `tokens.css` is *generated* from `tokens.ts` because the map needs the same
+  values at runtime for MapLibre paint properties and canvas ramps. A test fails
+  CI if the two drift. **No literal colours, sizes or radii outside that package.**
+- **Monorepo:** pnpm workspaces — `apps/api`, `apps/web`, `packages/terrain`,
+  `packages/design`, `packages/shared`
 
 ## Layout
 
 ```
 packages/terrain   DEM analytics engine (slope, landform, solar, wind, corridors)
+packages/design    Design system — tokens, primitives, styles. ALL visual
+                   decisions live here; apps own layout only.
 packages/shared    Contracts + selection analytics + rut model
 apps/api           NestJS + PostGIS backend
 apps/web           MapLibre PWA with on-device analysis worker
@@ -152,6 +171,11 @@ Default to delegating and orchestrating. The tooling lives in
   hunter does: offline, gloved, one-handed, at 05:30.
 - `analytics-auditor` — guards statistical honesty. Hunts for use-vs-availability
   errors, overclaimed significance, and folklore dressed as a model.
+- `game-biologist` — **large-game domain expert.** The only role with a mandate
+  over whether the *biology* is right, as opposed to whether the code computes
+  what it claims. Vets every modelled parameter against peer-reviewed
+  literature, grades the evidence, and replaces guesses with cited values. Owns
+  `docs/EVIDENCE.md`.
 - `product-auditor` / `engineering-auditor` — two independent deep auditors.
 - `backlog-groomer` — keeps `docs/BACKLOG.md` current and a Ready queue stocked.
 - `vision-steward` — turns the founder's plain-language ideas into
@@ -175,7 +199,8 @@ from [obra/superpowers](https://github.com/obra/superpowers), MIT). Debugging:
 
 **The loop for every feature:** plan → implement (specialist) → review
 (`code-reviewer`) → **functional QA with `field-qa`, including an actual
-offline run** → `analytics-auditor` if any number is shown to a user → update
+offline run** → `analytics-auditor` if any number is shown to a user →
+**`game-biologist` if any biological parameter was added or changed** → update
 `docs/ROADMAP.md` + `docs/BACKLOG.md` → commit.
 
 ## Working style for autonomous build

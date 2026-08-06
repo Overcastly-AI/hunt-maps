@@ -18,6 +18,7 @@
     "types": ["vite/client", "vite-plugin-pwa/client"],
     "baseUrl": ".",
     "paths": {
+      "@hunt-maps/design": ["../../packages/design/src/index.ts"],
       "@hunt-maps/terrain": ["../../packages/terrain/src/index.ts"],
       "@hunt-maps/shared": ["../../packages/shared/src/index.ts"]
     }

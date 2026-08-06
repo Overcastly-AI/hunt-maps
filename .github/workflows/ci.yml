@@ -75,6 +75,41 @@ jobs:
           fi
           echo "packages/terrain is dependency-free ✓"
 
+      - name: Assert design tokens have not drifted from generated CSS
+        # tokens.css is generated from tokens.ts. Both are consumed — CSS by the
+        # stylesheets, TypeScript by MapLibre paint properties and canvas ramps —
+        # so a stale stylesheet means the chrome and the map disagree about what
+        # "accent" is, invisibly.
+        run: |
+          pnpm --filter @hunt-maps/design build:tokens
+          if ! git diff --quiet -- packages/design/src/tokens.css; then
+            echo "tokens.css is out of date. Run: pnpm --filter @hunt-maps/design build:tokens"
+            git --no-pager diff -- packages/design/src/tokens.css
+            exit 1
+          fi
+          echo "design tokens are in sync ✓"
+
+      - name: Assert no literal colours leaked outside the design system
+        # The design system is only a source of truth if nothing bypasses it.
+        # A hex literal in an app stylesheet is how a design system quietly
+        # stops being one — the value works, so nobody notices until a palette
+        # change misses half the UI.
+        run: |
+          leaked=$(grep -rInE '#[0-9a-fA-F]{3,8}\b' \
+            --include='*.css' --include='*.tsx' --include='*.ts' \
+            apps/web/src \
+            | grep -v 'packages/design' \
+            | grep -vE '^\s*//|/\*|\*' \
+            || true)
+          if [ -n "$leaked" ]; then
+            echo "Literal colours found outside packages/design:"
+            echo "$leaked"
+            echo ""
+            echo "Add the value to packages/design/src/tokens.ts and reference the token."
+            exit 1
+          fi
+          echo "no colour literals outside the design system ✓"
+
   docker:
     runs-on: ubuntu-latest
     steps:

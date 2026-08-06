@@ -18,6 +18,7 @@
  */
 
 import type { AnalysisLayer } from '@hunt-maps/terrain';
+import { mapColor } from '@hunt-maps/design';
 
 export type LayerGroup = 'base' | 'relief' | 'analysis' | 'hunting' | 'saved';
 
@@ -71,11 +72,11 @@ export const LAYERS: LayerDefinition[] = [
     defaultOpacity: 0.6,
     exclusive: true,
     legend: [
-      { swatch: '#488cb0', label: '0–8° flat / field / bench' },
-      { swatch: '#60ba9a', label: '8–20° sidehill travel' },
-      { swatch: '#e2be5a', label: '20–30° bedding grade' },
-      { swatch: '#d87642', label: '30–45° steep' },
-      { swatch: '#9c303e', label: '45°+ effectively a wall' },
+      { swatch: mapColor['slope-flat'], label: '0–8° flat / field / bench' },
+      { swatch: mapColor['slope-sidehill'], label: '8–20° sidehill travel' },
+      { swatch: mapColor['slope-bedding'], label: '20–30° bedding grade' },
+      { swatch: mapColor['slope-steep'], label: '30–45° steep' },
+      { swatch: mapColor['slope-wall'], label: '45°+ effectively a wall' },
     ],
   },
   {
@@ -107,10 +108,10 @@ export const LAYERS: LayerDefinition[] = [
       'because it costs less than going over the top.',
     defaultOpacity: 0.65,
     legend: [
-      { swatch: '#40d6e2', label: 'Saddle (pass)' },
-      { swatch: '#4c9cc4', label: 'Channel / draw' },
-      { swatch: '#e8964e', label: 'Ridge / spur' },
-      { swatch: '#e26054', label: 'Peak / knob' },
+      { swatch: mapColor['feature-saddle'], label: 'Saddle (pass)' },
+      { swatch: mapColor['feature-channel'], label: 'Channel / draw' },
+      { swatch: mapColor['feature-ridge'], label: 'Ridge / spur' },
+      { swatch: mapColor['feature-peak'], label: 'Peak / knob' },
     ],
   },
   {

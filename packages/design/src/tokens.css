@@ -1,0 +1,98 @@
+/*
+ * GENERATED FILE — do not edit.
+ *
+ * Produced from `src/tokens.ts` by `pnpm --filter @hunt-maps/design build:tokens`.
+ * `tokens.test.ts` fails CI if this file drifts from the TypeScript source.
+ */
+
+:root {
+  /* color */
+  --color-bg: #0f1216;
+  --color-bg-panel: #161a20;
+  --color-bg-raised: #1e242c;
+  --color-bg-overlay: #0b0e11;
+  --color-line: #2a323c;
+  --color-line-strong: #3b4552;
+  --color-text: #e6e3dc;
+  --color-text-dim: #9aa3ad;
+  --color-text-faint: #6b747e;
+  --color-accent: #e8a33d;
+  --color-accent-dim: #8a6222;
+  --color-accent-bright: #f5bd68;
+  --color-ok: #5fd08a;
+  --color-warn: #e2be5a;
+  --color-danger: #d8574b;
+  --color-info: #3fb6d8;
+
+  /* map */
+  --map-slope-flat: #488cb0;
+  --map-slope-sidehill: #60ba9a;
+  --map-slope-bedding: #e2be5a;
+  --map-slope-steep: #d87642;
+  --map-slope-wall: #9c303e;
+  --map-feature-saddle: #40d6e2;
+  --map-feature-channel: #4c9cc4;
+  --map-feature-ridge: #e8964e;
+  --map-feature-peak: #e26054;
+  --map-feature-bench: #e8a33d;
+  --map-corridor: #5fd08a;
+  --map-pinch: #e26054;
+
+  /* space */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-touch: 44px;
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+
+  /* font */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+
+  /* text */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+
+  /* weight */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  /* leading */
+  --leading-tight: 1.25;
+  --leading-normal: 1.45;
+  --leading-loose: 1.6;
+
+  /* shadow */
+  --shadow-card: 0 8px 32px rgb(0 0 0 / 0.5);
+  --shadow-raised: 0 2px 8px rgb(0 0 0 / 0.35);
+
+  /* layout */
+  --layout-panel-width: 340px;
+  --layout-sheet-max-height: 45vh;
+  --layout-panel-breakpoint: 860px;
+
+  /* motion */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: dark;
+}

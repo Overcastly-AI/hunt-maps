@@ -37,6 +37,12 @@ The build loop pulls from **Ready**.
 | N5 | Parcel / ownership layer | P2 | L | 🔴 gap; likely needs a commercial data source — evaluate first |
 | N6 | Contour generation from DEM | P2 | M | Users expect contours on a hunting map |
 | N7 | Hunting-party sharing UI | P2 | M | 🟡 roles exist server-side |
+| N8 | Replace Tobler with a cervid energetics curve | P1 | M | `docs/EVIDENCE.md`: the corridor cost model is parameterised from a **human** hiking function. Brockway (red deer, 2.6 J·kg⁻¹·m⁻¹) and Fancy & White (caribou ascent cost, 40–45% upslope efficiency) make a cervid curve buildable today. Highest-value evidence upgrade available. |
+| N9 | Model escape terrain (≥10% slope) as facilitating movement | P1 | S | Landscape-genomics work found gene flow over longer distances where ≥10% slope was available. The cost surface currently penalises all grade monotonically. |
+| N10 | Surface `Confidence` chips on bedding, thermal and scent outputs | P1 | S | Three headline layers rest on 🔴 Assumed parameters. The design system primitive exists; the layers do not use it. Claiming more than we know is the one thing that costs us the trust moat. |
+| N11 | Source or honestly grade the scent-dispersion model | P2 | M | 400 m at a 25° half-angle has no source. Either find a dispersion model or grade it Assumed in the UI. |
+| N12 | Handle mobile vs sedentary bucks | P2 | M | GPS-collar work: ~⅓ of bucks are "mobile" (mean 6,530 ha) and will not be described by any property-scoped model. The app currently implies every deer is resident. |
+| N13 | Scope models per species, or narrow the claim to whitetail | P1 | M | Every biological parameter in the engine is whitetail-derived, but the product claims "deer or other large game". Silent borrowing across mule deer/elk/blacktail is wrong. |
 
 ## Investigate
 
@@ -46,6 +52,7 @@ The build loop pulls from **Ready**.
 | I2 | Does rut calibration converge within one season? | Currently needs ≥3 chasing observations; unproven that a normal user produces enough. |
 | I3 | Can we obtain GPS-collar data for validation? | Would move the bedding and corridor models from well-motivated to demonstrated. Highest-value research step available. |
 | I4 | Sub-canopy structure for corridor resistance | NLCD at 30 m misses regen thickets and CRP edges, which matter more to deer than the NLCD class. |
+| I6 | Can we obtain GPS-collar telemetry for model validation? | Would settle bedding slope, corridor use, shelter thresholds and the resistance table in one dataset — more red rows in `docs/EVIDENCE.md` than everything else combined. |
 | I5 | Enforce geometry NOT NULL via transaction + deferred constraint trigger | Geometry columns are nullable because Prisma cannot create rows with required `Unsupported()` columns and a bare NOT NULL would reject the insert. Today the invariant is upheld only by service code. |
 
 ## Done — recent

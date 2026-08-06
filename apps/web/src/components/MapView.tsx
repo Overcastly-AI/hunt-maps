@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import type { AnalysisLayer } from '@hunt-maps/terrain';
+import { color } from '@hunt-maps/design';
 import { LAYERS, layerById } from '../lib/layers';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
 
@@ -62,7 +63,9 @@ export function MapView({
         version: 8,
         sources: {},
         layers: [
-          { id: 'background', type: 'background', paint: { 'background-color': '#0f1216' } },
+          // Token, not a literal — the map canvas and the app chrome must be the
+          // same black, and a drifted pair is very visible at low brightness.
+          { id: 'background', type: 'background', paint: { 'background-color': color.bg } },
           // Anchor layers. Empty placeholders that never render but give every
           // real layer a stable `beforeId` to insert against.
           ...ANCHORS.map((id) => ({

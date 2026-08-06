@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@hunt-maps/design": "workspace:*",
     "@hunt-maps/shared": "workspace:*",
     "@hunt-maps/terrain": "workspace:*",
     "@tanstack/react-query": "^5.59.0",

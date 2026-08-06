@@ -31,6 +31,7 @@ and CI have them without the plugin installed:
 | `offline-steward` | The entire no-signal experience: tile storage, PWA, sync, conflicts. Guards the cache-elevation-not-rendered-tiles decision. |
 | `map-builder` | MapLibre layers, the `ridgeline://` protocol, colour ramps, cartographic legibility. |
 | `analytics-auditor` | Statistical honesty. Hunts use-vs-availability errors, overclaimed significance, and folklore dressed as a model. |
+| `game-biologist` | **Large-game domain expert.** The only role with a mandate over whether the *biology* is right. Vets every modelled parameter against peer-reviewed literature and grades it in `docs/EVIDENCE.md`. |
 | `field-qa` | Independent QA in the real context: offline, gloved, dark, mid-range phone. |
 
 ### Build and direction
@@ -39,7 +40,7 @@ and CI have them without the plugin installed:
 |-------|------|
 | `schema-architect` | Prisma + PostGIS model and migrations |
 | `backend-builder` | NestJS modules |
-| `frontend-builder` | React panels, forms, analytics views |
+| `frontend-builder` | React panels, forms, analytics views. All visual decisions go in `packages/design`, never inline. |
 | `code-reviewer` | Diff review — domain correctness first, then offline, then security |
 | `product-auditor` | Independent product/UX audit → `docs/AUDIT-PRODUCT.md` |
 | `engineering-auditor` | Independent engineering audit → `docs/AUDIT-ENGINEERING.md` |
@@ -67,10 +68,18 @@ caught by reviewing the feature that broke it.
 Workflows are documented as orchestration recipes; run them with the `Workflow`
 tool — each file carries its script outline.
 
-## The three gates that must never be skipped
+## The four gates that must never be skipped
 
 1. **A new terrain operator ships with a test against a closed-form answer.**
    Not a fixture, not a screenshot.
 2. **A feature is not done until its offline cold start has been run by hand.**
 3. **A new user-facing number does not merge without an `analytics-auditor`
    pass.**
+4. **A new biological parameter does not merge without a row in
+   `docs/EVIDENCE.md`** carrying a grade and a source — or an explicit "no
+   literature found". `game-biologist` assigns the grade.
+
+Note the division of labour between the two auditing roles, because it is easy
+to conflate them: `terrain-scientist` verifies that 22° is *applied* correctly.
+`game-biologist` asks whether a whitetail actually beds at 22°. Before the
+second role existed, nothing in the org asked that question.

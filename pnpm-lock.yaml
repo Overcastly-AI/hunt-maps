@@ -114,6 +114,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@hunt-maps/design':
+        specifier: workspace:*
+        version: link:../../packages/design
       '@hunt-maps/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -172,6 +175,24 @@ importers:
       vite-plugin-pwa:
         specifier: ^0.20.5
         version: 0.20.5(vite@5.4.21(@types/node@22.20.1)(terser@5.49.2))(workbox-build@7.4.1(@types/babel__core@7.20.5))(workbox-window@7.4.1)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(terser@5.49.2)
+
+  packages/design:
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.11
+        version: 18.3.31
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      tsx:
+        specifier: ^4.19.1
+        version: 4.23.8
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(terser@5.49.2)

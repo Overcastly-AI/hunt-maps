@@ -55,10 +55,32 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@hunt-maps/terrain': resolve(__dirname, '../../packages/terrain/src/index.ts'),
-      '@hunt-maps/shared': resolve(__dirname, '../../packages/shared/src/index.ts'),
-    },
+    // Array form with anchored regexes, not the object form.
+    //
+    // A plain string alias is a *prefix* match, so `@hunt-maps/design` would
+    // also rewrite `@hunt-maps/design/tokens.css` into
+    // `…/src/index.ts/tokens.css` — a path through a file, which fails with a
+    // confusing ENOTDIR from deep inside PostCSS. Anchoring the bare-specifier
+    // alias and giving subpaths their own rule keeps the stylesheet imports
+    // working alongside the source alias.
+    alias: [
+      {
+        find: /^@hunt-maps\/design$/,
+        replacement: resolve(__dirname, '../../packages/design/src/index.ts'),
+      },
+      {
+        find: /^@hunt-maps\/design\/(.*)$/,
+        replacement: resolve(__dirname, '../../packages/design/src/$1'),
+      },
+      {
+        find: /^@hunt-maps\/terrain$/,
+        replacement: resolve(__dirname, '../../packages/terrain/src/index.ts'),
+      },
+      {
+        find: /^@hunt-maps\/shared$/,
+        replacement: resolve(__dirname, '../../packages/shared/src/index.ts'),
+      },
+    ],
   },
   server: {
     port: 5173,

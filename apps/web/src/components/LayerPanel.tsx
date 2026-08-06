@@ -1,3 +1,13 @@
+import {
+  Callout,
+  Chip,
+  Field,
+  Legend,
+  RangeField,
+  SectionHeading,
+  Button,
+  ToggleRow,
+} from '@hunt-maps/design';
 import { LAYER_GROUPS, LAYERS, layerById, missingInputs } from '../lib/layers';
 
 export interface SavedFilterSummary {
@@ -26,16 +36,17 @@ export interface LayerPanelProps {
 /**
  * The layer stack control.
  *
- * Two things this panel does that most map UIs do not, both deliberate:
+ * All presentation comes from `@hunt-maps/design` primitives — this component
+ * is now purely the arrangement and the product rules. Two of those rules are
+ * worth calling out because they are unusual and deliberate:
  *
- *  1. **It explains each layer in a sentence.** These are not familiar layers —
- *    "Weiss multi-scale TPI landform classification" means nothing to a hunter,
- *    and a layer nobody understands is a layer nobody turns on. Every entry
- *    says what it shows and why it matters, in hunting language.
- *  2. **It says out loud when a layer is missing its inputs.** Bedding
- *    likelihood with no wind set renders *something* — and that something is
- *    misleading. Better to grey it out and say why than to draw a confident
- *    heat map built on a default.
+ *  1. **Every layer is explained in a sentence.** "Weiss multi-scale TPI
+ *     landform classification" means nothing to a hunter, and a layer nobody
+ *     understands is a layer nobody turns on.
+ *  2. **A layer whose inputs are unset is disabled with a stated reason**, not
+ *     rendered against a default. `ToggleRow`'s `blockedReason` prop makes that
+ *     the path of least resistance rather than something each screen has to
+ *     remember.
  */
 export function LayerPanel({
   active,
@@ -57,8 +68,9 @@ export function LayerPanel({
     <aside className="layer-panel" aria-label="Map layers">
       <header className="layer-panel__head">
         <h2>Layers</h2>
-        <span
-          className={offlineReady ? 'chip chip--ok' : 'chip chip--warn'}
+        <Chip
+          tone={offlineReady ? 'ok' : 'warn'}
+          glyph={offlineReady ? '●' : '○'}
           title={
             offlineReady
               ? 'Elevation for this area is stored on this device. Analysis layers work with no signal.'
@@ -66,40 +78,41 @@ export function LayerPanel({
           }
         >
           {offlineReady ? 'Offline ready' : 'Online only'}
-        </span>
+        </Chip>
       </header>
 
-      <section className="control-block">
-        <label htmlFor="wind-dial">
-          Wind from
-          <span className="control-block__value">
-            {windFromDeg === null ? 'not set' : `${Math.round(windFromDeg)}° ${octant(windFromDeg)}`}
-          </span>
-        </label>
-        <input
-          id="wind-dial"
-          type="range"
-          min={0}
-          max={359}
-          step={5}
-          value={windFromDeg ?? 0}
-          onChange={(e) => onWindChange(Number(e.target.value))}
-          aria-label="Wind direction in degrees the wind is coming from"
-        />
-        {windFromDeg !== null && (
-          <button type="button" className="link" onClick={() => onWindChange(null)}>
-            Clear wind
-          </button>
-        )}
-      </section>
+      <RangeField
+        id="wind-dial"
+        label="Wind from"
+        min={0}
+        max={359}
+        step={5}
+        value={windFromDeg ?? 0}
+        onValueChange={onWindChange}
+        display={
+          windFromDeg === null ? 'not set' : `${Math.round(windFromDeg)}° ${octant(windFromDeg)}`
+        }
+        aria-label="Wind direction in degrees the wind is coming from"
+        hint={
+          windFromDeg !== null ? (
+            <Button variant="link" onClick={() => onWindChange(null)}>
+              Clear wind
+            </Button>
+          ) : (
+            'Leeward bedding and shelter layers need this before they mean anything.'
+          )
+        }
+      />
 
-      <section className="control-block">
-        <label htmlFor="time-input">
-          Date &amp; time
-          <span className="control-block__value">{atUtc.toLocaleString()}</span>
-        </label>
+      <Field
+        id="time-input"
+        label="Date &amp; time"
+        value={atUtc.toLocaleString()}
+        hint="Sun and thermal layers move through the day and through the season. Scrub this to see where light lands at first light on opening morning."
+      >
         <input
           id="time-input"
+          className="rl-input"
           type="datetime-local"
           value={toLocalInput(atUtc)}
           onChange={(e) => {
@@ -107,103 +120,74 @@ export function LayerPanel({
             if (!Number.isNaN(next.getTime())) onTimeChange(next);
           }}
         />
-        <p className="hint">
-          Sun and thermal layers move through the day and through the season. Scrub this to see
-          where light lands at first light on opening morning.
-        </p>
-      </section>
+      </Field>
 
       {warnings.length > 0 && (
-        <div className="callout callout--warn" role="status">
+        <Callout tone="warn">
           {warnings.map((w) => (
             <p key={w}>{w}</p>
           ))}
-        </div>
+        </Callout>
       )}
 
       {LAYER_GROUPS.filter((g) => g.id !== 'saved').map((group) => (
         <section key={group.id} className="layer-group">
-          <h3>
-            {group.label}
-            <span className="layer-group__hint">{group.hint}</span>
-          </h3>
-          {LAYERS.filter((l) => l.group === group.id).map((layer) => {
-            const on = active.has(layer.id);
-            const blocked = layer.requiresWind && windFromDeg === null;
-            return (
-              <div key={layer.id} className={`layer-row${on ? ' layer-row--on' : ''}`}>
-                <label className="layer-row__main">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    disabled={blocked}
-                    onChange={() => onToggle(layer.id)}
-                    aria-describedby={`blurb-${layer.id}`}
-                  />
-                  <span className="layer-row__label">{layer.label}</span>
-                </label>
-                <p id={`blurb-${layer.id}`} className="layer-row__blurb">
-                  {layer.blurb}
-                </p>
-                {on && (
-                  <>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={Math.round((opacities[layer.id] ?? layer.defaultOpacity) * 100)}
-                      onChange={(e) => onOpacity(layer.id, Number(e.target.value) / 100)}
-                      aria-label={`${layer.label} opacity`}
-                      className="layer-row__opacity"
-                    />
-                    {layer.legend && (
-                      <ul className="legend">
-                        {layer.legend.map((entry) => (
-                          <li key={entry.label}>
-                            <span
-                              className="legend__swatch"
-                              style={{ background: entry.swatch }}
-                              aria-hidden="true"
-                            />
-                            {entry.label}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
+          <SectionHeading hint={group.hint}>{group.label}</SectionHeading>
+          {LAYERS.filter((l) => l.group === group.id).map((layer) => (
+            <ToggleRow
+              key={layer.id}
+              id={`layer-${layer.id}`}
+              label={layer.label}
+              checked={active.has(layer.id)}
+              onToggle={() => onToggle(layer.id)}
+              blurb={layer.blurb}
+              blockedReason={
+                layer.requiresWind && windFromDeg === null
+                  ? `Set a wind direction first — without one this layer would render against a default, which would be misleading rather than merely wrong.`
+                  : undefined
+              }
+            >
+              <input
+                type="range"
+                className="rl-range"
+                min={0}
+                max={100}
+                value={Math.round((opacities[layer.id] ?? layer.defaultOpacity) * 100)}
+                onChange={(e) => onOpacity(layer.id, Number(e.target.value) / 100)}
+                aria-label={`${layer.label} opacity`}
+              />
+              {layer.legend && <Legend entries={layer.legend} />}
+            </ToggleRow>
+          ))}
         </section>
       ))}
 
       <section className="layer-group">
-        <h3>
+        <SectionHeading
+          action={
+            <Button variant="link" onClick={onEditFilters}>
+              Edit
+            </Button>
+          }
+        >
           Saved filters
-          <button type="button" className="link" onClick={onEditFilters}>
-            Edit
-          </button>
-        </h3>
+        </SectionHeading>
         {savedFilters.length === 0 ? (
-          <p className="hint">
+          <p className="rl-hint">
             No saved filters yet. A filter is a terrain query you name and keep — “12–25°, facing
             north through east, on a bench” — and it travels with you offline.
           </p>
         ) : (
           savedFilters.map((f) => (
-            <div key={f.id} className={`layer-row${f.enabled ? ' layer-row--on' : ''}`}>
-              <label className="layer-row__main">
-                <input
-                  type="checkbox"
-                  checked={f.enabled}
-                  onChange={() => onToggleFilter(f.id)}
-                />
-                <span className="legend__swatch" style={{ background: f.color }} aria-hidden="true" />
-                <span className="layer-row__label">{f.name}</span>
-              </label>
-              {f.description && <p className="layer-row__blurb">{f.description}</p>}
-            </div>
+            <ToggleRow
+              key={f.id}
+              id={`filter-${f.id}`}
+              label={f.name}
+              checked={f.enabled}
+              onToggle={() => onToggleFilter(f.id)}
+              blurb={f.description}
+              swatch={f.color}
+            />
           ))
         )}
       </section>
