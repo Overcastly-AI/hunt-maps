@@ -44,6 +44,67 @@ async function closeLayersSheet(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// 0. Regression guard — clipped-ancestor hit-testing
+// ---------------------------------------------------------------------------
+//
+// A synthetic, app-independent pin for `dom-audit.ts`'s own logic, not a
+// product invariant — but it earns its place here for the same reason the
+// rest of this file exists: a reviewer of this very suite once hit-tested a
+// Layers-sheet row at its raw, unscrolled position (well inside the 900px
+// *window*, but past the sheet body's own 707px scroll clip) and reported it
+// as two real app defects. Neither existed; the mistake was a viewport-only
+// visibility check, exactly the shape of bug `auditInteractiveElements` is
+// built to avoid. This fixture pins both branches directly so a future
+// refactor that reintroduces a viewport-only check fails immediately, rather
+// than waiting for someone to rediscover the mistake by eye against the real
+// app. Uses `page.setContent` — no app, no DEM tiles, no navigation — so it
+// runs in well under a second.
+test.describe('0. Regression guard — clipped-ancestor hit-testing', () => {
+  test('a control past its scrolling ancestor clip is scrolled and hit-tested at its real, visible position', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 800, height: 700 });
+    await page.setContent(`
+      <div id="scroller" style="position:absolute;top:10px;left:10px;width:300px;height:200px;overflow-y:auto;">
+        <div style="height:1000px;position:relative;">
+          <button style="position:absolute;top:600px;left:10px;width:100px;height:44px;">Clipped</button>
+        </div>
+      </div>
+      <button style="position:fixed;top:-9999px;left:10px;width:100px;height:44px;">Unreachable</button>
+    `);
+
+    const results = await auditInteractiveElements(page, ['body']);
+    const clipped = results.find((r) => r.name === 'Clipped');
+    const unreachable = results.find((r) => r.name === 'Unreachable');
+    if (!clipped || !unreachable) {
+      throw new Error('Fixture setup failed — expected both a "Clipped" and an "Unreachable" button in the audit.');
+    }
+
+    // The button's raw flow position (scroller top 10px + 600px down = 610px)
+    // is well inside the 700px window, but the scroller only shows its first
+    // 200px (10-210px) before clipping. `reachable` must come from scrolling
+    // it into its *own* clipping ancestor, not from a window-bounds check.
+    expect(clipped.reachable, 'a control past a scrolling ancestor clip should be reachable via scrollIntoView').toBe(
+      true,
+    );
+    expect(
+      clipped.hitOk,
+      "a control scrolled into its clipping ancestor's view should hit-test to itself, not a stale position",
+    ).toBe(true);
+
+    // `position: fixed` ignores every ancestor's scroll offset, so no amount
+    // of scrolling can ever bring it into the viewport — the genuine class-2
+    // case (present in the DOM, permanently unreachable) this helper must
+    // still catch, so the fix above cannot be loosened into "always assume
+    // reachable" without this failing.
+    expect(
+      unreachable.reachable,
+      'a position:fixed control off the top of the viewport has no scrollable ancestor that can reach it',
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 1. Hit-testability
 // ---------------------------------------------------------------------------
 //
@@ -290,16 +351,21 @@ test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
 // last case below covers the sheet and a popover open together — see that
 // test for the one pair excluded from the check and why.
 test.describe('4. No chrome collisions (desktop)', () => {
+  // The three persistent groups exist in every one of these states — passing
+  // their names here means a rect that comes back `null` (its selector
+  // matched nothing) is a loud failure, not a silent "nothing to overlap".
+  const PERSISTENT = ['rail (top-right)', 'rail (bottom-left)', 'conditions bar', 'chrome-bottomleft group'];
+
   test('nothing open', async ({ page }) => {
     await gotoAndSettle(page, DESKTOP);
     await closeLayersSheet(page);
-    await assertNoCollisions(page);
+    await assertNoCollisions(page, { expectPresent: PERSISTENT });
   });
 
   test('layers sheet open', async ({ page }) => {
     await gotoAndSettle(page, DESKTOP);
     await waitForRectStable(page.locator('.rl-sheet'));
-    await assertNoCollisions(page);
+    await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'layers sheet'] });
   });
 
   test('wind popover open', async ({ page }) => {
@@ -307,7 +373,7 @@ test.describe('4. No chrome collisions (desktop)', () => {
     await closeLayersSheet(page);
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
-    await assertNoCollisions(page);
+    await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'wind/time popover'] });
   });
 
   // Layers and a popover are now independent state (App.tsx) and can both be
@@ -325,13 +391,16 @@ test.describe('4. No chrome collisions (desktop)', () => {
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
     await expect(page.locator('.rl-sheet')).toBeVisible();
-    await assertNoCollisions(page, { allow: [['layers sheet', 'wind/time popover']] });
+    await assertNoCollisions(page, {
+      allow: [['layers sheet', 'wind/time popover']],
+      expectPresent: [...PERSISTENT, 'layers sheet', 'wind/time popover'],
+    });
   });
 });
 
 async function assertNoCollisions(
   page: Page,
-  opts: { allow?: Array<[string, string]> } = {},
+  opts: { allow?: Array<[string, string]>; expectPresent?: string[] } = {},
 ): Promise<void> {
   const allow = new Set((opts.allow ?? []).map(([a, b]) => [a, b].sort().join('|')));
   const rects = await collectChromeRects(page);
@@ -339,9 +408,41 @@ async function assertNoCollisions(
     ['rail (top-right)', rects.railTopRight],
     ['rail (bottom-left)', rects.railBottomLeft],
     ['conditions bar', rects.conditions],
+    // NOTE: `chrome-bottomleft group` is deliberately absent from this list.
+    // It is the *container* of the bottom-left rail and the conditions bar,
+    // so it overlaps both of them by construction and a pairwise check
+    // against it can only ever fail. It still appears in `expectPresent`
+    // below, which is what actually guards against a selector silently
+    // matching nothing — the reason it was added in the first place.
     ['layers sheet', rects.sheet],
     ['wind/time popover', rects.popover],
   ];
+
+  // Presence and overlap are deliberately checked against *different* lists.
+  // Everything the app renders should be assertable as present, including
+  // container elements — but a container can only ever "overlap" its own
+  // children, so it must not enter the pairwise matrix.
+  const presence: Array<[string, typeof rects.sheet]> = [
+    ...named,
+    ['chrome-bottomleft group', rects.bottomLeftGroup],
+  ];
+
+  // A rect the selector failed to find comes back `null`, and `rectsOverlap`
+  // treats `null` as "nothing to overlap with" — so a future rename or a
+  // layout change that stops a selector matching would make this invariant
+  // pass for the wrong reason: it would have stopped looking, not confirmed
+  // there is no collision. Anything the caller says must exist in this state
+  // is asserted present before the loop runs at all.
+  for (const requiredName of opts.expectPresent ?? []) {
+    const entry = presence.find(([name]) => name === requiredName);
+    if (!entry) throw new Error(`assertNoCollisions: no rect named "${requiredName}" — check the caller's spelling.`);
+    expect(
+      entry[1],
+      `expected to find "${requiredName}" in this state, but its selector matched nothing — ` +
+        `a missing rect silently reads as "no collision", which would hide a real regression.`,
+    ).not.toBeNull();
+  }
+
   for (let i = 0; i < named.length; i++) {
     for (let j = i + 1; j < named.length; j++) {
       const [nameA, rectA] = named[i];
@@ -352,6 +453,23 @@ async function assertNoCollisions(
         `${nameA} and ${nameB} overlap: ${JSON.stringify(rectA)} vs ${JSON.stringify(rectB)}`,
       ).toBe(false);
     }
+  }
+
+  // The rail and the conditions bar are checked above as two separate rects,
+  // which does not cover the gap *between* them — a sheet edge landing inside
+  // that gap would pass both of those checks while still visually overlapping
+  // the bottom-left cluster as a whole. Checking `.chrome-bottomleft`'s own
+  // bounding box against the sheet closes that gap. Not run against the
+  // popover or folded into the loop above: the popover is anchored to a cell
+  // *inside* this same group and legitimately overlaps its own row's taller
+  // neighbour (the 3-button rail) the same way it overlaps the sheet — see
+  // the "both open" test's comment for why that specific pairing is allowed.
+  if (rects.bottomLeftGroup && rects.sheet) {
+    expect(
+      rectsOverlap(rects.bottomLeftGroup, rects.sheet),
+      `chrome-bottomleft (rail + conditions bar) and layers sheet overlap: ` +
+        `${JSON.stringify(rects.bottomLeftGroup)} vs ${JSON.stringify(rects.sheet)}`,
+    ).toBe(false);
   }
 }
 
