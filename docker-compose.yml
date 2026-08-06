@@ -32,7 +32,14 @@ services:
       REDIS_URL: redis://redis:6379
       # No default. The app refuses to boot without a real secret rather than
       # shipping a weak one to production.
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET — generate with: openssl rand -base64 48}
+      #
+      # Quoted, and the hint deliberately carries no ": " — a colon-space
+      # inside an unquoted YAML scalar ends the scalar, so the earlier
+      # "generate with: openssl rand -base64 48" made this whole file
+      # unparseable. `docker compose config` failed with a YAML error pointing
+      # at the column, which reads as a syntax slip somewhere rather than as
+      # the error message eating itself.
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET first — run 'openssl rand -base64 48'}"
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       DEM_3DEP_TEMPLATE: ${DEM_3DEP_TEMPLATE:-}
       NODE_ENV: production
