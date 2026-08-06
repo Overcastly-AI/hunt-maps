@@ -100,6 +100,43 @@ tool — each file carries its script outline.
    something real; it is never tuned until it passes. And when a defect is found
    by eye, the invariant that would have caught it ships in the same change.
 
+   **The suite is code, and gets the same scepticism as the product.** Three of
+   the first four defects it reported were in the suite, not the app: a
+   viewport-only visibility check that flagged rows scrolled past a container's
+   clip, an orchestrator probe that inherited the same flaw, and a container
+   element added to a pairwise overlap matrix it can only ever fail. A false
+   failure is not a free cost — it consumed an agent brief and nearly got a
+   working layout "fixed". So rule 5 runs in both directions: **confirm a
+   failure by an independent route before acting on it, and confirm a
+   suspicious pass the same way.**
+
+## Running the real app in this sandbox
+
+Several agents have independently rediscovered this; it costs about an hour
+each time.
+
+```bash
+node tools/dem-relay.mjs &                                    # :8099, disk-cached
+VITE_DEM_TEMPLATE='http://localhost:8099/{z}/{x}/{y}.png' pnpm build
+cd apps/web && pnpm exec vite preview --port 4173 --strictPort &
+PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test ui-invariants --workers=1
+```
+
+Four traps, each of which looks like a different bug than it is:
+
+- **Chromium does not trust the sandbox's egress proxy CA**, so browser-side
+  HTTPS to the DEM host resets and every terrain layer renders empty. That
+  looks like a broken analysis engine. `tools/dem-relay.mjs` relays through
+  Node, which does trust it.
+- **`VITE_DEM_TEMPLATE` is inlined at build time**, not read at run time. A
+  build without it bakes in the real S3 URL and the app runs mapless.
+- **`playwright.config.ts` sets `reuseExistingServer: true`**, so a stale
+  preview from an earlier build is silently reused. Restart it after every
+  rebuild, or the suite reports on code that is no longer there — a pass that
+  means nothing.
+- **Parallel Playwright workers get OOM-SIGKILLed here.** Always `--workers=1`;
+  without it the suite looks flaky rather than starved.
+
 There is a sixth rule that is about process rather than product, and it is the
 one most often broken: **the orchestrator delegates.** A fifteen-agent org that
 gets bypassed because doing it inline felt faster is not an org — it is one
