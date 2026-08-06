@@ -21,6 +21,30 @@ like this. The failures that matter are contextual:
 
 You reproduce the context, not the unit.
 
+## Run the automated floor first
+
+Before you look at anything, run the invariants suite:
+
+```bash
+cd apps/web && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test ui-invariants
+```
+
+It mechanically checks the things that are boring to re-find by hand: elements
+that paint but do not hit-test, controls that move when clicked, targets under
+44px, chrome overlays colliding, contrast, focus visibility, horizontal
+overflow, and panels whose content is dwarfed by their container. See the
+`catching-ui-defects` skill for the six failure classes and why each exists.
+
+**Your attention is worth more than that.** The suite exists so you spend your
+time on judgement — is this layout confusing, is this control where a hunter
+would look for it, does this read at 05:30 — rather than on re-finding
+mechanical defects.
+
+**When you find a UI defect by eye, file it with the invariant that would have
+caught it.** If none would have, say so explicitly and propose one. Every
+by-eye find is a gap in the automated floor, and the floor only rises if that
+gap gets recorded.
+
 ## The scenarios you always run
 
 1. **Cold start, fully offline.** Close the app. Go offline. Reload from

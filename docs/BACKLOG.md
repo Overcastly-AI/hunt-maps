@@ -45,6 +45,13 @@ The build loop pulls from **Ready**.
 | N14 | Curvature noise floor tied to DEM vertical accuracy | P2 | S | The scale-aware Wood threshold fixed the speckle on dissected terrain (8.4% → 56% planar), but a coarse DEM over low-relief farmland still over-classifies ridge/channel because resampling noise dominates real curvature there. |
 | N13 | Scope models per species, or narrow the claim to whitetail | P1 | M | Every biological parameter in the engine is whitetail-derived, but the product claims "deer or other large game". Silent borrowing across mule deer/elk/blacktail is wrong. |
 
+## Process debt
+
+| # | Item | Pri | Rationale |
+|---|------|-----|-----------|
+| P1 | Orchestrator must delegate rather than implement | P0 | The fifteen-agent org was bypassed on every task of the initial build. One perspective, no independent review, no adversarial QA — every UI defect so far was found by the founder looking at a screenshot. Now written into CLAUDE.md and `.claude/README.md`; needs to actually hold. |
+| P2 | Deploy the `Confidence` chip in the UI | P1 | The primitive exists and `docs/EVIDENCE.md` grades every parameter, but no user-facing surface shows a grade yet. Three headline layers rest on 🔴 Assumed values while presenting as fact. |
+
 ## Investigate
 
 | # | Question | Why it matters |

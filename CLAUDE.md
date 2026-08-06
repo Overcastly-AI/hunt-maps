@@ -23,7 +23,7 @@ decision should be checked against them:
 is **"Would a serious whitetail hunter switch to this and never go back?"** — a
 daily-driver bar, not a feature-count argument.
 
-## The three non-negotiables
+## The five non-negotiables
 
 ### 1. Offline is not a feature, it is the operating assumption
 
@@ -76,7 +76,27 @@ parameter without registering it, or labelling hunting media as `Measured`, both
 count as defects. `game-biologist` owns the register; the `Confidence` primitive
 in `@hunt-maps/design` is how grades reach the UI.
 
-### 4. Analytics compare use against availability
+### 4. UI defects are their own failure class — assert rendered state
+
+Every other subsystem fails where a test can see it. UI does not: the DOM
+reports success, the component rendered, `getByRole` finds the button,
+`toBeVisible` passes — and the user still cannot click it.
+
+A popover once painted perfectly and was **unclickable**, because an ancestor's
+`overflow: hidden` clipped it: a bounding box ignores an ancestor's clip, but
+`elementFromPoint` does not. 221 unit tests were green.
+
+So: **assert against rendered state, not DOM state.** Hit-testing, geometry and
+computed style tell you what the user got; a DOM query only tells you what you
+built. `apps/web/e2e/ui-invariants.spec.ts` encodes this. The six failure
+classes and how to detect each are in the `catching-ui-defects` skill.
+
+**When a UI defect is found by eye, the fix is two commits' worth of work: the
+fix, and the invariant that would have caught it.** Never tune a failing
+assertion until it goes green — the default assumption is that it found
+something real.
+
+### 5. Analytics compare use against availability
 
 The single most common failure in hunting "analytics" is a histogram of
 sightings by slope band. If 70% of the property is gentle slope, 70% of
@@ -199,9 +219,30 @@ from [obra/superpowers](https://github.com/obra/superpowers), MIT). Debugging:
 
 **The loop for every feature:** plan → implement (specialist) → review
 (`code-reviewer`) → **functional QA with `field-qa`, including an actual
-offline run** → `analytics-auditor` if any number is shown to a user →
+offline run** → **`ui-invariants` suite green + screenshot review if any pixel
+changed** → `analytics-auditor` if any number is shown to a user →
 **`game-biologist` if any biological parameter was added or changed** → update
 `docs/ROADMAP.md` + `docs/BACKLOG.md` → commit.
+
+### The orchestrator delegates — this has been violated and it matters
+
+The most common failure of this repo's process is not a bad agent brief. It is
+the orchestrator reading the task, deciding it is faster to just do it, and
+doing all of it alone. That happened through the entire initial build: a
+fifteen-agent org was created and then bypassed on every single task.
+
+It is not faster. It is one perspective, no independent review, no adversarial
+QA, and every defect found late by the founder looking at a screenshot.
+
+**Default to delegating.** Before implementing anything non-trivial, name the
+agent that owns it. If you are about to write code an agent in `.claude/agents/`
+is defined to own, stop and dispatch instead. Reserve doing it yourself for
+genuinely trivial edits, and for orchestration and verification — which are your
+actual job.
+
+Parallel agents get **explicitly disjoint file territories** in their briefs, and
+the orchestrator independently re-runs a slice of every agent's gates before
+reporting the work done.
 
 ## Working style for autonomous build
 

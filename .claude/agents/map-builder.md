@@ -41,6 +41,8 @@ else is a panel next to it.
 
 ## Definition of done
 
-Verified on desktop **and** a 390px mobile viewport, at both brightness
+**`ui-invariants` suite green** (`pnpm exec playwright test ui-invariants`) —
+never tuned until it passes; a failing invariant is assumed to have found
+something real. Verified on desktop **and** a 390px mobile viewport, at both brightness
 extremes, with the layer stack toggled in random order. `docs/ROADMAP.md` +
 `docs/BACKLOG.md` ticked in the same commit.

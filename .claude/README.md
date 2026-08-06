@@ -59,16 +59,22 @@ point — auditors who read each other's output converge on the same blind spots
 | `build-vertical-slice` | One feature: engine → schema → API → map → panel → review → field QA → analytics audit |
 | `terrain-validation-loop` | Standing loop that independently re-derives the engine's maths and cross-checks against desktop GIS |
 | `offline-integrity-loop` | Standing loop that proves the cold-start-offline path still works |
+| `ui-integrity-loop` | Standing loop: automated UI invariants + screenshot review across every overlay state |
 
-The last two run **independently of feature work**, and that is deliberate.
-Terrain defects are invisible (nothing crashes; the map just lies) and offline
-support rots silently (everything is developed and reviewed online). Neither is
-caught by reviewing the feature that broke it.
+The last three run **independently of feature work**, and that is deliberate.
+All three failure modes are silent:
+
+- Terrain defects do not crash — the map just lies.
+- Offline support rots because everything is developed and reviewed online.
+- **UI defects do not fail tests** — the DOM reports success while the user
+  cannot click the button.
+
+None of them is caught by reviewing the feature that broke it.
 
 Workflows are documented as orchestration recipes; run them with the `Workflow`
 tool — each file carries its script outline.
 
-## The four gates that must never be skipped
+## The five gates that must never be skipped
 
 1. **A new terrain operator ships with a test against a closed-form answer.**
    Not a fixture, not a screenshot.
@@ -78,6 +84,16 @@ tool — each file carries its script outline.
 4. **A new biological parameter does not merge without a row in
    `docs/EVIDENCE.md`** carrying a grade and a source — or an explicit "no
    literature found". `game-biologist` assigns the grade.
+5. **A pixel does not change without the `ui-invariants` suite green and a
+   screenshot looked at.** A failing invariant is assumed to have found
+   something real; it is never tuned until it passes. And when a defect is found
+   by eye, the invariant that would have caught it ships in the same change.
+
+There is a sixth rule that is about process rather than product, and it is the
+one most often broken: **the orchestrator delegates.** A fifteen-agent org that
+gets bypassed because doing it inline felt faster is not an org — it is one
+perspective with no independent review. Before implementing anything
+non-trivial, name the agent that owns it.
 
 Note the division of labour between the two auditing roles, because it is easy
 to conflate them: `terrain-scientist` verifies that 22° is *applied* correctly.
