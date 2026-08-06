@@ -1,0 +1,38 @@
+# Overlay that builds the images on the host instead of pulling them.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build
+#
+# Use this when the registry has no image for the tag you want — which right
+# now is the normal case, because Actions minutes on a private personal-account
+# repo are metered and the publish workflow stops running when they are gone.
+# Building on the VPS has no such dependency.
+#
+# `image:` is kept from the base file, so a build here tags the result with the
+# same name a pull would have produced. Switching back to registry images later
+# is then just dropping this file from the command.
+#
+# Build context is the repo root, two directories up — these Dockerfiles copy
+# pnpm-workspace.yaml and every workspace package, so they cannot build from
+# deploy/compose/.
+#
+# Resource note: the web build runs Vite and needs roughly 2 GB of RAM. On a
+# 1 GB VPS it dies with an out-of-memory kill that reads as a hung build. Add
+# swap first, or build elsewhere and push.
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Inlined into the bundle at build time — Vite resolves it during the
+        # build, so the running container never reads it. This cannot be set
+        # by an environment variable at runtime; changing the elevation source
+        # means rebuilding the image. Left empty, the app falls back to the
+        # public AWS Terrarium tiles.
+        VITE_DEM_TEMPLATE: ${VITE_DEM_TEMPLATE:-}
