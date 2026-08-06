@@ -1,0 +1,118 @@
+/*
+ * GENERATED FILE — do not edit.
+ *
+ * Produced from `src/tokens.ts` by `pnpm --filter @hunt-maps/design build:tokens`.
+ * `tokens.test.ts` fails CI if this file drifts from the TypeScript source.
+ */
+
+:root {
+  /* color */
+  --color-ground: #0a0f14;
+  --color-surface: #121a22;
+  --color-raised: #1b242e;
+  --color-scrim: rgb(6 10 14 / 0.62);
+  --color-line: #26323d;
+  --color-line-strong: #374757;
+  --color-text: #e8edf2;
+  --color-text-dim: #b2bfcb;
+  --color-text-faint: #94a3b0;
+  --color-accent: #c9a253;
+  --color-accent-dim: #6f5525;
+  --color-accent-bright: #e3bd76;
+  --color-accent-ink: #120d03;
+  --color-ok: #4fc3a1;
+  --color-warn: #e0b64a;
+  --color-blaze: #ff5a1f;
+  --color-info: #5b9dd9;
+
+  /* map */
+  --map-slope-flat: #3d7fa6;
+  --map-slope-sidehill: #4fae93;
+  --map-slope-bedding: #dcb455;
+  --map-slope-steep: #d4703c;
+  --map-slope-wall: #963040;
+  --map-feature-saddle: #3fd6e0;
+  --map-feature-channel: #4894c4;
+  --map-feature-ridge: #e08d47;
+  --map-feature-peak: #dd5a4e;
+  --map-feature-bench: #c9a253;
+  --map-corridor: #4fc3a1;
+  --map-pinch: #ff5a1f;
+
+  /* glass */
+  --glass-bg: rgb(18 26 34 / 0.92);
+  --glass-bg-strong: rgb(10 15 20 / 0.97);
+  --glass-blur: blur(18px) saturate(140%);
+  --glass-border: rgb(255 255 255 / 0.09);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
+
+  /* space */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-touch: 44px;
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+
+  /* font */
+  --font-sans: 'Barlow', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-condensed: 'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* text */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 24px;
+  --text-display: 32px;
+
+  /* weight */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* leading */
+  --leading-tight: 1.2;
+  --leading-normal: 1.45;
+  --leading-loose: 1.6;
+
+  /* track */
+  --track-display: -0.02em;
+  --track-normal: 0;
+  --track-label: 0.09em;
+  --track-eyebrow: 0.14em;
+
+  /* shadow */
+  --shadow-rail: 0 4px 20px rgb(0 0 0 / 0.45);
+  --shadow-sheet: 0 16px 48px rgb(0 0 0 / 0.6);
+  --shadow-raised: 0 2px 8px rgb(0 0 0 / 0.35);
+
+  /* layout */
+  --layout-sheet-width: 360px;
+  --layout-sheet-max-height: 62vh;
+  --layout-rail-gap: 12px;
+  --layout-breakpoint-compact: 860px;
+
+  /* motion */
+  --motion-fast: 120ms;
+  --motion-base: 220ms;
+  --motion-sheet: 280ms;
+  --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  color-scheme: dark;
+}

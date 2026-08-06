@@ -1,0 +1,220 @@
+/**
+ * App-shell layout only.
+ *
+ * Everything visual — colour, spacing, type, radii, component styling — lives
+ * in `@hunt-maps/design`. What remains here is genuinely app-specific: where the
+ * floating chrome sits over the map.
+ *
+ * The rule that keeps this decoupled: **no literal colours, sizes or radii in
+ * this file.** Everything reads a token. If you want a new value, add it to
+ * `packages/design/src/tokens.ts` — that is what makes a palette change a
+ * one-file edit instead of a search across the app.
+ */
+
+@import '@hunt-maps/design/fonts.css';
+@import '@hunt-maps/design/tokens.css';
+@import '@hunt-maps/design/styles.css';
+
+/* The map is the product: it fills the viewport and nothing takes width from it. */
+.app-shell {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+ * Chrome floats in four corners over the map.
+ *
+ * `pointer-events: none` on the layer, re-enabled on each control, so the whole
+ * map stays draggable through the gaps between them. Without that, the corners
+ * become dead zones where a pan silently does nothing.
+ */
+.map-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  padding: var(--space-3);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-3);
+  grid-template-areas:
+    '.          .  topright'
+    '.          .  .'
+    'bottomleft .  bottomright';
+}
+
+.map-chrome > * {
+  pointer-events: auto;
+}
+
+.chrome-topright {
+  grid-area: topright;
+  justify-self: end;
+  align-self: start;
+}
+.chrome-bottomleft {
+  grid-area: bottomleft;
+  align-self: end;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+}
+
+.chrome-bottomright {
+  grid-area: bottomright;
+  justify-self: end;
+  align-self: end;
+}
+
+/*
+ * Desktop: give the Layers drawer enough vertical clearance that it never
+ * reaches down into the bottom-left rail + conditions bar row, instead of
+ * sliding that row sideways out of the drawer's way.
+ *
+ * This used to be a `transform: translateX(...)` on `.chrome-bottomleft`
+ * whenever the sheet was open (see git history) — but the Layers button that
+ * *opens* the sheet lives inside that same translated group, so the click
+ * that opened the drawer slid its own trigger 372px sideways out from under
+ * the finger that just pressed it, and closing it snapped back the same way.
+ * That is the exact "trigger moves out from under the pointer" defect this
+ * app already fixed once for the wind/time editors (see `Popover`'s doc
+ * comment in `packages/design`), reintroduced here by a different code path.
+ * Reserving space instead of displacing anything means the trigger — and
+ * everything else in the row — never moves at all, whether the sheet is open
+ * or not.
+ *
+ * This overrides `.rl-sheet--drawer`'s own `bottom` offset
+ * (`packages/design/src/styles.css`), which only budgets for a single
+ * touch-target-tall control. This app's own rail stacks three buttons in
+ * that corner (`--space-touch` x3 plus a gap on each side), so the sheet
+ * needs three times the clearance — a fact about *this app's* specific
+ * chrome arrangement, not about the sheet component itself, which is why the
+ * override lives here rather than in the design package. Scoped to widths
+ * above the sheet's own mobile breakpoint so it never fights the intentional
+ * full-width bottom-sheet behaviour below that.
+ */
+@media (min-width: 861px) {
+  .rl-sheet--drawer {
+    bottom: calc(var(--space-touch) * 3 + var(--space-6) * 2);
+  }
+
+  /*
+   * Lift the whole chrome layer above the drawer, so the wind and time
+   * popovers — which open upward out of the conditions bar and across the
+   * drawer's column — are clickable while the layers sheet is open.
+   *
+   * Why it has to be *here*, on `.map-chrome`, and not on the popover: the
+   * popover already sets `z-index: 25` against a sheet at 20, which looks
+   * like it should win and cannot. Two ancestors defeat it. `.rl-conditions`
+   * carries `backdrop-filter` for the glass, and backdrop-filter creates a
+   * stacking context, so the popover's 25 only orders it *within the
+   * conditions bar*. And `.rl-sheet` is not a descendant of `.map-chrome` at
+   * all — it is a sibling under `.app-shell` — so the comparison that
+   * actually decides paint order is `.map-chrome`'s 10 against the sheet's
+   * 20. Nothing nested inside the chrome can escape that, at any z-index.
+   *
+   * The result was the popover painting under the sheet with its lower half
+   * hit-testing into `.rl-group` behind it: visible, and dead. Same failure
+   * class as the earlier `overflow: hidden` bug, and the same lesson — an
+   * ancestor property, invisible at the call site, silently overriding a
+   * child's own correct-looking rule.
+   *
+   * Desktop only. Below 861px the sheet is a full-width bottom sheet that is
+   * *meant* to cover this row while open (see the comment in the max-width
+   * block); raising the chrome there would leave the rail punched through a
+   * panel that is deliberately on top.
+   */
+  .map-chrome {
+    z-index: 30;
+  }
+}
+
+/*
+ * On a phone the conditions bar spans the full width and sits above the sheet.
+ * Wind and time are the two things a hunter re-checks constantly, so they get
+ * the bottom edge — the only part of a large phone a thumb reaches reliably.
+ */
+@media (max-width: 860px) {
+  .map-chrome {
+    grid-template-areas:
+      '.       .       topright'
+      '.       .       .'
+      'bottom  bottom  bottom';
+  }
+  .chrome-bottomleft {
+    grid-area: bottom;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    justify-self: stretch;
+  }
+
+  /*
+   * The mobile bottom sheet rises from the bottom edge and covers this row
+   * outright while open, rather than making room for it — there is no
+   * "sideways" on a full-width sheet. That is a deliberate, temporary
+   * occlusion by a panel the user can dismiss, not the trigger-displacement
+   * bug described above: nothing here moves, it is only painted over.
+   */
+  .chrome-bottomright {
+    display: none;
+  }
+}
+
+/* Terrain readout, anchored above the conditions bar. */
+.inspect-card {
+  position: absolute;
+  left: var(--space-3);
+  bottom: calc(var(--space-touch) + var(--space-6));
+  width: min(340px, calc(100% - var(--space-6)));
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  z-index: 15;
+}
+
+.inspect-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.inspect-card h3 {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+/* Readout rows: label left, monospace figure right, so values align in a column. */
+.readout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.readout dt {
+  color: var(--color-text-dim);
+}
+
+.readout dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+}

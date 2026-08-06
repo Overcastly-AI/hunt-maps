@@ -1,0 +1,160 @@
+# Ridgeline — default values, tuned for a laptop cluster (kind / minikube /
+# Docker Desktop / k3d) rather than for production. Every default here is
+# chosen so that `helm install` followed by one port-forward gives you a
+# working map. Production overrides are called out inline.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Images
+# -----------------------------------------------------------------------------
+# Published by .github/workflows/publish-images.yml on every push to main and
+# to claude/** branches, and on v* tags.
+#
+# `IfNotPresent` rather than `Always`: for local work with a side-loaded image,
+# `Always` makes a kind/minikube node reach for a registry copy of a tag that
+# is already on the node, fail, and leave you staring at ErrImagePull. For
+# production, pin an immutable tag (a `v*` release or a `sha-<commit>`) rather
+# than relying on a pull policy to chase `latest` — `latest` moving under a
+# running cluster is how you get two replicas on two different builds.
+image:
+  pullPolicy: IfNotPresent
+  # GHCR packages are private by default. Either make the package public in
+  # the repo's Packages settings, or create a pull secret and name it here:
+  #   kubectl create secret docker-registry ghcr \
+  #     --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
+  pullSecrets: []
+
+api:
+  image:
+    repository: ghcr.io/overcastly-ai/hunt-maps-api
+    tag: latest
+  replicaCount: 1
+  service:
+    port: 3001
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # Terrain analysis is CPU-bound and bursty. A CPU *limit* here causes
+  # throttling that reads to a user as "the analysis engine is slow", so
+  # there is deliberately no cpu limit — only a request, which is what the
+  # scheduler needs.
+
+  # Optional 3DEP (USGS 1m LiDAR) source. Left empty, the API serves the
+  # public Terrarium tiles and rejects 3dep requests with a clear message
+  # rather than silently falling back — see apps/api/src/terrain/dem.service.ts.
+  dem3depTemplate: ""
+
+  # Browsers that may call the API. The API reads this as a comma-separated
+  # list. The default matches the port-forward in NOTES.txt.
+  corsOrigins: "http://localhost:8080"
+
+  logLevel: info
+
+web:
+  image:
+    repository: ghcr.io/overcastly-ai/hunt-maps-web
+    tag: latest
+  replicaCount: 1
+  service:
+    port: 80
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  # Cluster DNS, used by nginx to resolve the API at request time rather than
+  # at startup (see the ConfigMap comment for why that matters). This Service
+  # name is `kube-dns` on kind, minikube, k3s and Docker Desktop alike, even
+  # when the implementation behind it is CoreDNS.
+  dnsResolver: kube-dns.kube-system.svc.cluster.local
+
+# -----------------------------------------------------------------------------
+# Database
+# -----------------------------------------------------------------------------
+# PostGIS, not plain Postgres. Every meaningful query in this app is spatial
+# and the extension is a hard requirement — a stock postgres image will come
+# up healthy and then fail on the first geometry column.
+postgis:
+  enabled: true
+  image:
+    repository: postgis/postgis
+    tag: "16-3.4"
+  auth:
+    database: ridgeline
+    username: ridgeline
+    # Leave empty to have the chart generate one and keep it in a Secret
+    # across upgrades. Set explicitly for anything you care about.
+    password: ""
+  persistence:
+    enabled: true
+    size: 8Gi
+    # Empty means "use the cluster default StorageClass", which is what every
+    # local distribution ships. Set it if yours does not have a default.
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Point at an existing database instead of running one in-cluster.
+# When set, this wins and `postgis.enabled` is ignored.
+externalDatabase:
+  url: ""
+
+# -----------------------------------------------------------------------------
+# Redis — off, and it should stay off until something uses it
+# -----------------------------------------------------------------------------
+# docker-compose.yml starts Redis and passes REDIS_URL to the API, but nothing
+# in apps/api consumes it: there is no redis/ioredis/bull dependency in
+# apps/api/package.json and no import anywhere in apps/api/src. Shipping it
+# enabled would mean every operator runs a cache that nothing reads.
+# Flip this on in the same change that introduces a consumer.
+redis:
+  enabled: false
+  image:
+    repository: redis
+    tag: 7-alpine
+
+# -----------------------------------------------------------------------------
+# Secrets
+# -----------------------------------------------------------------------------
+# The API refuses to boot without a JWT secret rather than shipping a weak
+# default (apps/api — JwtModule.registerAsync). The chart preserves that: it
+# never bakes a fixed secret. If you leave this empty it generates a random
+# one on first install and reuses it on every later upgrade via `lookup`, so
+# upgrading does not silently invalidate every session.
+auth:
+  jwtSecret: ""
+  # Use a Secret you manage yourself. Must contain keys `jwt-secret` and,
+  # if postgis is enabled, `postgres-password`.
+  existingSecret: ""
+
+# -----------------------------------------------------------------------------
+# Ingress
+# -----------------------------------------------------------------------------
+# Off by default. A port-forward works identically on every local cluster;
+# ingress does not, and a chart that assumes an ingress controller fails in a
+# way that looks like the app is broken.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ridgeline.local
+  tls: []
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

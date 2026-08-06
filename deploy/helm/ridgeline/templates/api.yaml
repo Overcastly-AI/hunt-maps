@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ridgeline.api.fullname" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.api.service.port }}
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: {{ include "ridgeline.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ridgeline.api.fullname" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ridgeline.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "ridgeline.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        # Roll the pods when the secret's contents change, so a rotated JWT
+        # key or database password actually reaches a running container
+        # instead of waiting for an unrelated restart.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "ridgeline.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        # Migrations run here rather than in the app container's command.
+        #
+        # The image's own CMD is `prisma migrate deploy && node dist/main.js`,
+        # which is right for docker-compose and wrong for Kubernetes: with more
+        # than one replica, every pod races to apply the same migration on every
+        # rollout. Prisma's advisory lock means one wins and the rest block, so
+        # it usually *looks* fine — until a slow migration trips a startup probe
+        # and the rollout stalls on pods that were only ever waiting.
+        #
+        # An initContainer serialises it per-pod and, importantly, fails the pod
+        # loudly if the migration fails, instead of the app starting against a
+        # schema it does not match.
+        - name: migrate
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /app/apps/api
+          command:
+            - sh
+            - -c
+            - |
+              # `migrate deploy` is both the wait and the work: it is
+              # idempotent, and it fails fast while the database is still
+              # accepting no connections. Retrying it directly avoids needing
+              # a separate readiness probe — pg_isready is not in this image
+              # (it ships Prisma, not the Postgres client tools), and a
+              # here-string probe would not run either, since /bin/sh here is
+              # dash and `<<<` is a bashism.
+              attempt=1
+              until pnpm exec prisma migrate deploy; do
+                if [ "$attempt" -ge 30 ]; then
+                  echo "database unreachable or migration failing after $attempt attempts; giving up"
+                  exit 1
+                fi
+                echo "migrate attempt $attempt failed; database may still be starting - retrying in 2s"
+                attempt=$((attempt + 1))
+                sleep 2
+              done
+              echo "migrations applied"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ridgeline.secretName" . }}
+                  key: database-url
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /app/apps/api
+          # Migrations are handled above; run only the server here.
+          command: ["node", "dist/main.js"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.service.port }}
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: {{ .Values.api.service.port | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ridgeline.secretName" . }}
+                  key: database-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ridgeline.secretName" . }}
+                  key: jwt-secret
+            - name: CORS_ORIGINS
+              value: {{ .Values.api.corsOrigins | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.api.logLevel | quote }}
+            {{- if .Values.api.dem3depTemplate }}
+            - name: DEM_3DEP_TEMPLATE
+              value: {{ .Values.api.dem3depTemplate | quote }}
+            {{- end }}
+            {{- if .Values.redis.enabled }}
+            - name: REDIS_URL
+              value: "redis://{{ include "ridgeline.fullname" . }}-redis:6379"
+            {{- end }}
+          # /api/health reports PostGIS reachability, so readiness tracks the
+          # thing that actually matters: whether spatial queries can run. A
+          # plain TCP check would mark a pod ready that cannot serve a map.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

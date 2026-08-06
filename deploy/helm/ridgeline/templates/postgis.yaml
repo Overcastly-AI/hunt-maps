@@ -1,0 +1,124 @@
+{{- if and .Values.postgis.enabled (not .Values.externalDatabase.url) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ridgeline.postgis.fullname" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgis
+spec:
+  # Headless: a StatefulSet's pod gets a stable DNS name, and there is exactly
+  # one database pod. A ClusterIP would add a load-balancing hop in front of a
+  # single backend for no benefit.
+  clusterIP: None
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+  selector:
+    app.kubernetes.io/name: {{ include "ridgeline.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: postgis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "ridgeline.postgis.fullname" . }}
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgis
+spec:
+  serviceName: {{ include "ridgeline.postgis.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ridgeline.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: postgis
+  template:
+    metadata:
+      labels:
+        {{- include "ridgeline.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgis
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgis
+          image: "{{ .Values.postgis.image.repository }}:{{ .Values.postgis.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgis.auth.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgis.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ridgeline.secretName" . }}
+                  key: postgres-password
+            # The image initialises its data directory only when this path is
+            # empty. Pointing at a subdirectory of the mount rather than the
+            # mount root keeps `lost+found` on ext4 volumes from making the
+            # directory look non-empty, which aborts init with a message that
+            # does not mention lost+found at all.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgis.auth.username | quote }}, "-d", {{ .Values.postgis.auth.database | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgis.auth.username | quote }}]
+            # Generous: a slow restore or a checkpoint under load can stall
+            # pg_isready briefly, and killing a database that is merely busy
+            # turns a pause into an outage.
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.postgis.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if not .Values.postgis.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.postgis.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.postgis.persistence.storageClass }}
+        storageClassName: {{ .Values.postgis.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgis.persistence.size | quote }}
+  {{- end }}
+{{- end }}

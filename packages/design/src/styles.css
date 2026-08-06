@@ -1,0 +1,885 @@
+/**
+ * Ridgeline component styles.
+ *
+ * Every rule reads from `tokens.css` custom properties — no literal colours,
+ * sizes or radii. That is what makes a palette or scale change a one-file edit
+ * in `tokens.ts` rather than a search across the app.
+ *
+ * ## The layout thesis
+ *
+ * **The map is the product.** Chrome floats over it in glass surfaces and never
+ * takes width away from it. A fixed sidebar would permanently cost a third of
+ * the screen to show controls the user touches for seconds at a time — on a
+ * device held in one gloved hand, in the dark. So: a full-bleed map, a vertical
+ * control rail, a layers sheet that slides in over the map and dismisses, and
+ * one persistent conditions bar.
+ *
+ * Class names are prefixed `rl-` so this drops into any surface without
+ * colliding with app-local styles or MapLibre's own classes.
+ */
+
+/* --------------------------------------------------------------------------
+ * Reset and base
+ * -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  /* The map handles its own panning; the page itself never scrolls. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  background: var(--color-ground);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Figures that sit in columns or get read aloud must align and be unambiguous. */
+.rl-mono,
+.rl-figure,
+.rl-field__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Glass — the shared material for anything floating over the map
+ * -------------------------------------------------------------------------- */
+
+.rl-glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-rail), var(--glass-highlight);
+}
+
+/* --------------------------------------------------------------------------
+ * Eyebrow / section heading
+ * -------------------------------------------------------------------------- */
+
+.rl-eyebrow {
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-eyebrow);
+  color: var(--color-text-faint);
+}
+
+.rl-section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-condensed);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.rl-section-heading__hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  text-transform: none;
+  letter-spacing: var(--track-normal);
+  color: var(--color-text-faint);
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+ * Control rail — the floating vertical stack of map tools
+ * -------------------------------------------------------------------------- */
+
+.rl-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rl-rail__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-touch);
+  height: var(--space-touch);
+  border: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.rl-rail__btn:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.rl-rail__btn[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.rl-rail__btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --------------------------------------------------------------------------
+ * Sheet — the layers panel, sliding over the map
+ * -------------------------------------------------------------------------- */
+
+.rl-sheet {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sheet);
+  animation: rl-sheet-in var(--motion-sheet) var(--motion-ease);
+}
+
+/* Desktop: a drawer anchored to the left edge, above the conditions bar. */
+.rl-sheet--drawer {
+  top: var(--space-3);
+  left: var(--space-3);
+  bottom: calc(var(--space-touch) + var(--space-6));
+  width: var(--layout-sheet-width);
+  border-radius: var(--radius-xl);
+}
+
+@keyframes rl-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rl-sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-line);
+  flex-shrink: 0;
+}
+
+.rl-sheet__title {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+.rl-sheet__body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+}
+
+/* Mobile: a bottom sheet with a drag handle, the platform-native shape. */
+@media (max-width: 860px) {
+  .rl-sheet--drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: var(--layout-sheet-max-height);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    animation-name: rl-sheet-up;
+  }
+
+  @keyframes rl-sheet-up {
+    from {
+      transform: translateY(16px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  .rl-sheet__grip {
+    width: 36px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--color-line-strong);
+    margin: var(--space-2) auto 0;
+    flex-shrink: 0;
+  }
+}
+
+.rl-sheet__grip {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .rl-sheet__grip {
+    display: block;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Conditions bar — the signature element
+ *
+ * Wind, thermal phase and time sit here permanently rather than inside the
+ * layers sheet, because in this product they are not settings: they change what
+ * every layer *means*. A bedding map on a west wind and the same map on an east
+ * wind are different claims about the ground, and the user must never be unsure
+ * which one they are looking at.
+ * -------------------------------------------------------------------------- */
+
+.rl-conditions {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  border-radius: var(--radius-lg);
+  /*
+   * Deliberately NOT `overflow: hidden`.
+   *
+   * The obvious way to round a segmented bar is to clip it, and that is exactly
+   * what broke the wind and time editors: they anchor *inside* a cell so their
+   * caret points at the right control, and clipping the bar clipped them out of
+   * existence. They still painted (a bounding box is not affected by an
+   * ancestor's clip) but `elementFromPoint` returned the map underneath, so the
+   * buttons were visible and unclickable — the worst kind of broken.
+   *
+   * Corners are rounded on the end children instead.
+   */
+}
+
+.rl-conditions > *:first-child,
+.rl-conditions > *:first-child .rl-conditions__cell {
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.rl-conditions > *:last-child,
+.rl-conditions > *:last-child .rl-conditions__cell {
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.rl-conditions__cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-height: var(--space-touch);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.rl-conditions__cell:hover {
+  background: var(--color-raised);
+}
+
+.rl-conditions__label {
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-faint);
+  display: block;
+  line-height: var(--leading-tight);
+}
+
+.rl-conditions__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+}
+
+.rl-conditions__value--unset {
+  color: var(--color-warn);
+}
+
+/* The wind needle. An actual rotating pointer rather than a number, because
+   direction is spatial information and a hunter reads it against the map. */
+.rl-needle {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--color-accent);
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+.rl-needle--unset {
+  color: var(--color-text-faint);
+}
+
+/* --------------------------------------------------------------------------
+ * Chip
+ * -------------------------------------------------------------------------- */
+
+.rl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+}
+
+.rl-chip__glyph {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.rl-chip--ok {
+  color: var(--color-ok);
+  border-color: color-mix(in srgb, var(--color-ok) 42%, transparent);
+  background: color-mix(in srgb, var(--color-ok) 10%, transparent);
+}
+.rl-chip--warn {
+  color: var(--color-warn);
+  border-color: color-mix(in srgb, var(--color-warn) 42%, transparent);
+  background: color-mix(in srgb, var(--color-warn) 10%, transparent);
+}
+.rl-chip--danger {
+  color: var(--color-blaze);
+  border-color: color-mix(in srgb, var(--color-blaze) 46%, transparent);
+  background: color-mix(in srgb, var(--color-blaze) 12%, transparent);
+}
+.rl-chip--info {
+  color: var(--color-info);
+  border-color: color-mix(in srgb, var(--color-info) 42%, transparent);
+  background: color-mix(in srgb, var(--color-info) 10%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+ * Callout
+ * -------------------------------------------------------------------------- */
+
+.rl-callout {
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  margin-bottom: var(--space-3);
+  /* A severity stripe, so state reads in form as well as colour. */
+  border-left: 3px solid currentColor;
+}
+
+.rl-callout p {
+  margin: 0 0 var(--space-1);
+}
+.rl-callout p:last-child {
+  margin-bottom: 0;
+}
+
+.rl-callout--info {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--color-info);
+}
+.rl-callout--warn {
+  background: color-mix(in srgb, var(--color-warn) 12%, transparent);
+  color: var(--color-warn);
+}
+.rl-callout--danger {
+  background: color-mix(in srgb, var(--color-blaze) 14%, transparent);
+  color: var(--color-blaze);
+}
+
+/* --------------------------------------------------------------------------
+ * Button
+ *
+ * Minimum height is the touch token, not a visual choice — this is operated
+ * with gloves on.
+ * -------------------------------------------------------------------------- */
+
+.rl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--space-touch);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.rl-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rl-btn--primary {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-weight: var(--weight-semibold);
+}
+.rl-btn--primary:hover:not(:disabled) {
+  background: var(--color-accent-bright);
+}
+
+.rl-btn--ghost {
+  background: var(--color-raised);
+  border-color: var(--color-line);
+  color: var(--color-text);
+}
+.rl-btn--ghost:hover:not(:disabled) {
+  border-color: var(--color-line-strong);
+}
+
+.rl-btn--danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-blaze) 50%, transparent);
+  color: var(--color-blaze);
+}
+
+.rl-btn--link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  /*
+   * Still no visible box (no background/border), so this only grows the
+   * *hit* area, not the apparent size of the link — but it has to be a real
+   * min-height, not a visual trick, because the invariants suite measures the
+   * element's own rendered box, the same box a gloved tap actually lands in.
+   * "New filter" and "Clear wind" were 22px tall, half the 44px floor.
+   */
+  min-height: var(--space-touch);
+  padding: var(--space-2);
+}
+.rl-btn--link:hover:not(:disabled) {
+  color: var(--color-accent-bright);
+  text-decoration: underline;
+}
+
+.rl-btn--block {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+ * Field / range
+ * -------------------------------------------------------------------------- */
+
+.rl-field {
+  margin-bottom: var(--space-4);
+}
+
+.rl-field__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-condensed);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  margin-bottom: var(--space-2);
+}
+
+.rl-field__value {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-accent);
+  text-transform: none;
+  letter-spacing: var(--track-normal);
+}
+
+.rl-range {
+  width: 100%;
+  accent-color: var(--color-accent);
+  /* Generous track height — this is dragged with a gloved thumb. */
+  height: 28px;
+}
+
+.rl-input {
+  width: 100%;
+  min-height: var(--space-touch);
+  background: var(--color-ground);
+  border: 1px solid var(--color-line);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+
+.rl-input:focus {
+  border-color: var(--color-accent-dim);
+}
+
+/* --------------------------------------------------------------------------
+ * ToggleRow
+ * -------------------------------------------------------------------------- */
+
+.rl-toggle {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-1);
+  border: 1px solid transparent;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.rl-toggle:hover:not(.rl-toggle--blocked) {
+  background: color-mix(in srgb, var(--color-raised) 60%, transparent);
+}
+
+.rl-toggle--on {
+  background: var(--color-raised);
+  border-color: var(--color-accent-dim);
+}
+
+.rl-toggle--blocked {
+  opacity: 0.7;
+}
+
+.rl-toggle__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  /*
+   * This `<label>` — not the 18px checkbox it wraps — is the box a browser
+   * actually honours a tap against, and at `--space-8` (32px) it sat below
+   * the gloved-fingertip floor across all 17 rows in the layers sheet, its
+   * biggest and most-used control population. `--space-touch` is the floor
+   * every other interactive element in this file already uses.
+   */
+  min-height: var(--space-touch);
+}
+
+.rl-toggle--blocked .rl-toggle__main {
+  cursor: not-allowed;
+}
+
+.rl-toggle__main input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.rl-toggle__label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+}
+
+.rl-toggle--blocked .rl-toggle__label {
+  color: var(--color-text-dim);
+}
+
+.rl-toggle__blurb {
+  margin: var(--space-2) 0 0 30px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-dim);
+  /* Keep explanatory prose near a readable measure even in a narrow sheet. */
+  max-width: 34em;
+}
+
+.rl-toggle__blurb--warn {
+  color: var(--color-warn);
+}
+
+.rl-toggle__extra {
+  margin-left: 30px;
+  margin-top: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+ * Legend / swatch
+ * -------------------------------------------------------------------------- */
+
+.rl-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  display: inline-block;
+}
+
+.rl-legend {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.rl-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+ * Panel / hint
+ * -------------------------------------------------------------------------- */
+
+.rl-panel {
+  background: var(--color-raised);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.rl-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.rl-panel__title {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+}
+
+.rl-hint {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-faint);
+  margin: var(--space-2) 0 0;
+  max-width: 40em;
+}
+
+.rl-group {
+  margin-bottom: var(--space-6);
+}
+
+/* --------------------------------------------------------------------------
+ * MapLibre control theming
+ *
+ * MapLibre ships white controls. On a dark map that is not merely
+ * inconsistent — it is a **white rectangle at 05:30**, which is the exact
+ * failure this product's constraints exist to prevent: it destroys dark
+ * adaptation and, on a phone held up in a stand, announces your position.
+ *
+ * The nav and geolocate controls are replaced by our own rail, so what remains
+ * here is attribution and scale.
+ * -------------------------------------------------------------------------- */
+
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--color-text-faint) !important;
+  border-radius: var(--radius-sm) !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-xs) !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--color-text-faint) !important;
+}
+
+.maplibregl-ctrl-attrib-button {
+  filter: invert(0.85) !important;
+}
+
+.maplibregl-ctrl-scale {
+  background: var(--glass-bg) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-top: none !important;
+  color: var(--color-text) !important;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm) !important;
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs) !important;
+  padding: 2px var(--space-2) !important;
+}
+
+/* --------------------------------------------------------------------------
+ * Popover — small editors anchored to the control that opened them
+ *
+ * Sized to content, positioned by CSS against a relative anchor, and it moves
+ * nothing else on screen. See the `Popover` doc comment for why the wind and
+ * time editors are not drawers.
+ * -------------------------------------------------------------------------- */
+
+.rl-popover-anchor {
+  position: relative;
+  /* Inside the conditions bar these replace the cells as flex children, so they
+     must stretch the same way or the divider rhythm breaks. */
+  display: flex;
+  align-items: stretch;
+}
+
+.rl-popover {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 25;
+  width: max-content;
+  min-width: 268px;
+  max-width: min(320px, calc(100vw - var(--space-6)));
+  border-radius: var(--radius-lg);
+  animation: rl-popover-in var(--motion-base) var(--motion-ease);
+  transform-origin: bottom left;
+}
+
+@keyframes rl-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A caret tying the popover to its trigger. Without it the panel reads as
+   floating debris rather than as belonging to the button below it. */
+.rl-popover::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: var(--space-6);
+  width: 12px;
+  height: 12px;
+  background: var(--glass-bg);
+  border-right: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.rl-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.rl-popover__title {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+}
+
+.rl-popover__body {
+  padding: var(--space-4);
+}
+
+/* On a phone the conditions bar spans the viewport, so the popover matches it
+   rather than hanging off one end. */
+@media (max-width: 860px) {
+  .rl-popover {
+    left: 0;
+    right: 0;
+    max-width: none;
+  }
+}
+
+/* Compact compass + cardinal grid for the wind editor. */
+.rl-compass {
+  display: flex;
+  justify-content: center;
+  padding-bottom: var(--space-3);
+  color: var(--color-accent);
+}
+
+.rl-cardinals {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.rl-cardinals .rl-btn {
+  padding: 0;
+  min-height: var(--space-10);
+  font-family: var(--font-condensed);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--track-label);
+}

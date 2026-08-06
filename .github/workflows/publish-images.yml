@@ -1,0 +1,106 @@
+name: Publish images
+
+# Builds the API and web images and pushes them to GitHub Container Registry.
+#
+# Triggers are deliberately broad on branches. Deploying to a VPS by hand means
+# wanting an image for the branch you are actually working on, not only for a
+# tagged release — so every branch produces a pullable tag, and only `main` and
+# version tags produce the stable ones a production compose file should pin.
+on:
+  push:
+    branches: ['main', 'claude/**']
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dem_template:
+        description: 'VITE_DEM_TEMPLATE baked into the web image (blank = public Terrarium tiles)'
+        required: false
+        default: ''
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # Required to push to ghcr.io with GITHUB_TOKEN. Without it the login
+      # succeeds and the push 403s, which reads as a credentials problem.
+      packages: write
+
+    strategy:
+      # Don't let a web failure cancel an otherwise-good API push; on a slow
+      # VPS deploy you often want whichever image did build.
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: web
+            dockerfile: apps/web/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Lowercased explicitly: the owner is "Overcastly-AI" but OCI
+          # reference names must be lowercase, and a capital letter here
+          # fails the push with an "invalid reference format" that points at
+          # the tag rather than at the owner.
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/hunt-maps-${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+          flags: |
+            --label=org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_DEM_TEMPLATE=${{ github.event.inputs.dem_template || '' }}
+          # amd64 only. Hostinger VPS plans are x86, and adding arm64 here
+          # roughly triples build time under QEMU for an architecture nothing
+          # in this project currently deploys to. Add linux/arm64 when there
+          # is an actual arm target, not pre-emptively.
+          platforms: linux/amd64
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+      - name: Summarise
+        run: |
+          {
+            echo "### \`${{ matrix.name }}\` image published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

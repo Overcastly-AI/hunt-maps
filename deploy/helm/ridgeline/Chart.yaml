@@ -1,0 +1,22 @@
+apiVersion: v2
+name: ridgeline
+description: >-
+  Ridgeline — self-hosted hunting map and terrain-analytics platform.
+  PostGIS + NestJS API + MapLibre PWA, packaged for a local cluster.
+type: application
+
+# Chart version moves when the packaging changes; appVersion tracks the app.
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - hunting
+  - gis
+  - postgis
+  - terrain
+home: https://github.com/Overcastly-AI/hunt-maps
+sources:
+  - https://github.com/Overcastly-AI/hunt-maps
+
+maintainers:
+  - name: Ridgeline

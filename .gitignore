@@ -1,0 +1,28 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.tsbuildinfo
+
+.env
+.env.local
+.env.*.local
+
+# Map/terrain data caches — never commit tiles or DEMs
+data/
+tiles/
+*.pmtiles
+*.mbtiles
+*.tif
+*.tiff
+*.laz
+*.las
+
+# Test artifacts
+playwright-report/
+test-results/
+.playwright/
+
+.DS_Store
+*.log

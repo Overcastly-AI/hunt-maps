@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    // Point at the workspace packages' TypeScript source for typechecking, so
+    // `tsc --noEmit` works without building them first. At runtime Node
+    // resolves the same specifiers through the workspace symlink to each
+    // package's built CommonJS output, which `pnpm build` produces in
+    // dependency order.
+    "paths": {
+      "@hunt-maps/terrain": ["../../packages/terrain/src/index.ts"],
+      "@hunt-maps/shared": ["../../packages/shared/src/index.ts"]
+    },
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*", "prisma/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
