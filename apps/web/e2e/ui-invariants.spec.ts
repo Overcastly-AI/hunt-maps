@@ -396,6 +396,58 @@ test.describe('4. No chrome collisions (desktop)', () => {
       expectPresent: [...PERSISTENT, 'layers sheet', 'wind/time popover'],
     });
   });
+
+  /**
+   * The invariant that the `allow` above needs to be safe.
+   *
+   * Whitelisting an overlap says "these two are *meant* to share space". It
+   * says nothing about which one a click lands on, and that is a separate
+   * question decided by stacking contexts rather than by rectangles. This
+   * exact pair passed the collision test while every control in the popover
+   * was dead: `.rl-popover` sets `z-index: 25` against a sheet at 20, but
+   * `.rl-conditions` creates a stacking context with `backdrop-filter`, and
+   * `.rl-sheet` is a *sibling* of `.map-chrome` rather than a descendant — so
+   * the comparison that actually decided paint order was `.map-chrome`'s 10
+   * against the sheet's 20, which nothing nested inside the chrome can win.
+   *
+   * So: whenever an overlap is deliberately allowed, the thing on top must be
+   * proven to be on top by hit-testing, not assumed from its z-index.
+   */
+  test('every control in the popover is clickable while the sheet is open', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP); // sheet already open by default
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
+    await expect(page.locator('.rl-sheet')).toBeVisible();
+
+    const dead = await page.evaluate(() => {
+      const popover = document.querySelector('.rl-popover');
+      if (!popover) throw new Error('popover not open');
+      const out: Array<{ label: string; hit: string }> = [];
+      for (const el of popover.querySelectorAll('button, input, select, a[href]')) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        if (!(hit === el || el.contains(hit))) {
+          out.push({
+            label: (el.textContent ?? '').trim().slice(0, 16) || el.tagName,
+            hit: hit ? `${hit.tagName}.${hit.className}` : 'null',
+          });
+        }
+      }
+      return out;
+    });
+
+    expect(
+      dead,
+      dead
+        .map((d) => `popover control "${d.label}" is painted but a click there lands on ${d.hit}`)
+        .join('\n'),
+    ).toEqual([]);
+
+    // And prove it end to end: Playwright's actionability check fails on an
+    // intercepted click, so this would have caught the defect on its own.
+    await page.getByRole('button', { name: 'NW', exact: true }).click({ timeout: 5000 });
+  });
 });
 
 async function assertNoCollisions(

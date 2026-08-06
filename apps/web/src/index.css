@@ -67,6 +67,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+
 }
 
 .chrome-bottomright {
@@ -105,6 +106,36 @@
 @media (min-width: 861px) {
   .rl-sheet--drawer {
     bottom: calc(var(--space-touch) * 3 + var(--space-6) * 2);
+  }
+
+  /*
+   * Lift the whole chrome layer above the drawer, so the wind and time
+   * popovers — which open upward out of the conditions bar and across the
+   * drawer's column — are clickable while the layers sheet is open.
+   *
+   * Why it has to be *here*, on `.map-chrome`, and not on the popover: the
+   * popover already sets `z-index: 25` against a sheet at 20, which looks
+   * like it should win and cannot. Two ancestors defeat it. `.rl-conditions`
+   * carries `backdrop-filter` for the glass, and backdrop-filter creates a
+   * stacking context, so the popover's 25 only orders it *within the
+   * conditions bar*. And `.rl-sheet` is not a descendant of `.map-chrome` at
+   * all — it is a sibling under `.app-shell` — so the comparison that
+   * actually decides paint order is `.map-chrome`'s 10 against the sheet's
+   * 20. Nothing nested inside the chrome can escape that, at any z-index.
+   *
+   * The result was the popover painting under the sheet with its lower half
+   * hit-testing into `.rl-group` behind it: visible, and dead. Same failure
+   * class as the earlier `overflow: hidden` bug, and the same lesson — an
+   * ancestor property, invisible at the call site, silently overriding a
+   * child's own correct-looking rule.
+   *
+   * Desktop only. Below 861px the sheet is a full-width bottom sheet that is
+   * *meant* to cover this row while open (see the comment in the max-width
+   * block); raising the chrome there would leave the rail punched through a
+   * panel that is deliberately on top.
+   */
+  .map-chrome {
+    z-index: 30;
   }
 }
 

@@ -97,10 +97,12 @@ test.describe('Ridgeline screenshots', () => {
     // stays exactly where it was — no need to dismiss the drawer first, and
     // nothing moves out from under the pointer.
     await page.getByRole('button', { name: /Wind from/ }).click();
-    // Opening the wind editor closes the layers drawer, so the bar animates
-    // back to its unshifted position. Let it settle before clicking into the
-    // popover, or Playwright chases a moving target.
-    await page.waitForTimeout(700);
+    // The layers drawer deliberately stays open — sweeping the wind while
+    // watching the layer list repaint is the interaction this app exists for,
+    // and the two panels were decoupled precisely so it is possible. Nothing
+    // moves when the popover opens, so this only waits out the popover's own
+    // entrance animation.
+    await page.waitForTimeout(400);
     await page.getByRole('button', { name: 'NW', exact: true }).click();
     await waitForTiles(page);
     await page.screenshot({ path: `${OUT}/04b-desktop-wind-popover.png` });
