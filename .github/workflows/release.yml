@@ -248,9 +248,15 @@ jobs:
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
 
       - name: Push the chart to GHCR
+        # Pushes to ghcr.io/<owner>/hunt-maps/ridgeline — helm appends the
+        # chart name to this path. Namespaced under the repository rather than
+        # a bare `charts/`, which is account-level and would collide the first
+        # time a second repo here publishes a chart. It also keeps the chart
+        # alongside hunt-maps-api and hunt-maps-web instead of orphaned in a
+        # generic namespace.
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           helm push \
             "dist/ridgeline-${{ needs.release.outputs.version }}.tgz" \
-            "oci://ghcr.io/${OWNER_LC}/charts"
+            "oci://ghcr.io/${OWNER_LC}/hunt-maps"

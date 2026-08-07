@@ -7,7 +7,7 @@ type: application
 
 # Chart version moves when the packaging changes; appVersion tracks the app.
 version: 1.1.1
-appVersion: "1.1.1"
+appVersion: '1.1.1'
 
 keywords:
   - hunting
@@ -20,3 +20,11 @@ sources:
 
 maintainers:
   - name: Ridgeline
+
+# GHCR links a package to its repository through this annotation, exactly as
+# the images do through their OCI label. Without it the published chart is an
+# anonymous artifact: no source repo, no README, no provenance on its package
+# page.
+annotations:
+  org.opencontainers.image.source: https://github.com/Overcastly-AI/hunt-maps
+  org.opencontainers.image.licenses: MIT

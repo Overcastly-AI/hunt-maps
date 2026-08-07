@@ -81,7 +81,7 @@ exist on the machine running the cluster.
 One command:
 
 ```bash
-helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline --set ingress.enabled=true
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline --set ingress.enabled=true
 ```
 
 Then open **http://ridgeline.localtest.me**
@@ -96,7 +96,7 @@ automatically, so there is no second value to remember.
 any cluster:
 
 ```bash
-helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline
 kubectl port-forward svc/ridgeline-web 8080:80
 ```
 
@@ -124,7 +124,7 @@ supply a pull secret:
 ```bash
 kubectl create secret docker-registry ghcr \
   --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
-helm upgrade ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
   --set image.pullSecrets[0].name=ghcr
 ```
 
@@ -140,7 +140,7 @@ which looks identical to having no controller at all.
 
 ```bash
 kubectl get ingressclass          # what is actually installed
-helm upgrade ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
   --set ingress.enabled=true --set ingress.className=<the class above>
 ```
 
