@@ -8,6 +8,17 @@ import {
 import { contrastRatio, estimateBackground, parseCssColor, requiredContrastRatio } from './helpers/contrast';
 import { gridPoints, samplePixels } from './helpers/pixels';
 import { boxDelta, DESKTOP, gotoAndSettle, MOBILE, NARROW, waitForRectStable, type Box } from './helpers/settle';
+import {
+  chipColor,
+  chipText,
+  clearTiles,
+  jumpTo,
+  observeChipLabels,
+  remeasure,
+  renderedFeatureCount,
+  seedTilesForView,
+  tokenColor,
+} from './helpers/offline';
 
 /**
  * UI invariants.
@@ -742,3 +753,134 @@ async function measureDensity(page: Page, panelSelector: string, bodySelector: s
     { panelSelector, bodySelector },
   );
 }
+
+// ---------------------------------------------------------------------------
+// 9. Offline coverage describes the view on screen
+// ---------------------------------------------------------------------------
+//
+// The failure class here is the one CLAUDE.md names as the worst this product
+// has: the app telling a hunter that ground is downloaded when it is not. It
+// used to do exactly that. The Layers sheet sampled `store.stats().tileCount
+// > 0` once at mount and rendered the result behind the words "Offline ready —
+// elevation for **this area** is stored on this device". One tile anywhere on
+// earth made every view read green, and it stayed green after panning five
+// hundred miles. A hunter reads that at the trailhead, walks in at 04:30, and
+// the analysis engine has nothing to compute from.
+//
+// Every unit test in the app passed throughout, and so would `getByRole` — the
+// chip rendered, the text was legible, the colour was right for the value it
+// was given. The value was the lie. So the invariant has to be behavioural:
+// **put real tiles on the device for this view, prove the badge says Covered,
+// go offline, pan somewhere with nothing stored, and prove the badge never
+// says Covered again.** That sequence fails against the old code at the last
+// step, and it is the only assertion in this file that would have.
+//
+// Nothing here is mocked. `helpers/offline.ts` writes real PNG tiles into the
+// real OPFS store through the app's own tile-key derivation, and the pan
+// happens with the browser context genuinely offline, so no tile can sneak in
+// from the network at the destination.
+test.describe('9. Offline coverage describes the view on screen', () => {
+  for (const viewport of [DESKTOP, MOBILE]) {
+    test(`${viewport.width}px — a badge earned here is not carried five hundred miles`, async ({
+      page,
+      context,
+    }) => {
+      await gotoAndSettle(page, viewport);
+      await waitForRectStable(page.locator('.rl-sheet'));
+
+      // 1. A genuinely cold device, then a genuinely downloaded region.
+      await clearTiles(page);
+      const seeded = await seedTilesForView(page, 1);
+      expect(seeded.written, 'fixture should have written tiles').toBeGreaterThan(0);
+      await remeasure(page);
+
+      await expect
+        .poll(() => chipText(page), { timeout: 15_000 })
+        .toBe('Covered');
+
+      // Rendered state, not DOM state: the chip must actually be painted in the
+      // "ok" token colour. A class name proves what we asked for; the computed
+      // colour is what the user's eye receives.
+      expect(await chipColor(page)).toBe(await tokenColor(page, '--color-ok'));
+
+      // 2. No signal, then five hundred miles west — Ohio to Missouri, the pan
+      // that used to change nothing at all.
+      await context.setOffline(true);
+      await jumpTo(page, -92.54, 39.43);
+
+      // 3. The assertion that fails against the old code. Not just the final
+      // label: *no frame* after the pan may claim this ground is covered.
+      const labels = await observeChipLabels(page, 4000);
+      expect(
+        labels,
+        `after panning 500 miles offline the badge showed: ${labels.join(' → ')}. ` +
+          `"Covered" in that sequence means the app told a hunter that ground with no stored ` +
+          `elevation is ready to use with no signal.`,
+      ).not.toContain('Covered');
+
+      await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe('Not downloaded');
+      expect(await chipColor(page)).toBe(await tokenColor(page, '--color-warn'));
+
+      // And the sheet's full sentence agrees with the chip — the two are
+      // rendered from one description, and a drift between them would be the
+      // original defect reappearing in the half nobody checks.
+      await expect(page.getByTestId('coverage-detail')).toContainText('None of this view');
+
+      await context.setOffline(false);
+    });
+  }
+
+  test('a half-stored view says Partial and draws where the data ends', async ({ page }) => {
+    // "Partial — 43%" tells a hunter they have a problem; the overlay tells them
+    // which half of the draw they are missing, which is the part that matters
+    // when they are standing in it. Asserted through `queryRenderedFeatures`,
+    // which reports what the GL renderer actually drew — a source whose data
+    // was set but whose layer never made it into the style comes back empty.
+    await gotoAndSettle(page, DESKTOP);
+    await waitForRectStable(page.locator('.rl-sheet'));
+
+    await clearTiles(page);
+    await seedTilesForView(page, 0.5);
+    await remeasure(page);
+
+    await expect.poll(() => chipText(page), { timeout: 15_000 }).toContain('Partial');
+    expect(await chipColor(page)).toBe(await tokenColor(page, '--color-warn'));
+
+    await expect
+      .poll(() => renderedFeatureCount(page, 'rl-offline-coverage-fill'), { timeout: 15_000 })
+      .toBeGreaterThan(0);
+  });
+
+  test('a cold device says Not downloaded, and never "ready"', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await clearTiles(page);
+    await remeasure(page);
+
+    await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe('Not downloaded');
+    // Nothing measured means nothing to draw. An overlay left over from a
+    // previous view would be a hatch that lags the map by one pan.
+    expect(await renderedFeatureCount(page, 'rl-offline-coverage-fill')).toBe(0);
+  });
+
+  test('the coverage overlay survives a layer toggle', async ({ page }) => {
+    // `syncLayers` removes any `rl-*` layer it does not recognise, and the
+    // overlay lives under the same prefix — so toggling any layer used to tear
+    // the hatch off the map while the badge still said "Partial". Visible,
+    // correct text, and the thing that told you *where* silently gone.
+    await gotoAndSettle(page, DESKTOP);
+    await waitForRectStable(page.locator('.rl-sheet'));
+
+    await clearTiles(page);
+    await seedTilesForView(page, 0.5);
+    await remeasure(page);
+    await expect
+      .poll(() => renderedFeatureCount(page, 'rl-offline-coverage-fill'), { timeout: 15_000 })
+      .toBeGreaterThan(0);
+
+    await page.getByRole('checkbox', { name: /Bench/i }).first().click();
+
+    await expect
+      .poll(() => renderedFeatureCount(page, 'rl-offline-coverage-fill'), { timeout: 15_000 })
+      .toBeGreaterThan(0);
+  });
+});
