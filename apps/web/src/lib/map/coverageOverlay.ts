@@ -139,10 +139,13 @@ export class CoverageOverlay {
     if (signature === this.signature && this.installed) return;
     this.signature = signature;
 
-    if (!this.map.isStyleLoaded()) {
-      // Racing the style load leaves an orphaned source; retry once the style
-      // is up. `once` is safe here — `destroy()` guards the callback.
-      this.map.once('load', () => this.setTiles(tiles));
+    if (!this.styleReady()) {
+      // Retry on `styledata`, which fires repeatedly as the style changes.
+      // `once('load')` looks like the obvious choice and is a trap: `load` has
+      // usually already fired by the time the first coverage answer lands, so a
+      // listener registered here would never run and the overlay would never
+      // appear — silently, with the badge still correctly saying "Partial".
+      this.map.once('styledata', () => this.setTiles(tiles));
       return;
     }
 
@@ -155,6 +158,29 @@ export class CoverageOverlay {
     const source = this.map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     source?.setData(toFeatureCollection(tiles));
     this.setVisible(true);
+  }
+
+  /**
+   * Can the style accept a source and a layer right now?
+   *
+   * Deliberately **not** `map.isStyleLoaded()`. That returns false while *any*
+   * source still has tiles in flight, and this app's normal condition is a map
+   * whose DEM and imagery requests are failing or slow — a mile from the truck
+   * with no bars, which is the entire point of the feature this overlay serves.
+   * Gating on it meant the coverage hatch never installed in exactly the
+   * situation a hunter needs it, while the badge still read "Partial" and
+   * nothing on screen said *where*.
+   *
+   * `addLayer` only requires the style to have been parsed. This app's own
+   * anchor layers are declared in the initial style object, so their presence
+   * tests precisely that and nothing more.
+   */
+  private styleReady(): boolean {
+    try {
+      return Boolean(this.map.getLayer(BEFORE_ID));
+    } catch {
+      return false;
+    }
   }
 
   private setVisible(visible: boolean): void {
@@ -213,11 +239,18 @@ export class CoverageOverlay {
 
   destroy(): void {
     this.destroyed = true;
-    if (!this.map.getStyle || !this.map.isStyleLoaded()) return;
-    for (const id of [FILL_LAYER_ID, LINE_LAYER_ID]) {
-      if (this.map.getLayer(id)) this.map.removeLayer(id);
+    // Same reasoning as `styleReady`: gating teardown on `isStyleLoaded()`
+    // would skip it on a map that is still fetching tiles, which is most of
+    // them. Guarded instead, because teardown races a map that may already be
+    // removing itself.
+    try {
+      for (const id of [FILL_LAYER_ID, LINE_LAYER_ID]) {
+        if (this.map.getLayer(id)) this.map.removeLayer(id);
+      }
+      if (this.map.getSource(SOURCE_ID)) this.map.removeSource(SOURCE_ID);
+    } catch {
+      // The map is going away anyway; nothing to leak.
     }
-    if (this.map.getSource(SOURCE_ID)) this.map.removeSource(SOURCE_ID);
     this.installed = false;
   }
 }
