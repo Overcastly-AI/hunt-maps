@@ -50,7 +50,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          # No `cache: pnpm` here. This job never runs `pnpm install` —
+          # semantic-release and its plugins are installed by the action — so
+          # there is no pnpm store to save, and the cache POST step fails the
+          # whole job with "Path(s) specified in the action for caching do(es)
+          # not exist". That failure happens *after* the release is published,
+          # so the tag, GitHub release and changelog all land and then the job
+          # goes red, which skipped the images and chart entirely.
 
       - name: Semantic release
         id: semantic
@@ -69,7 +75,13 @@ jobs:
 
   images:
     needs: release
-    if: needs.release.outputs.published == 'true'
+    # `always()` deliberately. Without it these jobs are skipped whenever the
+    # release job goes red for any reason — including a post-step failure that
+    # happens after the release is already published, which is exactly how
+    # v1.1.0 ended up tagged with no images built. The `published` output is
+    # only ever 'true' when semantic-release actually released something, so
+    # this cannot fire on a genuine release failure.
+    if: always() && needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -174,7 +186,8 @@ jobs:
 
   chart:
     needs: release
-    if: needs.release.outputs.published == 'true'
+    # See the note on `images` — same reasoning.
+    if: always() && needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write # attach the packaged chart to the release
