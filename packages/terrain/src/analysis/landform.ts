@@ -484,15 +484,16 @@ export function ringSlopeStats(
   radiusCells: number,
   steepDeg: number,
   directions = 16,
+  out: RingSlopeStats = { samples: 0, steepCount: 0, meanSlopeDeg: NaN },
 ): RingSlopeStats {
   const { width, height, slope } = surface;
+  const offsets = ringOffsets(radiusCells, directions);
   let samples = 0;
   let steepCount = 0;
   let sum = 0;
   for (let k = 0; k < directions; k++) {
-    const ang = (k / directions) * Math.PI * 2;
-    const sx = Math.round(x + Math.cos(ang) * radiusCells);
-    const sy = Math.round(y + Math.sin(ang) * radiusCells);
+    const sx = x + offsets[k * 2];
+    const sy = y + offsets[k * 2 + 1];
     if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
     const rs = slope[sy * width + sx];
     if (!Number.isFinite(rs)) continue;
@@ -500,7 +501,39 @@ export function ringSlopeStats(
     sum += rs;
     if (rs >= steepDeg) steepCount++;
   }
-  return { samples, steepCount, meanSlopeDeg: samples > 0 ? sum / samples : NaN };
+  out.samples = samples;
+  out.steepCount = steepCount;
+  out.meanSlopeDeg = samples > 0 ? sum / samples : NaN;
+  return out;
+}
+
+/**
+ * Rounded (dx, dy) cell offsets for the ring directions, memoised on the last
+ * (radius, directions) pair used.
+ *
+ * Called once per cell, so computing 16 sin/cos here costs a million transcendental
+ * calls per 256² tile — measurably the most expensive thing in the bedding layer
+ * before it was hoisted, and this runs per tile inside a render loop. The cache
+ * is a pure memoisation of a deterministic function of its two arguments: a
+ * caller interleaving two radii only loses the speed-up, never correctness.
+ */
+let cachedRingRadius = -1;
+let cachedRingDirections = -1;
+let cachedRingOffsets = new Int32Array(0);
+function ringOffsets(radiusCells: number, directions: number): Int32Array {
+  if (radiusCells === cachedRingRadius && directions === cachedRingDirections) {
+    return cachedRingOffsets;
+  }
+  const offsets = new Int32Array(directions * 2);
+  for (let k = 0; k < directions; k++) {
+    const ang = (k / directions) * Math.PI * 2;
+    offsets[k * 2] = Math.round(Math.cos(ang) * radiusCells);
+    offsets[k * 2 + 1] = Math.round(Math.sin(ang) * radiusCells);
+  }
+  cachedRingRadius = radiusCells;
+  cachedRingDirections = directions;
+  cachedRingOffsets = offsets;
+  return offsets;
 }
 
 /** Drop connected components smaller than `minCells` (4-connectivity). */

@@ -170,6 +170,21 @@
   }
 }
 
+/*
+ * Offline-coverage chip slot in the Layers sheet header.
+ *
+ * A bare wrapper for a test handle would still be a block-level participant in
+ * the header's flex row; `inline-flex` keeps the chip's own geometry exactly
+ * what it was before the wrapper existed, and `min-width: 0` lets the label
+ * ("Partial — 43%", "Storage unreadable") shrink rather than push the header
+ * past the sheet's width on a phone, which would give the page a horizontal
+ * scroll the map's own pan gesture then fights.
+ */
+.coverage-chip {
+  display: inline-flex;
+  min-width: 0;
+}
+
 /* Terrain readout, anchored above the conditions bar. */
 .inspect-card {
   position: absolute;

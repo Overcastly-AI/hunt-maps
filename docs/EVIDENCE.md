@@ -969,7 +969,9 @@ detectable latitude trend**:
 
 | Region | Lat | Population mean / peak | Model | Error |
 |---|---|---|---|---|
+| Alberta / western Canada | 52–54°N | peak breeding **10–21 Nov** (mid 16 Nov) | 15 Nov | −1 d |
 | SW Wisconsin (188 GPS bucks + conception) | 43.0°N | breeding window 23 Oct – 12 Nov | 15 Nov | −5 d |
+| Pennsylvania | 41.0°N | **median conception 11–17 Nov**; 90 % bred 16 Oct – 16 Dec | 15 Nov | ~0 d |
 | New Jersey, northern adults | 40.2°N | 3–23 Nov (mid 13 Nov) | 15 Nov | +2 d |
 | Midwest (IL/OH/IN) | 40.0°N | **10 Nov** | 15 Nov | **+5 d** |
 | West Virginia | 38.8°N | 7–15 Nov | 16 Nov | +5 d |
@@ -979,7 +981,20 @@ detectable latitude trend**:
 
 [Hunsaker et al. 2025, *Ecology and Evolution* — breeding season and movement ecology of male whitetail, SW Wisconsin](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589) ·
 [NJDEP — biology of the white-tailed deer](https://dep.nj.gov/njfw/hunting/biology-of-the-white-tailed-deer/) ·
-[VA DWR — fawning dates are key to rut timing](https://dwr.virginia.gov/blog/virginias-deer-with-justin-folks-fawning-dates-are-key-to-rut-timing/)
+[VA DWR — fawning dates are key to rut timing](https://dwr.virginia.gov/blog/virginias-deer-with-justin-folks-fawning-dates-are-key-to-rut-timing/) ·
+[PGC — when is the rut](https://www.pa.gov/agencies/pgc/wildlife/discover-pa-wildlife/white-tailed-deer/when-is-the-rut) ·
+[Alberta Wild — white-tailed deer](https://albertawild.com/species/white-tail-deer-hunting/)
+
+**Two rows added in the same pass extend the flat band from 5.5° of latitude to
+17°, which is what makes the constant safe to ship.** The table above originally
+spanned only 37.5–43°N; **Alberta at 52–54°N peaks 10–21 November, i.e. *later*
+than Illinois at 40°N**, and Pennsylvania at 41°N — the largest fetal-aging
+dataset in the northeast, road-killed does 2000–2007 — has a median conception
+of 11–17 November. Across **37°N to 54°N the peak moves by at most about a week
+and does so non-monotonically.** A latitude ramp fitted over that band is
+fitting noise. The Alberta row is the weaker of the two (agency/outfitter
+summary, no n, index-level) and is carried as corroboration, not as an anchor;
+the Pennsylvania row is 🟢 agency fetal aging.
 
 **So the right functional class in the north is a constant, not a latitude
 ramp** — and the shipped code already uses a constant there, which is the one
@@ -1061,7 +1076,11 @@ Sources for the rows above, in addition to those already cited:
 [Outdoor Alabama / WFF county rut map](https://www.outdooralabama.com/node/3171) ·
 [LDWF estimated deer breeding periods](https://www.wlf.louisiana.gov/page/deer-breeding-periods) ·
 [TPWD — the rut in white-tailed deer](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/) ·
-[Richter & Labisky 1985, *J. Wildl. Manage.* 49:964–971 — reproductive dynamics among disjunct Florida herds](https://journals.flvc.org/edis/article/view/114365)
+Richter, A. R. & R. F. Labisky 1985, *J. Wildl. Manage.* 49:964–971 —
+reproductive dynamics among disjunct white-tailed deer herds in Florida
+(**primary; no reachable URL — see the citation-hygiene note under the seed
+table**), reported via
+[UF/IFAS EDIS — White-tailed Deer of Florida](https://journals.flvc.org/edis/article/view/114365)
 
 **Three separate ways the function fails, each fatal on its own.**
 
@@ -1185,6 +1204,19 @@ contains the inversion outright: the **northernmost** Florida herd sampled has
 the **latest** mean breeding date in the state. No latitude function of any
 degree can fit four points where the extremes are 196 days apart and the sign
 alternates.
+
+> **Citation hygiene, checked because this row carries more weight than any
+> other.** The four herd means (Rotenberger 10 Aug · Tosohatchee 7 Oct · Camp
+> Blanding 2 Nov · Eglin AFB 22 Feb) and the sampling design (**380 reproductive
+> tracts, July 1978 – January 1981, four sites**) were **independently
+> re-verified in a separate search this pass** and match. **But the URL attached
+> to this citation elsewhere in the section resolves to a UF/IFAS EDIS document
+> ("White-tailed Deer of Florida"), not to *JWM* 49:964–971.** The EDIS document
+> is a secondary source reporting Richter & Labisky; the primary paper has no
+> reachable URL from this environment and **has not been read**. The grade stays
+> 🟢 because the numbers are confirmed by two independent secondary sources
+> reporting the same primary study, but the link must not be presented as the
+> paper. Do not cite the EDIS URL as if it were the *JWM* article.
 
 **The finding that kills latitude, stated as sharply as the data allows.**
 Pass 2's example was Texas Gulf (30 Sep) vs Mississippi (1 Jan) at similar
@@ -1762,3 +1794,24 @@ attached and are therefore the cheapest to land.
 | `impassableSlopeDeg: 55` | 🔴 | 🔴 **(with reason)** | the cervid slope literature has no thresholds at all, by construction |
 | Scent-detection distance | 🔴 | 🔴 **(with reason)** | only anatomy is measurable; the media metre-values have no primary source |
 | Pressure cutpoints | 🔴 | 🔴 **(with reason)** | doctrine's own threshold is ~5× ours; neither is measured |
+
+---
+
+## Pass-4 changelog — `R9`, rut regionalisation
+
+| Row | Before | After | Why |
+|---|---|---|---|
+| Latitude interpolation | 🔴 "wrong functional class", 5 example regions | 🔴 **scored against 40 published regional peaks** | +1…+7 d at ≥ 37°N; **−80 to +131 d** below it. Three independent failure modes quantified: 107 d spread at one latitude, **wrong gradient sign** in GA/NC/SC/FL, **6× too small** in AL |
+| "Southern timing is driven by herd genetics and restocking" | asserted flatly by pass 3 | 🔵 **corrected and hedged** | Sumners et al. 2015 found nuclear F<sub>ST</sub> did **not** differ (P = 0.200); only mtDNA did. Maternal lineage + female philopatry, restocking as hypothesis. This register overclaimed |
+| "±4 days" northern uncertainty | unsourced | 🟢 **two dispersions, both measured** | Dye 2012: population annual mean SD **4 d**; individual SD **13.4 d**, range 46 d. So **±8 d uncalibrated, ±4 d calibrated** |
+| Photoperiod mechanism | correlation only | 🟢 **physiological mechanism + 29-yr stability** | Verme & Ozoga 1987 (long days delay puberty); melatonin advances oestrus 37–119 d; Ontario DVC — no timing change 1988–2016, region the only surviving predictor |
+| Moon phase does not drive the rut | 🟢 on *movement* studies | 🟢 on **conception dates** | Dye 2012: moon phase did not predict conception date for individuals or populations. Tested on the exact quantity a lunar predictor claims |
+| Region seed table | 8 rows | 🟢 **20 rows**, resolution-labelled | + NC (5 units), VA, WV, KY, TN, AR, E OK, AL county, MS unit, LA (10 areas), TX (7 ecoregions), **Richter & Labisky 1985** (4 FL herds, peer-reviewed, 6 months asynchronous) |
+| `rutConfidence` | 🔴 "too generous" | 🔴 **"the probability of nothing"** — new row | Undefined semantics is the deeper defect. Defined as P(\|err\| ≤ 7 d); values re-derived per **tier**, not per latitude |
+| `rutConfidence` < 36°N | pass 3 said 0.15 | **refuse** | 0.15 is still a date on a chip. −80 to +131 d errors mean UNKNOWN |
+| Southern edge of the model | not registered | 🟢 **aseasonal below ~14–18°N** | Costa Rica test of aseasonality. Model currently returns DOY 410 at 10°N |
+| `southernHemisphere` 182-d shift | not registered | 🔵 **roughly right, cap conf 0.40** | NZ whitetail rut mid-Apr–early Jun vs shifted prediction 11 May; introduced range, no conception data |
+| Phase window day counts | all 🔴 | **split**: outer envelope 🔵, internals 🔴 | Hunsaker 2025 — peak rut **16–21 d** (188 GPS males); MSU — most breeding in a **21-d** window. Seeking-vs-chasing boundary still has no source after three passes |
+| Mean conception vs huntable peak | conflated | 🔵 **disputed, range recorded** | −14 d (MDWFP) / −4…−6 d (Hunsaker) / ≈0 d (GA DVC). Our −6 survives, inside the GPS estimate |
+| GA county + FL zone tables | "read the PDFs before implementing" | **confirmed unreachable**, ledger filed | `curl` 403 at CONNECT for both hosts. Only 3 GA counties are confirmed, from the PDF's indexed title. Secondary summaries of the GA map **contradict each other** on coastal timing |
+| Elk / mule deer rut dates | asserted in the transfer table | 🟡 **sourced** | elk peak within 5–10 d of the autumnal equinox; mule deer late Nov–mid Dec. DOY 314 is ~7 weeks wrong for elk |

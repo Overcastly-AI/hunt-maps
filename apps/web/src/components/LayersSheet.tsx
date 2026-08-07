@@ -73,15 +73,23 @@ export function LayersSheet({
       title="Layers"
       onClose={onClose}
       action={
-        <Chip tone={offline.tone} glyph={offline.glyph} title={offline.detail}>
-          {offline.chip}
-        </Chip>
+        // Wrapped purely to give the invariant suite a stable handle. What is
+        // asserted there is the *rendered* text and tone of the chip, not that
+        // some chip exists — a `getByRole` hit is exactly what stayed green
+        // through the whole life of the bug this replaces.
+        <span className="coverage-chip" data-testid="coverage-chip">
+          <Chip tone={offline.tone} glyph={offline.glyph} title={offline.detail}>
+            {offline.chip}
+          </Chip>
+        </span>
       }
     >
       {/* The full sentence lives in the body, where there is room for the
           caveats the header chip cannot carry: which zoom the answer is for,
-          how much of it was sampled, and what the hatch on the map means. */}
-      <p className="rl-hint" data-testid="coverage-detail">
+          how much of it was sampled, and what the hatch on the map means.
+          `aria-live` because this changes underneath the user as they pan, and
+          a screen-reader user is owed the same correction a sighted one gets. */}
+      <p className="rl-hint" data-testid="coverage-detail" role="status" aria-live="polite">
         {offline.detail}
       </p>
 
