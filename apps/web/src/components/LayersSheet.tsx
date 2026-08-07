@@ -7,7 +7,17 @@ import {
   Sheet,
   ToggleRow,
 } from '@hunt-maps/design';
+import { useEffect, useState } from 'react';
+import { openTileStore } from '../lib/offline/tileStore';
 import { LAYER_GROUPS, LAYERS, missingInputs } from '../lib/layers';
+
+function useLegacyOfflineReady(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    void openTileStore().then((s) => s.stats()).then((s) => setReady(s.tileCount > 0));
+  }, []);
+  return ready;
+}
 import type { CoverageState } from '../lib/offline/coverage';
 import { describeCoverage } from '../lib/offline/coverageLabel';
 
@@ -67,6 +77,10 @@ export function LayersSheet({
 }: LayersSheetProps) {
   const warnings = missingInputs(active, windFromDeg);
   const offline = describeCoverage(coverage);
+  // TEMPORARY: simulate the pre-R8 defect for invariant verification.
+  const legacy = useLegacyOfflineReady();
+  offline.chip = legacy ? 'Covered' : 'Not downloaded';
+  offline.tone = legacy ? 'ok' : 'warn';
 
   return (
     <Sheet
