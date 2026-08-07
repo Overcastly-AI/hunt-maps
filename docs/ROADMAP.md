@@ -75,10 +75,43 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
-- [ ] **P0 — fix `offlineReady`, a global boolean sampled once at mount that
-      tells a hunter an area is downloaded when it is not** (verified defect,
-      `BACKLOG R8`; this is the exact field failure CLAUDE.md calls the worst
-      this product has)
+- [x] **P0 SHIPPED — `offlineReady` replaced with per-viewport coverage truth**
+      (`BACKLOG R8`). The boolean was sampled once at mount and rendered behind
+      "elevation for **this area** is stored on this device"; it stayed green
+      five hundred miles away. Now six states, each claiming exactly one thing:
+      `Checking…` (nothing — and no code path carries a previous view's answer
+      into a new one), `Covered` (every tile this view draws from, no rounding
+      slack — 34 of 35 is Partial), `Partial — n%` with a hatched extent on the
+      map, `Detail missing` (covered at this zoom, gaps at z15 — works now,
+      blank when you zoom in), `Not downloaded`, and `Storage unreadable`
+      (deliberately *not* collapsed into "0% covered" — those call for
+      different actions).
+      - The needed-tile set is derived **once**, in `lib/map/demTiles.ts`, and
+        `demTileKey()` is shared with `terrainProtocol.fetchDem`, so the
+        coverage probe and the actual fetch cannot look in different places.
+        A disagreement there would have replaced R8's lie with a subtler one.
+      - Exact when it can be (~8–35 tiles for a real viewport, every one
+        probed); stride-sampled above 256, and then the label *says* so with
+        an `≈` prefix rather than presenting an estimate as a count.
+      - Five e2e invariants at 1440px **and** 390px, asserted on rendered
+        state. Verified to fail against the defect: with the mount-sampled
+        boolean restored, the recorded chip sequence after a 500-mile offline
+        pan was `["COVERED"]`; with the fix, `["CHECKING…","NOT DOWNLOADED"]`.
+      - Three further defects found and fixed en route, all invisible to the
+        unit suite: the overlay **never installed offline at all** (it gated on
+        `isStyleLoaded()`, which is false while any source has tiles in flight
+        — permanently, with no signal — then retried on an event that had
+        already fired); `syncLayers` deleted the overlay on any layer toggle
+        because it shares the `rl-*` prefix; and the probe cap could overrun
+        itself, which is not a cap on a phone mid-pan.
+      - Verified by hand through a real browser on the path that actually
+        matters: download, **close the page**, go offline, **cold load**.
+        Not `navigator.onLine`, and not a warm context.
+      Still open: neighbour tiles outside the view are not counted, so a hunter
+      standing exactly on a download boundary can see a seam the badge did not
+      warn about (`BACKLOG R34`); and **`R4`, the region picker, is still the
+      missing front door** — all of this tells a hunter they are not covered,
+      and nothing in the UI yet lets them fix it.
 - [ ] Property boundary drawing and editing on the map *(🔴 scorecard gap)*
 - [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
 - [ ] Observation capture optimised for gloved, one-handed, in-the-field use
