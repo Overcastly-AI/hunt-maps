@@ -103,8 +103,21 @@ export function useViewportCoverage(map: maplibregl.Map | null): ViewportCoverag
     // First measurement. `once('load')` if the style is not up yet — the store
     // is readable before the map is, but reading `getBounds()` early gives the
     // pre-hash default view rather than the deep-linked one.
+    //
+    // `idle` as well, and not belt-and-braces: `isStyleLoaded()` is false while
+    // *any* source still has tiles in flight, which offline is close to always,
+    // so this branch is the one that runs — and if `load` had already fired
+    // before this hook subscribed, a lone `once('load')` would never fire and
+    // the badge would sit on "Checking…" forever. The same trap silently
+    // stopped the coverage overlay from ever installing; see
+    // `coverageOverlay.ts#styleReady`. `idle` fires once the map settles,
+    // including when every tile errored, so there is always a second chance.
+    // A duplicate probe is harmless: it is memoised and idempotent.
     if (map.isStyleLoaded()) schedule();
-    else map.once('load', schedule);
+    else {
+      map.once('load', schedule);
+      map.once('idle', schedule);
+    }
 
     return () => {
       disposed = true;
@@ -114,6 +127,8 @@ export function useViewportCoverage(map: maplibregl.Map | null): ViewportCoverag
       map.off('zoomstart', onMoveStart);
       map.off('moveend', schedule);
       map.off('zoomend', schedule);
+      map.off('load', schedule);
+      map.off('idle', schedule);
     };
   }, [map]);
 
