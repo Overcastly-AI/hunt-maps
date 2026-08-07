@@ -421,7 +421,7 @@ export function detectBenches(
 ): Uint8Array {
   const maxBench = options.maxBenchSlopeDeg ?? 8;
   const minSurround = options.minSurroundSlopeDeg ?? 18;
-  const ring = Math.max(2, Math.round(options.ringRadius ?? 8));
+  const ring = Math.max(2, Math.round(options.ringRadius ?? DEFAULT_RING_RADIUS_CELLS));
   const minCells = options.minCells ?? 6;
 
   const { width, height } = grid;
@@ -433,28 +433,74 @@ export function detectBenches(
       const s = surface.slope[i];
       if (!Number.isFinite(s) || s > maxBench) continue;
 
-      // Sample the ring in 16 directions rather than every cell in the annulus:
-      // 16 samples is enough to characterise the surround and keeps this within
-      // a render budget.
-      let steepCount = 0;
-      let samples = 0;
-      for (let k = 0; k < 16; k++) {
-        const ang = (k / 16) * Math.PI * 2;
-        const sx = Math.round(x + Math.cos(ang) * ring);
-        const sy = Math.round(y + Math.sin(ang) * ring);
-        if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
-        const rs = surface.slope[sy * width + sx];
-        if (!Number.isFinite(rs)) continue;
-        samples++;
-        if (rs >= minSurround) steepCount++;
-      }
+      const r = ringSlopeStats(surface, x, y, ring, minSurround);
       // At least half the ring must be steep — a shelf is steep above and below
       // but typically open along the contour.
-      if (samples >= 8 && steepCount / samples >= 0.5) flag[i] = 1;
+      if (r.samples >= 8 && r.steepCount / r.samples >= 0.5) flag[i] = 1;
     }
   }
 
   return minCells > 1 ? removeSmallBlobs(flag, width, height, minCells) : flag;
+}
+
+/**
+ * Default ring radius in cells for "is this pad embedded in steep ground?".
+ *
+ * Shared by `detectBenches` and the bedding slope term so the two layers cannot
+ * disagree about what counts as a shelf. They did disagree once — bedding peaked
+ * at a uniform 22° sidehill while `detectBenches` required a ≤8° pad inside a
+ * ≥18° ring — which put the flagship bedding layer's maximum on exactly the
+ * ground the bench layer rejects.
+ */
+export const DEFAULT_RING_RADIUS_CELLS = 8;
+
+export interface RingSlopeStats {
+  /** Ring directions that landed inside the grid and had data. */
+  samples: number;
+  /** How many of those were at or above the steep threshold. */
+  steepCount: number;
+  /** Mean slope over the sampled directions, degrees; NaN when `samples` is 0. */
+  meanSlopeDeg: number;
+}
+
+/**
+ * Slope statistics on a ring of radius `radiusCells` around (x, y).
+ *
+ * Samples 16 directions rather than every cell in the annulus: 16 is enough to
+ * characterise the surround and keeps this inside a per-tile render budget
+ * (a full annulus at r=8 is 200+ reads per cell).
+ *
+ * **Edge behaviour.** `SurfaceField` covers the tile interior only, so ring
+ * samples that fall outside it are dropped rather than read from the halo. The
+ * result is a `radiusCells`-wide border where the ring is characterised from
+ * fewer directions. That is a real (pre-existing) limitation shared by every
+ * consumer, and it is why callers get `samples` back and decide for themselves
+ * whether they have enough to speak.
+ */
+export function ringSlopeStats(
+  surface: SurfaceField,
+  x: number,
+  y: number,
+  radiusCells: number,
+  steepDeg: number,
+  directions = 16,
+): RingSlopeStats {
+  const { width, height, slope } = surface;
+  let samples = 0;
+  let steepCount = 0;
+  let sum = 0;
+  for (let k = 0; k < directions; k++) {
+    const ang = (k / directions) * Math.PI * 2;
+    const sx = Math.round(x + Math.cos(ang) * radiusCells);
+    const sy = Math.round(y + Math.sin(ang) * radiusCells);
+    if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
+    const rs = slope[sy * width + sx];
+    if (!Number.isFinite(rs)) continue;
+    samples++;
+    sum += rs;
+    if (rs >= steepDeg) steepCount++;
+  }
+  return { samples, steepCount, meanSlopeDeg: samples > 0 ? sum / samples : NaN };
 }
 
 /** Drop connected components smaller than `minCells` (4-connectivity). */

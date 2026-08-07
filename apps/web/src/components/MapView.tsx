@@ -4,6 +4,9 @@ import type { AnalysisLayer } from '@hunt-maps/terrain';
 import { color } from '@hunt-maps/design';
 import { LAYERS, layerById } from '../lib/layers';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
+import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
+import { syncCoverageOverlay } from '../lib/map/coverageOverlay';
+import type { ViewportCoverage } from '../lib/offline/coverage';
 
 export interface MapViewProps {
   activeLayers: Set<string>;
@@ -18,6 +21,14 @@ export interface MapViewProps {
   /** Map centre, so solar and thermal readouts follow the ground being viewed. */
   onMove?: (center: { lng: number; lat: number }) => void;
   protocol: TerrainProtocol;
+  /**
+   * Current offline coverage for this view. Rendered as the hatch/extent
+   * overlay — see `lib/map/coverageOverlay.ts`. `null` (or an indeterminate
+   * answer) draws nothing, never a guess.
+   */
+  coverage?: ViewportCoverage | null;
+  /** Whether the coverage overlay is shown at all. */
+  showCoverage?: boolean;
 }
 
 const BASE_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom: number }> = {
@@ -56,6 +67,8 @@ export function MapView({
   onReady,
   onMove,
   protocol,
+  coverage,
+  showCoverage = false,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -141,6 +154,15 @@ export function MapView({
     else instance.once('load', apply);
   }, [activeLayers, opacities, windFromDeg, atUtc, filterStackId, protocol]);
 
+  // Coverage is its own effect and its own module: it is not an analysis layer,
+  // it changes on a different cadence (every move), and `map-builder` should be
+  // able to retune its cartography without touching the layer stack above.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    syncCoverageOverlay(instance, coverage ?? null, showCoverage);
+  }, [coverage, showCoverage]);
+
   return <div ref={container} className="map-canvas" data-testid="map-canvas" />;
 }
 
@@ -214,8 +236,12 @@ function syncLayers(
       map.addSource(sourceId, {
         type: 'raster',
         tiles,
-        tileSize: 256,
-        maxzoom: BASE_SOURCES[id]?.maxzoom ?? 15,
+        // Shared constants, not literals: `lib/map/demTiles.ts` derives the
+        // zoom the offline coverage check probes at from exactly these two
+        // values. A local `256`/`15` here is how the badge and the fetch would
+        // silently start disagreeing about which tiles a view needs.
+        tileSize: DEM_TILE_SIZE,
+        maxzoom: BASE_SOURCES[id]?.maxzoom ?? DEM_MAX_ZOOM,
         attribution: BASE_SOURCES[id]?.attribution ?? 'Elevation: USGS / AWS Terrain Tiles',
       });
       map.addLayer(

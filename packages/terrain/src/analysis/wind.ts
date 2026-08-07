@@ -11,6 +11,13 @@
  * shelter term, and it can be computed for every cell on the map for any wind
  * direction the user dials in.
  *
+ * Leeward geometry is not the whole aspect story, though, and in cold weather it
+ * is not even the dominant part: once snow and cold set in, deer move to the
+ * faces that catch sun, and a purely leeward layer on a south wind in January
+ * points at the north slope — the deepest snow on the property. `beddingLikelihood`
+ * therefore blends leeward with solar aspect on a temperature ramp that is a
+ * no-op above 5 °C. See `BeddingSeasonOptions`.
+ *
  * Thermals are the other half, and they invert twice a day:
  *
  *  - **Morning / warming:** air rises upslope. Scent goes *up* the hill.
@@ -24,6 +31,7 @@
 
 import type { CurvatureField, SurfaceField } from './surface.js';
 import { azimuthDelta } from './surface.js';
+import { DEFAULT_RING_RADIUS_CELLS, ringSlopeStats } from './landform.js';
 
 const RAD = Math.PI / 180;
 
@@ -208,63 +216,251 @@ export function thermalPhaseAt(
     : ThermalPhase.Sinking;
 }
 
+// ---------------------------------------------------------------------------
+// Bedding likelihood
+// ---------------------------------------------------------------------------
+
 /**
- * Leeward bedding likelihood, 0..1 — the composite the map actually renders.
+ * Slope at which the pad term has fallen to half, in degrees.
  *
- * Combines the four things that have to co-occur for a buck bed:
- *  - leeward aspect (in the lee of the prevailing wind)
- *  - genuine terrain shelter upwind (something to be in the lee of)
- *  - a slope band he can actually lie on and still see downhill
- *  - broken ground for security cover
+ * The shape here is the load-bearing decision, not the number. Rowland et al.
+ * 2018 (*Wildlife Monographs* 199, elk, western Oregon/Washington) measure use
+ * declining **5.3% per percent of slope, monotonically, with no interior
+ * optimum** — a Gaussian with an interior peak is the one shape the best-measured
+ * cervid slope response contradicts. So the pad term is monotone decreasing:
+ * gentler is always better, all else equal, and "all else" is the ring term
+ * below, which is what stops that preference from selecting the valley floor.
  *
- * Multiplicative, not additive: every term is a *requirement*, and an additive
- * score would happily rank an exposed flat with great cover as prime bedding.
+ * The half-max point sits inside three independent bands that agree with each
+ * other and disagree with the 22° this used to peak at: BC WHR whitetail winter
+ * range 5.7–24.2° (centre 15°), elk daily use 8.5–16.7° (centre 12.5°), and
+ * `detectBenches`' own pad definition of ≤8°. The failure this fixes is
+ * user-facing and backwards: a 10° shelf used to score *lower* than a 22°
+ * sidehill, so the flagship layer sent hunters past the bench to the open face.
  */
+export const BEDDING_PAD_HALF_MAX_SLOPE_DEG = 12;
+
+/**
+ * Ring slope at which the "embedded in steep ground" term reaches half, degrees.
+ *
+ * A bed is a gentle pad *inside* steep ground: that is what gives a buck a
+ * sightline downhill, a thermal advantage, and an exit nobody can follow. Slope
+ * alone cannot express it — the same 8° reads as a bench, a ridge crown or the
+ * middle of a hayfield. `detectBenches` requires ≥18° in a 16-direction ring;
+ * this is the soft version of the same test, at the bottom of the BC WHR band so
+ * that it credits ground the hard threshold would reject outright.
+ */
+export const BEDDING_RING_MIN_SLOPE_DEG = 15;
+
+/**
+ * Logistic width of the ring term, degrees. Purely a shape parameter: at 4° the
+ * term runs from ~5% at 3° of surround to ~95% at 27°, so the transition spans
+ * the "rolling farm ground → hill country" range rather than snapping at a
+ * threshold. A hard threshold here would make the layer flicker cell-to-cell
+ * along every break of slope.
+ */
+export const BEDDING_RING_SOFTNESS_DEG = 4;
+
+/**
+ * VRM at which the security-cover term saturates, dimensionless.
+ *
+ * VRM is `1 − |R|/n` over surface normals, which for small dispersion is
+ * `≈ σ²/2` where σ is the RMS angular spread of those normals. 0.06 is therefore
+ * "surface orientation varies by about ±20° within the window" — ground broken
+ * enough to break a sightline at bedding range. Derived from that geometry, not
+ * measured against deer locations; it wants field validation against known beds.
+ */
+export const BEDDING_VRM_FULL_COVER = 0.06;
+
+/**
+ * Above this air temperature the solar-aspect term is switched off entirely,
+ * °C. Set at 5 °C so the season term is a **no-op through the entire early and
+ * peak-rut season** — a Midwest October morning is 5–15 °C and the leeward
+ * geometry alone is what a hunter wants there.
+ */
+export const BEDDING_COLD_ONSET_C = 5;
+
+/**
+ * At or below this temperature the solar-aspect term carries its full weight,
+ * °C. −10 °C is a genuine winter-severity threshold, not a cold snap.
+ */
+export const BEDDING_SEVERE_COLD_C = -10;
+
+/**
+ * Maximum share of the aspect term given to sun rather than to lee.
+ *
+ * Four agencies (BC WHR, Ontario, Nova Scotia, Maine) prescribe south/west
+ * aspects for winter deer range, and the mechanism is measured: 18.1 cm of snow
+ * on the SE-facing slope against 42.0 cm on the NE-facing slope in the same
+ * study area (Lang & Gates 1985). At 0.75, a fully sun-facing but windward slope
+ * overtakes a fully leeward but shaded one at roughly **−7 °C** and below, and
+ * lee still wins at every temperature above about 0 °C. Deep cold does not make
+ * wind irrelevant — hence 0.75 and not 1 — it makes the sun the stronger of two
+ * live requirements. The failure this prevents: on a south wind in January the
+ * leeward-only term pointed at north-facing ground, the deepest snow and coldest
+ * cell on the property, and presented it as the safe pick.
+ */
+export const BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75;
+
+/**
+ * Optional cold-season inputs for the aspect term.
+ *
+ * Both fields are required *together* if the caller supplies this at all. There
+ * is deliberately no default season: assuming "winter" would silently move every
+ * user's bedding layer to the sunny face in October, and assuming "not winter"
+ * from a missing temperature is the bug being fixed. An unset season means the
+ * function behaves exactly as leeward-only, and the UI is expected to say the
+ * layer is running without a temperature rather than to imply it accounted for one.
+ */
+export interface BeddingSeasonOptions {
+  /** Air temperature expected during the sit, °C. */
+  temperatureC: number;
+  /**
+   * **Absolute** direct-beam incidence, `cos(incidence)` in [0, 1], per cell —
+   * i.e. the output of `slopeInsolation(surface, sun)`, conventionally at solar
+   * noon on the date being planned.
+   *
+   * It must be an absolute quantity, never a field normalised by its own
+   * min/max: a per-tile normalisation makes the same hillside score differently
+   * depending on which tile it lands in, which paints seams straight down the
+   * middle of the bedding layer.
+   */
+  insolation: Float32Array;
+  /** Override the temperature ramp; see the `BEDDING_*_C` constants. */
+  coldOnsetC?: number;
+  severeColdC?: number;
+  maxSolarWeight?: number;
+}
+
+/**
+ * Weight given to solar aspect over leeward aspect, 0..`maxSolarWeight`.
+ *
+ * Exported so callers can skip building an insolation field they would multiply
+ * by zero, and so the ramp is pinned by tests independently of the composite.
+ */
+export function coldBlendWeight(
+  temperatureC: number,
+  options: Pick<BeddingSeasonOptions, 'coldOnsetC' | 'severeColdC' | 'maxSolarWeight'> = {},
+): number {
+  const onset = options.coldOnsetC ?? BEDDING_COLD_ONSET_C;
+  const severe = options.severeColdC ?? BEDDING_SEVERE_COLD_C;
+  const maxWeight = options.maxSolarWeight ?? BEDDING_MAX_SOLAR_ASPECT_WEIGHT;
+  if (!Number.isFinite(temperatureC) || temperatureC >= onset) return 0;
+  if (temperatureC <= severe) return maxWeight;
+  return (maxWeight * (onset - temperatureC)) / (onset - severe);
+}
+
 export interface BeddingOptions {
   windFromDeg: number;
   /** Optional terrain-shelter field; strongly recommended. */
   shelter?: Float32Array;
-  /** Optional ruggedness (TRI, metres) as a security-cover proxy. */
-  ruggedness?: Float32Array;
-  /** Ideal bedding slope in degrees. Deer bed on grade, not on cliffs. */
-  idealSlopeDeg?: number;
-  /** Tolerance around the ideal slope. */
-  slopeToleranceDeg?: number;
+  /**
+   * Optional **Vector Ruggedness Measure** field (`computeVectorRuggedness`),
+   * dimensionless 0..1, as the security-cover proxy.
+   *
+   * Not TRI. TRI is `g·s·√6` on a smooth plane, so feeding it here rewards steep
+   * ground a second time on top of the slope terms below — see the note on
+   * `computeRuggedness`.
+   */
+  vectorRuggedness?: Float32Array;
+  /** Slope at which the pad term halves, degrees. */
+  padHalfMaxSlopeDeg?: number;
+  /** Ring slope at which the surround term reaches half, degrees. */
+  ringMinSlopeDeg?: number;
+  /** Logistic width of the surround term, degrees. */
+  ringSoftnessDeg?: number;
+  /** Ring radius in cells; shared with `detectBenches` by default. */
+  ringRadiusCells?: number;
+  /** VRM value at which the cover term saturates. */
+  vrmFullCover?: number;
+  /** Cold-season aspect inputs. Omit for leeward-only behaviour. */
+  season?: BeddingSeasonOptions;
 }
 
+/**
+ * Leeward bedding likelihood, 0..1 — the composite the map actually renders.
+ *
+ * Four things have to co-occur for a mature-buck bed, and each is a **separate
+ * requirement**, so the score is multiplicative. An additive score would happily
+ * rank an exposed flat with great cover as prime bedding.
+ *
+ *  1. **Aspect** — leeward of the wind (`cos(aspect − windFrom)`), blended
+ *     toward *sun-facing* as it gets cold (see `BeddingSeasonOptions`).
+ *  2. **Shelter** — something upwind actually tall enough to be in the lee of.
+ *  3. **Position on the hill** — a gentle pad (monotone in slope, Rowland 2018)
+ *     that is embedded in steep ground (the ring term). Together these describe
+ *     a bench, a shoulder or a spur crown; separately, neither does.
+ *  4. **Security cover** — dispersion of surface orientation (VRM), which is
+ *     independent of slope by construction.
+ *
+ * Units: slopes in degrees; output dimensionless 0..1; `NaN` where the DEM has
+ * no data. The ring term reads `SurfaceField` out to `ringRadiusCells`, and the
+ * `ringSlopeStats` edge caveat applies at the tile border.
+ */
 export function beddingLikelihood(
   surface: SurfaceField,
   options: BeddingOptions,
 ): Float32Array {
-  const ideal = options.idealSlopeDeg ?? 22;
-  const tol = options.slopeToleranceDeg ?? 14;
+  const padHalfMax = options.padHalfMaxSlopeDeg ?? BEDDING_PAD_HALF_MAX_SLOPE_DEG;
+  const ringMin = options.ringMinSlopeDeg ?? BEDDING_RING_MIN_SLOPE_DEG;
+  const ringSoft = Math.max(1e-6, options.ringSoftnessDeg ?? BEDDING_RING_SOFTNESS_DEG);
+  const ringRadius = Math.max(2, Math.round(options.ringRadiusCells ?? DEFAULT_RING_RADIUS_CELLS));
+  const vrmFull = Math.max(1e-9, options.vrmFullCover ?? BEDDING_VRM_FULL_COVER);
   const exposure = windExposure(surface, options.windFromDeg);
+  const { width, height } = surface;
   const n = surface.slope.length;
+
+  // Season is opt-in and only engaged when it is genuinely cold. Resolving the
+  // weight to exactly 0 here means the warm path is the *same arithmetic* as the
+  // no-season path, not an approximation of it, so a caller that always passes a
+  // temperature gets bit-identical output in October.
+  const solarWeight = options.season ? coldBlendWeight(options.season.temperatureC, options.season) : 0;
+  const insolation = solarWeight > 0 ? options.season?.insolation : undefined;
+  if (insolation && insolation.length !== n) {
+    throw new Error(
+      `beddingLikelihood: season.insolation has length ${insolation.length}, expected ${n}`,
+    );
+  }
+  const leeWeight = 1 - solarWeight;
+
   const out = new Float32Array(n);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      const slope = surface.slope[i];
+      if (!Number.isFinite(slope)) {
+        out[i] = NaN;
+        continue;
+      }
 
-  for (let i = 0; i < n; i++) {
-    const slope = surface.slope[i];
-    if (!Number.isFinite(slope)) {
-      out[i] = NaN;
-      continue;
+      // Leeward term: exposure of -1 (fully leeward) → 1, +1 (windward) → 0.
+      // A flat cell has no aspect, so `windExposure` returns 0 and this lands on
+      // 0.5 — neither leeward nor windward, which is the honest answer.
+      const lee = (1 - exposure[i]) / 2;
+      const aspectTerm = insolation ? leeWeight * lee + solarWeight * clamp01(insolation[i]) : lee;
+
+      // Pad term: monotone decreasing, half at `padHalfMax`. Never peaks in the
+      // interior — that shape is what Rowland et al. 2018 measured against.
+      const padTerm = 1 / (1 + (slope / padHalfMax) * (slope / padHalfMax));
+
+      // Ring term: is that pad embedded in steep ground, or is it a field?
+      // Falls back to the cell's own slope when the ring is entirely outside the
+      // tile, which keeps a uniform hillside self-consistent at the border
+      // instead of collapsing the term to "no surround".
+      const ring = ringSlopeStats(surface, x, y, ringRadius, ringMin);
+      const ringSlope = ring.samples > 0 ? ring.meanSlopeDeg : slope;
+      const ringTerm = 1 / (1 + Math.exp(-(ringSlope - ringMin) / ringSoft));
+
+      // Shelter term: without an upwind obstruction, "leeward" is meaningless.
+      const shelterTerm = options.shelter ? 0.25 + 0.75 * clamp01(options.shelter[i]) : 1;
+
+      // Cover term: orientation dispersion, deliberately slope-independent.
+      const coverTerm = options.vectorRuggedness
+        ? 0.4 + 0.6 * clamp01(options.vectorRuggedness[i] / vrmFull)
+        : 1;
+
+      out[i] = clamp01(aspectTerm * padTerm * ringTerm * shelterTerm * coverTerm);
     }
-
-    // Leeward term: exposure of -1 (fully leeward) → 1, +1 (windward) → 0.
-    const lee = (1 - exposure[i]) / 2;
-
-    // Slope term: Gaussian around the ideal bedding grade.
-    const d = (slope - ideal) / tol;
-    const slopeTerm = Math.exp(-0.5 * d * d);
-
-    // Shelter term: without an upwind obstruction, "leeward" is meaningless.
-    const shelterTerm = options.shelter ? 0.25 + 0.75 * clamp01(options.shelter[i]) : 1;
-
-    // Cover term: 4 m of local relief in a 3x3 is plenty of broken ground.
-    const coverTerm = options.ruggedness
-      ? 0.4 + 0.6 * clamp01(options.ruggedness[i] / 4)
-      : 1;
-
-    out[i] = clamp01(lee * slopeTerm * shelterTerm * coverTerm);
   }
   return out;
 }

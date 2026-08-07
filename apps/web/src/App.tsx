@@ -23,7 +23,8 @@ import { LayersSheet, type SavedFilterSummary } from './components/LayersSheet';
 import { ConditionsEditor } from './components/ConditionsEditors';
 import { toggleLayer } from './lib/layers';
 import { TerrainProtocol } from './lib/map/terrainProtocol';
-import { openTileStore, requestPersistentStorage } from './lib/offline/tileStore';
+import { requestPersistentStorage } from './lib/offline/tileStore';
+import { useViewportCoverage } from './lib/offline/useViewportCoverage';
 
 const DEM_TEMPLATE =
   import.meta.env.VITE_DEM_TEMPLATE ??
@@ -56,13 +57,26 @@ export default function App() {
   const [opacities, setOpacities] = useState<Record<string, number>>({});
   const [windFromDeg, setWindFromDeg] = useState<number | null>(null);
   const [atUtc, setAtUtc] = useState(() => new Date());
-  const [offlineReady, setOfflineReady] = useState(false);
   const [inspect, setInspect] = useState<{ lng: number; lat: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
   const [popover, setPopover] = useState<Popover>(null);
   const [center, setCenter] = useState({ lng: -82.54, lat: 39.43 });
 
   const mapRef = useRef<maplibregl.Map | null>(null);
+  // State, not just a ref: the coverage hook has to re-subscribe when the map
+  // instance appears, and a ref assignment does not re-render.
+  const [map, setMap] = useState<maplibregl.Map | null>(null);
+
+  /**
+   * Offline coverage for the view on screen, recomputed as the map moves.
+   *
+   * Deliberately not a boolean and deliberately not sampled once: the previous
+   * implementation read `store.stats().tileCount > 0` at mount, which made a
+   * single stored tile anywhere on earth render "Offline ready — elevation for
+   * this area is stored on this device" for every view, forever. That sentence
+   * is the one a hunter believes at the trailhead at 04:30.
+   */
+  const { coverage } = useViewportCoverage(map);
 
   const [filters, setFilters] = useState<FilterEntry[]>(() =>
     PRESET_FILTERS.map((p, i) => ({

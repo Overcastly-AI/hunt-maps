@@ -8,6 +8,7 @@ import {
   ToggleRow,
 } from '@hunt-maps/design';
 import { LAYER_GROUPS, LAYERS, missingInputs } from '../lib/layers';
+import { describeCoverage, type ViewportCoverage } from '../lib/offline/coverage';
 
 export interface SavedFilterSummary {
   id: string;
@@ -22,7 +23,12 @@ export interface LayersSheetProps {
   opacities: Record<string, number>;
   windFromDeg: number | null;
   savedFilters: SavedFilterSummary[];
-  offlineReady: boolean;
+  /**
+   * Offline coverage **for the view currently on screen**, recomputed as the
+   * map moves. `null` means "not measured yet" and renders as an explicit
+   * indeterminate state — never as ready.
+   */
+  coverage: ViewportCoverage | null;
   onToggle: (id: string) => void;
   onOpacity: (id: string, value: number) => void;
   onToggleFilter: (id: string) => void;
@@ -40,38 +46,54 @@ export interface LayersSheetProps {
  *  2. **A layer whose inputs are unset is disabled with a stated reason**, not
  *     rendered against a default. `ToggleRow`'s `blockedReason` makes that the
  *     path of least resistance rather than something each screen must remember.
+ *  3. **The offline badge describes the view on screen, and nothing else.** It
+ *     used to be a boolean sampled once at mount from the total tile count, so
+ *     one stored tile made every view on earth read "Offline ready" — including
+ *     five hundred miles away. Every string here now comes from
+ *     `describeCoverage`, which has no code path that produces a reassuring
+ *     answer from an absent measurement.
  */
 export function LayersSheet({
   active,
   opacities,
   windFromDeg,
   savedFilters,
-  offlineReady,
+  coverage,
   onToggle,
   onOpacity,
   onToggleFilter,
   onClose,
 }: LayersSheetProps) {
   const warnings = missingInputs(active, windFromDeg);
+  const offline = describeCoverage(coverage);
 
   return (
     <Sheet
       title="Layers"
       onClose={onClose}
       action={
-        <Chip
-          tone={offlineReady ? 'ok' : 'warn'}
-          glyph={offlineReady ? '●' : '○'}
-          title={
-            offlineReady
-              ? 'Elevation for this area is stored on this device. Analysis layers work with no signal.'
-              : 'This area is not downloaded. Layers need a connection until you save it for offline use.'
-          }
-        >
-          {offlineReady ? 'Offline ready' : 'Online only'}
+        <Chip tone={offline.tone} glyph={offline.glyph} title={offline.detail}>
+          {offline.chip}
         </Chip>
       }
     >
+      {/* The full sentence lives in the body, where there is room for the
+          caveats the header chip cannot carry: which zoom the answer is for,
+          how much of it was sampled, and what the hatch on the map means. */}
+      <p className="rl-hint" data-testid="coverage-detail">
+        {offline.detail}
+      </p>
+
+      {coverage?.backend === 'memory' && (
+        <Callout tone="danger" role="alert">
+          <p>
+            This device would not give us persistent storage, so saved elevation is being held in
+            memory only and will be gone when the app reloads. Do not rely on this at the
+            trailhead.
+          </p>
+        </Callout>
+      )}
+
       {warnings.length > 0 && (
         <Callout tone="warn">
           {warnings.map((w) => (

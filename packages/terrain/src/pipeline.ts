@@ -20,6 +20,8 @@ import {
   computeCurvature,
   computeRuggedness,
   computeSurface,
+  computeVectorRuggedness,
+  DEFAULT_VRM_RADIUS_CELLS,
   type CurvatureField,
   type SurfaceField,
 } from './analysis/surface.js';
@@ -42,6 +44,7 @@ import {
 import { slopeInsolation, solarPosition, type SolarPosition } from './analysis/solar.js';
 import {
   beddingLikelihood,
+  coldBlendWeight,
   terrainShelter,
   windExposure,
   type BeddingOptions,
@@ -81,10 +84,26 @@ export interface AnalysisRequest {
   weiss?: WeissOptions;
   wood?: WoodOptions;
   bench?: BenchOptions;
-  bedding?: Omit<BeddingOptions, 'windFromDeg'>;
+  bedding?: Omit<BeddingOptions, 'windFromDeg' | 'season'>;
   /** Radii in cells for the two TPI scales. */
   tpiSmallRadius?: number;
   tpiLargeRadius?: number;
+  /**
+   * VRM window radius in cells for the bedding cover term. Raise it on
+   * sub-5 m DEMs — see `DEFAULT_VRM_RADIUS_CELLS`. `requiredHalo` reads the same
+   * value, so widening the window can never open a seam.
+   */
+  coverRadiusCells?: number;
+  /**
+   * Air temperature expected during the sit, °C. **Optional and deliberately
+   * undefaulted**: supplying it switches on the cold-season solar-aspect term in
+   * `beddingLikelihood`; omitting it leaves the bedding layer purely leeward and
+   * bit-identical to what it computed before that term existed. Guessing a
+   * season on the user's behalf is the failure mode this avoids — a layer that
+   * quietly assumed January would move every bedding prediction to the sunny
+   * face without saying so.
+   */
+  temperatureC?: number;
 }
 
 export interface AnalysisResult extends TerrainFields {
@@ -146,11 +165,14 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
     );
   }
 
-  const needsRuggedness = want.has('ruggedness') || want.has('bedding');
-  let ruggedness: Float32Array | undefined;
-  if (needsRuggedness) {
-    ruggedness = computeRuggedness(grid);
-    if (want.has('ruggedness')) result.ruggedness = ruggedness;
+  // Two different ruggedness measures, on purpose. TRI is the layer a user
+  // reads ("local relief in metres") and the value denormalised onto
+  // observations; VRM is the only one admissible as bedding *cover*, because it
+  // is independent of slope and the bedding score already has slope terms.
+  if (want.has('ruggedness')) result.ruggedness = computeRuggedness(grid);
+  let cover: Float32Array | undefined;
+  if (want.has('bedding')) {
+    cover = computeVectorRuggedness(grid, { radiusCells: request.coverRadiusCells });
   }
 
   if (want.has('weiss')) result.weiss = classifyWeiss(grid, surface, request.weiss);
@@ -198,8 +220,9 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
     result.bedding = beddingLikelihood(surface, {
       windFromDeg: windFrom,
       shelter,
-      ruggedness,
+      vectorRuggedness: cover,
       ...request.bedding,
+      season: beddingSeason(request, surface),
     });
   }
 

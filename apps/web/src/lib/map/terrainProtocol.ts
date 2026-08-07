@@ -27,6 +27,7 @@
 import maplibregl from 'maplibre-gl';
 import type { AnalysisLayer, DemEncoding, TerrainPredicate } from '@hunt-maps/terrain';
 import { openTileStore, type TileKey } from '../offline/tileStore';
+import { demTileKey } from './demTiles';
 import type { RenderTileMessage, WorkerResponse } from '../../workers/terrain.worker';
 
 export const PROTOCOL = 'ridgeline';
@@ -194,7 +195,10 @@ export class TerrainProtocol {
     const key = `${z}/${x}/${y}`;
     let entry = this.demCache.get(key);
     if (!entry) {
-      entry = this.fetchDem({ layer: 'dem', z, x, y }, signal);
+      // `demTileKey` is shared with the offline coverage query. If the two ever
+      // derived the store key separately, the badge could report a view covered
+      // while this fetch looked somewhere else and found nothing.
+      entry = this.fetchDem(demTileKey({ z, x, y }), signal);
       this.demCache.set(key, entry);
       // Bound the in-memory cache; the persistent store is the real cache.
       if (this.demCache.size > 512) {
