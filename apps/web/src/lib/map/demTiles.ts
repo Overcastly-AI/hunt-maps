@@ -231,7 +231,11 @@ export function sampleDemTiles(bounds: BBox, z: number, max: number): TileCoord[
     // Keep the sample roughly isotropic: a wide, short viewport gets more
     // columns than rows, so the probes stay spread over the ground rather than
     // bunched in one stripe.
-    const nx = clamp(Math.round(Math.sqrt((budget * w) / h)), 1, w);
+    // Capped at the budget as well as the range width: a very wide, very short
+    // range (a letterboxed viewport, or one half of an antimeridian split) can
+    // otherwise ask for more columns than it has probes to spend, and the grid
+    // below then overruns the cap it was given.
+    const nx = clamp(Math.round(Math.sqrt((budget * w) / h)), 1, Math.min(w, budget));
     // `floor`, not `ceil`: `ceil` lets nx*ny exceed the budget (7 columns of a
     // 48-tile budget rounds up to 7 rows = 49 probes), and a probe cap that can
     // be overrun is not a cap. Overshooting by one is harmless on a laptop and

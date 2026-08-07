@@ -98,8 +98,25 @@ describe('sampleDemTiles', () => {
     const needed = new Set(demTilesForBounds(WIDE, 12).map((t) => `${t.x}/${t.y}`));
     const sample = sampleDemTiles(WIDE, 12, 48);
     expect(sample.length).toBeGreaterThan(0);
-    expect(sample.length).toBeLessThanOrEqual(60); // budget plus per-range rounding
+    expect(sample.length).toBeLessThanOrEqual(48);
     for (const t of sample) expect(needed.has(`${t.x}/${t.y}`)).toBe(true);
+  });
+
+  it('honours the budget for awkward aspect ratios, not just square ones', () => {
+    // The probe cap is a battery budget for a phone mid-pan. A cap that a
+    // letterboxed viewport or an antimeridian split can overrun is not a cap.
+    const shapes: BBox[] = [
+      { west: -179, south: 0, east: 179, north: 1 }, // very wide, very short
+      { west: -1, south: -80, east: 0, north: 80 }, // very tall, very narrow
+      { west: 179, south: -1, east: -179, north: 1 }, // split across the line
+    ];
+    for (const shape of shapes) {
+      for (const max of [4, 12, 48, 256]) {
+        const n = sampleDemTiles(shape, 12, max).length;
+        expect(n, `${JSON.stringify(shape)} @ max ${max} sampled ${n}`).toBeLessThanOrEqual(max);
+        expect(n).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('spreads over both axes — a single column would misreport a half-stored region', () => {
