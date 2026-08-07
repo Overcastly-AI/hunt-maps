@@ -71,6 +71,48 @@ helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
   --set image.pullSecrets[0].name=ghcr
 ```
 
+### Offline needs a secure context, not necessarily HTTPS
+
+Service workers only register in a **secure context**, and the browser decides
+that from the _hostname_, not the resolved IP:
+
+| Origin                          | Secure context?                                               | Offline works? |
+| ------------------------------- | ------------------------------------------------------------- | -------------- |
+| `http://localhost:8080`         | yes                                                           | **yes**        |
+| `http://ridgeline.localhost`    | yes — anything ending `.localhost` is trusted                 | **yes**        |
+| `http://ridgeline.localtest.me` | **no** — a public domain that happens to resolve to 127.0.0.1 | no             |
+| `https://anything`              | yes                                                           | yes            |
+
+This matters more here than in most apps: offline is not a feature of
+Ridgeline, it is the operating assumption. Everything still works over plain
+HTTP — the map, the terrain engine, saved filters — but the service worker
+never registers, so nothing is cached and the app silently has no no-signal
+behaviour. **The page looks completely normal.**
+
+So, for local work:
+
+```bash
+# Testing offline — trusted origin, no certificate, nothing to configure
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline
+kubectl port-forward svc/ridgeline-web 8080:80
+# → http://localhost:8080
+
+# A hostname AND offline
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
+  --set ingress.enabled=true --set ingress.host=ridgeline.localhost
+# → http://ridgeline.localhost
+```
+
+`*.localhost` is resolved to loopback by Chrome and Firefox directly, so there
+is still nothing to add to `/etc/hosts`. It is slightly less universal than
+`localtest.me` — Safari and some OS resolvers do not handle it — which is why
+the chart default stays on `localtest.me`, the one that always resolves.
+
+For a real deployment, terminate TLS properly (see
+[`deploy/compose/README.md`](../compose/README.md) for the Caddy config) and
+set `ingress.tls`. The chart derives the CORS origin's scheme from that, so an
+https host gets an https origin automatically.
+
 ## When the hostname does not route
 
 The Ingress object is created regardless, so `kubectl get ingress` looks

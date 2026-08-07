@@ -102,6 +102,15 @@ kubectl port-forward svc/ridgeline-web 8080:80
 
 Then http://localhost:8080.
 
+**For testing offline, use this port-forward rather than the hostname.**
+Service workers only register in a secure context, which browsers decide from
+the hostname: `localhost`, `127.0.0.1` and anything ending in `.localhost` are
+trusted, but `ridgeline.localtest.me` is a public domain that merely resolves
+to 127.0.0.1 — so no HTTPS means no service worker, and the app silently has no
+offline behaviour while looking completely normal. `--set
+ingress.host=ridgeline.localhost` gets you both a hostname and a secure
+context.
+
 Check it actually works — this asserts things a green rollout does not, namely
 that the API reports PostGIS _reachable_ and that the web tier really proxies
 `/api`:
