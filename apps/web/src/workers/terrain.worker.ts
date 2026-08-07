@@ -47,7 +47,7 @@ import {
   type DemEncoding,
   type TerrainPredicate,
 } from '@hunt-maps/terrain';
-import { mapColor } from '@hunt-maps/design';
+import { mapColor, BEDDING_RAMP_DOMAIN_MAX, stretchToUnit } from '@hunt-maps/design';
 
 export interface RenderTileMessage {
   id: number;
@@ -180,7 +180,15 @@ function renderTile(msg: RenderTileMessage): Uint8ClampedArray {
     case 'insolation':
       return renderRamp(result.insolation ?? new Float32Array(n), SUN_RAMP);
     case 'bedding':
-      return renderRamp(result.bedding ?? new Float32Array(n), HEAT_RAMP);
+      // `beddingLikelihood` is a product of five imperfect terms and rarely
+      // gets near 1.0 on real terrain — feeding it straight into a ramp built
+      // for [0, 1] paints nothing (BACKLOG R32). Rescale into the ramp's
+      // domain first; see `BEDDING_RAMP_DOMAIN_MAX` for why that domain is a
+      // fixed, documented figure rather than a per-tile stretch.
+      return renderRamp(
+        stretchFieldToUnit(result.bedding ?? new Float32Array(n), BEDDING_RAMP_DOMAIN_MAX),
+        HEAT_RAMP,
+      );
     case 'weiss':
       return renderCategorical(result.weiss ?? new Uint8Array(n), WEISS_COLORS);
     case 'wood':
@@ -200,6 +208,20 @@ function renderTile(msg: RenderTileMessage): Uint8ClampedArray {
     default:
       return new Uint8ClampedArray(n * 4);
   }
+}
+
+/**
+ * Rescale a whole field through `stretchToUnit` before it hits a ramp built
+ * for `[0, 1]`. Kept local to the render path rather than exported: the
+ * per-value transform lives in `@hunt-maps/design` (the visual decision),
+ * this loop is just applying it to a tile's worth of cells.
+ */
+function stretchFieldToUnit(field: Float32Array, domainMax: number): Float32Array {
+  const out = new Float32Array(field.length);
+  for (let i = 0; i < field.length; i++) {
+    out[i] = stretchToUnit(field[i], domainMax);
+  }
+  return out;
 }
 
 export {};

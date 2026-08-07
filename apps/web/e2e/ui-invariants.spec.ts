@@ -6,8 +6,17 @@ import {
   rectsOverlap,
 } from './helpers/dom-audit';
 import { contrastRatio, estimateBackground, parseCssColor, requiredContrastRatio } from './helpers/contrast';
-import { gridPoints, samplePixels } from './helpers/pixels';
-import { boxDelta, DESKTOP, gotoAndSettle, MOBILE, NARROW, waitForRectStable, type Box } from './helpers/settle';
+import { canvasSaturationCoverage, gridPoints, samplePixels } from './helpers/pixels';
+import {
+  boxDelta,
+  DESKTOP,
+  gotoAndSettle,
+  MOBILE,
+  NARROW,
+  waitForRectStable,
+  waitForTiles,
+  type Box,
+} from './helpers/settle';
 import {
   chipColor,
   chipText,
@@ -890,4 +899,83 @@ test.describe('9. Offline coverage describes the view on screen', () => {
       .poll(() => renderedFeatureCount(page, 'rl-offline-coverage-fill'), { timeout: 15_000 })
       .toBeGreaterThan(0);
   });
+});
+
+// ---------------------------------------------------------------------------
+// 10. A layer that paints nothing must fail
+// ---------------------------------------------------------------------------
+//
+// `BACKLOG R32`: 166 terrain unit tests and every invariant above were green
+// while the shipped bedding layer covered **0.00%** of the map canvas —
+// `beddingLikelihood`'s realised range (measured on a real ridge-and-draw DEM:
+// max 0.1386, p99 0.1217) sits entirely in the bottom slice of `HEAT_RAMP`'s
+// absolute `[0, 1]` domain, so every pixel rendered functionally transparent.
+// Every gate that exists checks that the checkbox is checked, the worker
+// returned a buffer, or the DOM painted *something* — none of them look at
+// what colour actually landed on screen, which is the exact blind spot
+// `CLAUDE.md`'s "assert against rendered state" rule exists for. This is that
+// assertion for a whole layer instead of one control: enable it, wait for it
+// to actually render, and count saturated pixels in the real screenshot.
+test.describe('10. Layer paint coverage — a layer that paints nothing must fail', () => {
+  // Bedding is the most expensive layer in the engine (VRM over a 9x9 window,
+  // shelter, and the corridor-grade slope stats, all on-device); under
+  // swiftshader that comfortably outruns the suite's default per-test budget.
+  test.setTimeout(900_000);
+
+  for (const viewport of [DESKTOP, MOBILE]) {
+    test(`${viewport.width}px — bedding likelihood, NW wind, paints visible colour over the relief`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport);
+
+      // On a narrow viewport the Layers sheet is a bottom drawer that covers
+      // the rail behind it rather than sliding it clear (documented on
+      // `closeLayersSheet` above), so the Wind trigger is unreachable while
+      // it is open. Start from a known, closed state on every viewport
+      // rather than branching the flow by width.
+      await closeLayersSheet(page);
+
+      // Bedding is a leeward model and stays disabled with no wind set
+      // (CLAUDE.md: grey out an input-starved layer rather than render a
+      // default) — set one before trying to enable the layer.
+      await page.getByRole('button', { name: /Wind from/ }).click();
+      await waitForRectStable(page.locator('.rl-popover'));
+      await page.getByRole('button', { name: 'NW', exact: true }).click();
+      await waitForTiles(page);
+      await page.keyboard.press('Escape');
+
+      await page.getByRole('button', { name: 'Layers' }).click();
+      const bedding = page.getByRole('checkbox', { name: /Bedding likelihood/ });
+      await expect(bedding).toBeEnabled();
+      await bedding.click();
+      await waitForTiles(page);
+
+      // Close the layers sheet / any open popover so what gets measured is the
+      // map, not chrome sitting on top of it.
+      await closeLayersSheet(page);
+      await page.keyboard.press('Escape');
+      await waitForRectStable(page.locator('.chrome-bottomleft'));
+
+      const mapBox = await measureBox(page.getByTestId('map-canvas'));
+      const coveragePct = await canvasSaturationCoverage(page, mapBox);
+      // eslint-disable-next-line no-console
+      console.log(`[R32 invariant] bedding saturated-pixel coverage at ${viewport.width}px: ${coveragePct.toFixed(2)}%`);
+
+      // The regression this guards: 0.00%, measured the same way, on the
+      // build this ticket was filed against. 1% is well below what the fixed
+      // domain rescale actually produces on either viewport this suite
+      // covers (desktop framing shows more of the leeward, saturated side of
+      // the terrain than the narrower mobile crop does, so the two numbers
+      // differ — both clear 1% by a wide margin) but is comfortably above
+      // the ~0.1% floor of stray UI-icon colour (the wind compass glyph,
+      // mainly) this metric picks up even when the layer paints nothing at
+      // all — see BACKLOG R32.
+      expect(
+        coveragePct,
+        `bedding likelihood painted saturated colour over only ${coveragePct.toFixed(2)}% of the map ` +
+          `canvas at ${viewport.width}px — BACKLOG R32 regressed. (0.00-0.1% is the failure this guards; ` +
+          `UI-icon noise alone measures well under 1%.)`,
+      ).toBeGreaterThan(1);
+    });
+  }
 });

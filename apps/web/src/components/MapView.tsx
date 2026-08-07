@@ -68,6 +68,22 @@ export function MapView({
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const overlay = useRef<CoverageOverlay | null>(null);
+  // Set once the style has loaded for the first time. `isStyleLoaded()`
+  // answers a different question than its name suggests: MapLibre also folds
+  // in-flight tile activity for *already-added* sources into it, so it can
+  // flip back to `false` well after the initial style is up (this app's own
+  // satellite source retries indefinitely against a network that will not
+  // resolve, which is exactly the condition that exposed this). The sync
+  // effect below used to re-check `isStyleLoaded()` on every dependency
+  // change and fall back to `map.once('load', apply)` when it read false —
+  // but MapLibre's `'load'` event fires exactly once per style, so any sync
+  // that happened to land during a transient `false` attached a listener
+  // that would never fire again, silently stranding every later layer toggle
+  // (BACKLOG R32: this is why the bedding layer never painted in CI — the
+  // toggle never reached `map.addSource` at all, before the ramp domain was
+  // even in play). Tracked with a ref rather than re-deriving it from the map
+  // each time, because the map has no public "has loaded at least once" query.
+  const styleLoadedOnce = useRef(false);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -146,8 +162,22 @@ export function MapView({
     if (!instance) return;
 
     const apply = () => syncLayers(instance, activeLayers, opacities, windFromDeg, atUtc, filterStackId);
-    if (instance.isStyleLoaded()) apply();
-    else instance.once('load', apply);
+
+    // Once the style has loaded for the first time, every later dependency
+    // change (a layer toggle, a wind scrub, a date change) applies straight
+    // away — see `styleLoadedOnce` above for why re-checking
+    // `isStyleLoaded()` here is the bug this replaced.
+    if (styleLoadedOnce.current) {
+      apply();
+    } else if (instance.isStyleLoaded()) {
+      styleLoadedOnce.current = true;
+      apply();
+    } else {
+      instance.once('load', () => {
+        styleLoadedOnce.current = true;
+        apply();
+      });
+    }
   }, [activeLayers, opacities, windFromDeg, atUtc, filterStackId, protocol]);
 
   // Coverage gets its own effect and its own module: it is not an analysis
