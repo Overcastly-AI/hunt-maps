@@ -1,299 +1,244 @@
 /**
- * Per-viewport offline coverage.
+ * "Is *this view* actually stored on this device?"
  *
  * ## The defect this replaces
  *
  * The Layers sheet used to sample `store.stats().tileCount > 0` **once at
- * mount** and render the result behind the words "Offline ready — elevation for
- * *this area* is stored on this device". One tile anywhere on earth made every
- * view on earth read green, forever, including after panning five hundred
- * miles. A hunter reads that at the trailhead, walks in, and the analysis engine
- * has nothing to compute from — the exact failure CLAUDE.md names as the worst
- * this product has.
+ * mount** and render the result behind the words "elevation for *this area* is
+ * stored on this device". One tile anywhere in the world made it green, and it
+ * stayed green while you panned five hundred miles. A hunter reads that at the
+ * trailhead, walks in at 04:30, and the analysis engine has nothing to compute
+ * from — the single worst failure this product has.
  *
- * The fix is not a better boolean. It is asking the real question — *are the
- * tiles this view is drawing from actually on this device* — every time the view
- * changes, and answering with a state that can say "I do not know yet".
+ * So coverage is a *query about the current viewport*, recomputed whenever the
+ * view changes, and it has three honest answers plus two "I do not know" ones.
+ * It never falls back to "ready".
  *
- * ## Why five states and not three
+ * ## What the answer means across zooms
  *
- * `covered` / `partial` / `none` are the three answers the user asked for. The
- * other two exist because the alternative to admitting ignorance is defaulting,
- * and a default here is indistinguishable from the bug:
+ * Coverage is per zoom level, and the check is run at the tile zoom MapLibre is
+ * actually requesting right now ({@link demSourceZoom}). Two consequences,
+ * both surfaced in the label rather than hidden:
  *
- *  - `checking` — the view changed and the probe has not finished. Showing the
- *    previous view's answer during that window is precisely how a stale green
- *    survives a pan.
- *  - `unavailable` — the store could not be opened at all. There is no honest
- *    percentage to report, and "ready" would be a guess in the one direction
- *    that gets somebody hurt.
+ *  - At `DEM_MAX_ZOOM` (the deepest zoom the DEM source is ever requested at)
+ *    "Covered" is permanent for that ground: zooming further overzooms the same
+ *    tiles and needs nothing new.
+ *  - Below it, "every tile this view needs *now*" says nothing about the detail
+ *    tiles a user will need the moment they zoom in. So when the current zoom
+ *    comes back fully covered and is not yet at max, a bounded sample of
+ *    `DEM_MAX_ZOOM` tiles across the same viewport is probed too. Missing detail
+ *    downgrades the answer to Partial, and the label says it is a sample and
+ *    which zoom it is talking about. Enumerating every z15 tile under a z6 view
+ *    would be millions of lookups; sampling and saying so is the honest option.
  *
- * ## What is counted and what is sampled
+ * ## Cost
  *
- * A viewport needs roughly (width/256 + 1) × (height/256 + 1) tiles *regardless
- * of zoom*, because MapLibre picks the tile zoom to match screen resolution — a
- * phone is ~15 tiles, a 1440×900 desktop ~35, a 4K window ~160. So the normal
- * case is an exact count, every tile probed. {@link MAX_PROBES} caps the
- * pathological case (very large windows, very wide aspect ratios) with a 2D
- * stride sample; when that triggers, `sampled` is set and the UI must say the
- * percentage is approximate rather than pass an estimate off as a count.
- *
- * ## Neighbours are deliberately not counted
- *
- * `terrainProtocol` fetches each tile plus its eight neighbours, because the
- * gradient kernels need a one-pixel apron. A missing *neighbour* costs one seam
- * at the edge of the analysis; a missing *centre* is a blank tile. Coverage
- * reports the tiles the view draws, so it answers "will this view render", not
- * "will every pixel of it be seam-free". Inflating the set by a ring would
- * under-report coverage for every view whose downloaded region ends exactly at
- * the screen edge, which is most of them.
+ * This runs on `moveend` on a mid-range phone, so it is bounded twice over:
+ * the needed-tile set is capped at {@link MAX_VIEW_PROBES} (beyond that it is
+ * sampled, and `sampled` is set so the UI can say so), probes run through a
+ * small concurrency pool rather than thousands of parallel OPFS opens, and
+ * results are memoised briefly so a pan back and forth is nearly free.
  */
 
-import type { TileCoord } from '@hunt-maps/terrain';
-import { demTileKey } from '../map/demTiles';
-import type { TileStore, TileStoreStats } from './tileStore';
+import type { BBox, TileCoord } from '@hunt-maps/terrain';
+import {
+  DEM_MAX_ZOOM,
+  demSourceZoom,
+  demTileCount,
+  demTileKey,
+  demTilesForBounds,
+  sampleDemTiles,
+} from '../map/demTiles';
+import { openTileStore, type TileStore, type TileStoreStats } from './tileStore';
 
-export type CoverageState = 'checking' | 'covered' | 'partial' | 'none' | 'unavailable';
+/** Exact-count ceiling for the current view. A typical viewport is 20–60 tiles. */
+export const MAX_VIEW_PROBES = 256;
 
-export interface ViewportCoverage {
-  state: CoverageState;
-  /** DEM zoom this answer is about. Coverage is per zoom level — see `demTiles.ts`. */
-  zoom: number;
-  /** Tiles the view needs. */
-  neededCount: number;
-  /** Tiles actually probed. Equals `neededCount` unless `sampled`. */
-  probedCount: number;
-  /** Probed tiles found in the store. */
-  presentCount: number;
-  /** True when `probedCount < neededCount`: the fraction is an estimate. */
-  sampled: boolean;
-  /** `presentCount / probedCount`, 0 when nothing was probed. */
+/** Probe budget for the "will this still work when I zoom in" check. */
+export const MAX_DETAIL_PROBES = 48;
+
+/** Parallel store lookups. OPFS costs ~3 async handle opens per probe. */
+const PROBE_CONCURRENCY = 12;
+
+/** How long a probe result is trusted. Short: a download can land underneath us. */
+const PROBE_TTL_MS = 20_000;
+
+const PROBE_CACHE_MAX = 4_000;
+
+export type CoverageVerdict = 'covered' | 'partial' | 'empty';
+
+export interface CoverageResult {
+  status: CoverageVerdict;
+  /**
+   * `view` — measured at the zoom the map is requesting right now.
+   * `detail` — the current zoom was fully covered, but a sample of
+   * `DEM_MAX_ZOOM` tiles under the same view found gaps.
+   */
+  basis: 'view' | 'detail';
+  /** Tile zoom the figures below refer to. */
+  tileZoom: number;
+  /** Tiles this view needs at `tileZoom`. */
+  neededTiles: number;
+  /** Tiles actually looked up. Less than `neededTiles` iff `sampled`. */
+  probedTiles: number;
+  presentTiles: number;
+  /** `presentTiles / probedTiles`, in [0, 1]. An estimate when `sampled`. */
   fraction: number;
-  /** Probed tiles that are stored — the covered extent, for the map overlay. */
-  present: TileCoord[];
-  /** Probed tiles that are not stored — the gap, for the map overlay. */
-  missing: TileCoord[];
-  /** Which backend answered, so the UI can warn that memory does not survive a reload. */
-  backend: TileStoreStats['backend'] | null;
+  sampled: boolean;
+  /**
+   * Stored tiles, for the map overlay. Populated only for an exact `view`
+   * measurement — a scatter of sampled squares would draw an extent we did not
+   * actually measure, which is a different flavour of the same lie.
+   */
+  coveredExtent: TileCoord[];
+  backend: TileStoreStats['backend'];
+  /** In-memory fallback: real for this session, gone after a reload. */
+  volatile: boolean;
+}
+
+export type CoverageState =
+  | { kind: 'checking' }
+  | { kind: 'unavailable'; reason: string }
+  | { kind: 'result'; result: CoverageResult };
+
+export interface CoverageRequest {
+  bounds: BBox;
+  /** The *map* zoom, not the tile zoom. */
+  zoom: number;
+  /** Injected by tests; production reads the real store. */
+  store?: TileStore;
+  maxViewProbes?: number;
+  maxDetailProbes?: number;
+  signal?: AbortSignal;
+}
+
+interface CacheEntry {
+  present: boolean;
+  at: number;
+}
+
+const probeCache = new Map<string, CacheEntry>();
+
+/**
+ * Drop memoised probe results.
+ *
+ * Call after a region download or a delete: otherwise the sheet keeps
+ * reporting the pre-download answer for up to {@link PROBE_TTL_MS}, which
+ * would make a completed download look like it did nothing.
+ */
+export function invalidateCoverageCache(): void {
+  probeCache.clear();
+}
+
+async function probe(store: TileStore, tile: TileCoord): Promise<boolean> {
+  const key = `${tile.z}/${tile.x}/${tile.y}`;
+  const now = Date.now();
+  const hit = probeCache.get(key);
+  if (hit && now - hit.at < PROBE_TTL_MS) return hit.present;
+
+  const present = await store.has(demTileKey(tile));
+  if (probeCache.size >= PROBE_CACHE_MAX) {
+    // Cheap FIFO trim. The cache is an optimisation, not a source of truth.
+    const oldest = probeCache.keys().next().value;
+    if (oldest !== undefined) probeCache.delete(oldest);
+  }
+  probeCache.set(key, { present, at: now });
+  return present;
 }
 
 /**
- * Ceiling on per-move existence checks.
+ * Probe every tile through a bounded pool.
  *
- * Each probe is an OPFS directory walk or an IndexedDB read, on the main thread,
- * on a phone that is also rendering a map. 256 covers every realistic viewport
- * exactly (a 4K window needs ~160); past it we stride-sample and say so.
+ * A wide viewport is tens of tiles, but a `Promise.all` over all of them still
+ * opens that many OPFS directory handles at once, which on a cheap phone
+ * competes with the tile renderer for the same thread. Twelve at a time keeps
+ * the map interactive while panning.
  */
-export const MAX_PROBES = 256;
+async function probeAll(
+  store: TileStore,
+  tiles: TileCoord[],
+  signal?: AbortSignal,
+): Promise<TileCoord[]> {
+  const present: TileCoord[] = [];
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(PROBE_CONCURRENCY, tiles.length) }, async () => {
+    for (;;) {
+      const index = cursor++;
+      if (index >= tiles.length) return;
+      if (signal?.aborted) return;
+      if (await probe(store, tiles[index])) present.push(tiles[index]);
+    }
+  });
+  await Promise.all(workers);
+  return present;
+}
 
 /**
- * Probe the store for a view's tiles.
+ * Measure offline DEM coverage for one viewport.
  *
- * Never throws: a store that fails mid-probe reports `unavailable` rather than
- * bubbling an exception into a render, because the user still needs the rest of
- * the sheet. `store` may be `null` for "the store could not be opened".
+ * Throws if the store cannot be opened or a lookup fails — the caller turns
+ * that into an explicit `unavailable` state. It must never be swallowed into
+ * "0% covered", because "we could not read your storage" and "your storage is
+ * empty" call for different actions from the user.
  */
-export async function queryViewportCoverage(
-  store: TileStore | null,
-  tiles: TileCoord[],
-  options: { maxProbes?: number } = {},
-): Promise<ViewportCoverage> {
-  const zoom = tiles[0]?.z ?? 0;
-  if (!store) {
-    return {
-      state: 'unavailable',
-      zoom,
-      neededCount: tiles.length,
-      probedCount: 0,
-      presentCount: 0,
-      sampled: false,
-      fraction: 0,
-      present: [],
-      missing: [],
-      backend: null,
-    };
-  }
+export async function queryViewportCoverage(req: CoverageRequest): Promise<CoverageResult> {
+  const store = req.store ?? (await openTileStore());
+  const maxViewProbes = req.maxViewProbes ?? MAX_VIEW_PROBES;
+  const maxDetailProbes = req.maxDetailProbes ?? MAX_DETAIL_PROBES;
+  const volatile = store.backend === 'memory';
 
-  const probes = sampleTiles(tiles, options.maxProbes ?? MAX_PROBES);
-  const sampled = probes.length < tiles.length;
+  const tileZoom = demSourceZoom(req.zoom);
+  const needed = demTileCount(req.bounds, tileZoom);
+  const sampled = needed > maxViewProbes;
+  const probes = sampled
+    ? sampleDemTiles(req.bounds, tileZoom, maxViewProbes)
+    : demTilesForBounds(req.bounds, tileZoom);
 
-  let results: boolean[];
-  try {
-    results = await Promise.all(probes.map((t) => store.has(demTileKey(t))));
-  } catch {
-    return {
-      state: 'unavailable',
-      zoom,
-      neededCount: tiles.length,
-      probedCount: 0,
-      presentCount: 0,
-      sampled: false,
-      fraction: 0,
-      present: [],
-      missing: [],
-      backend: store.backend,
-    };
-  }
-
-  const present: TileCoord[] = [];
-  const missing: TileCoord[] = [];
-  probes.forEach((tile, i) => (results[i] ? present : missing).push(tile));
-
+  const present = await probeAll(store, probes, req.signal);
   const fraction = probes.length === 0 ? 0 : present.length / probes.length;
 
-  return {
-    state: coverageState(present.length, probes.length),
-    zoom,
-    neededCount: tiles.length,
-    probedCount: probes.length,
-    presentCount: present.length,
-    sampled,
+  const base: CoverageResult = {
+    status: present.length === 0 ? 'empty' : fraction >= 1 ? 'covered' : 'partial',
+    basis: 'view',
+    tileZoom,
+    neededTiles: needed,
+    probedTiles: probes.length,
+    presentTiles: present.length,
     fraction,
-    present,
-    missing,
+    sampled,
+    coveredExtent: sampled ? [] : present,
     backend: store.backend,
+    volatile,
   };
-}
 
-/**
- * The three honest answers.
- *
- * `covered` requires *every* probed tile, with no rounding slack: 34 of 35
- * tiles is `partial`, because the one missing tile is a blank square somewhere
- * on the screen and the user is entitled to know which square.
- *
- * An empty view (`probed === 0`, only reachable if the bounds enumerate to
- * nothing) is `none`, never `covered` — "I found no tiles to check" must not
- * read as "everything you need is here".
- */
-export function coverageState(present: number, probed: number): CoverageState {
-  if (probed === 0) return 'none';
-  if (present === 0) return 'none';
-  return present === probed ? 'covered' : 'partial';
-}
+  if (base.status !== 'covered' || tileZoom >= DEM_MAX_ZOOM) return base;
 
-/**
- * Stride-sample a tile list down to at most `max` entries.
- *
- * 2D-aware: stride in x and y separately over the tile rectangle rather than
- * every k-th element of a row-major list, which would alias with the row width
- * and can sample a single column. Always keeps the first tile, so the sample is
- * deterministic and a repeated query over an unchanged view gives an unchanged
- * answer — a percentage that jitters while the map is still would look like a
- * bug and destroy trust in the number.
- */
-export function sampleTiles(tiles: TileCoord[], max = MAX_PROBES): TileCoord[] {
-  if (tiles.length <= max) return tiles;
+  // Fully covered at the zoom on screen — but the user will zoom in, and the
+  // detail tiles are a different set. Sampled, never enumerated: at low zoom
+  // the exact set runs to millions.
+  const detailNeeded = demTileCount(req.bounds, DEM_MAX_ZOOM);
+  const detailSampled = detailNeeded > maxDetailProbes;
+  const detailProbes = detailSampled
+    ? sampleDemTiles(req.bounds, DEM_MAX_ZOOM, maxDetailProbes)
+    : demTilesForBounds(req.bounds, DEM_MAX_ZOOM);
+  const detailPresent = await probeAll(store, detailProbes, req.signal);
 
-  const xs = tiles.map((t) => t.x);
-  const ys = tiles.map((t) => t.y);
-  const x0 = Math.min(...xs);
-  const y0 = Math.min(...ys);
-  const width = Math.max(...xs) - x0 + 1;
-  const height = Math.max(...ys) - y0 + 1;
+  if (detailProbes.length === 0 || detailPresent.length === detailProbes.length) return base;
 
-  // Grow the stride until the grid fits under the cap. Starting from the ideal
-  // sqrt ratio and stepping up is exact without a solve, and runs a handful of
-  // iterations at most.
-  let stride = Math.max(1, Math.floor(Math.sqrt(tiles.length / max)));
-  for (;;) {
-    const cols = Math.ceil(width / stride);
-    const rows = Math.ceil(height / stride);
-    if (cols * rows <= max) break;
-    stride++;
-  }
-
-  return tiles.filter((t) => (t.x - x0) % stride === 0 && (t.y - y0) % stride === 0);
-}
-
-export interface CoverageDescription {
-  /** Short, glanceable, fits the sheet header. */
-  chip: string;
-  tone: 'ok' | 'warn' | 'danger' | 'neutral';
-  /** Status is never carried by colour alone. */
-  glyph: string;
-  /** The full sentence, for the sheet body and the chip's tooltip. */
-  detail: string;
-}
-
-/**
- * One place that turns coverage into words, so the chip, the body line, the
- * tooltip and the tests cannot drift apart.
- *
- * `null` means "no answer yet" and is described identically to `checking`.
- * There is deliberately no branch that produces an optimistic string from an
- * absent measurement.
- */
-export function describeCoverage(coverage: ViewportCoverage | null): CoverageDescription {
-  if (!coverage || coverage.state === 'checking') {
-    return {
-      chip: 'Checking…',
-      tone: 'neutral',
-      glyph: '◌',
-      detail: 'Checking which elevation tiles for this view are stored on this device.',
-    };
-  }
-
-  if (coverage.state === 'unavailable') {
-    return {
-      chip: 'Storage unavailable',
-      tone: 'danger',
-      glyph: '!',
-      detail:
-        'This device’s offline tile storage could not be read, so we cannot tell you what is ' +
-        'saved. Treat this view as not downloaded until it can.',
-    };
-  }
-
-  const zoomNote = `Checked at zoom ${coverage.zoom} — the zoom this view is drawing from. Zooming in can change this answer.`;
-
-  if (coverage.state === 'covered') {
-    return {
-      chip: 'Covered',
-      tone: 'ok',
-      glyph: '●',
-      detail:
-        `Every elevation tile this view needs (${coverage.probedCount}) is stored on this ` +
-        `device, so the analysis layers work here with no signal. ${zoomNote}`,
-    };
-  }
-
-  if (coverage.state === 'none') {
-    return {
-      chip: 'Not downloaded',
-      tone: 'warn',
-      glyph: '○',
-      detail:
-        'None of this view’s elevation is stored on this device. Analysis layers here need a ' +
-        `connection until you save this area. ${zoomNote}`,
-    };
-  }
-
-  const pct = percentLabel(coverage.fraction);
-  const approx = coverage.sampled ? '≈' : '';
   return {
-    chip: `Partial — ${approx}${pct}%`,
-    tone: 'warn',
-    glyph: '◐',
-    detail:
-      `Partial — ${approx}${pct}% of this view is stored on this device. The hatched area on the ` +
-      `map is the part that is missing; it will be blank with no signal. ` +
-      (coverage.sampled
-        ? `Estimated from ${coverage.probedCount} of ${coverage.neededCount} tiles. `
-        : `${coverage.presentCount} of ${coverage.probedCount} tiles. `) +
-      zoomNote,
+    status: 'partial',
+    basis: 'detail',
+    tileZoom: DEM_MAX_ZOOM,
+    neededTiles: detailNeeded,
+    probedTiles: detailProbes.length,
+    presentTiles: detailPresent.length,
+    fraction: detailPresent.length / detailProbes.length,
+    sampled: detailSampled,
+    // The current zoom is covered edge to edge, so hatching it would paint the
+    // whole screen; the gap is in a zoom the user cannot see yet, and the text
+    // is what has to carry that.
+    coveredExtent: [],
+    backend: store.backend,
+    volatile,
   };
-}
-
-/**
- * Percent for display, pinned away from both ends.
- *
- * A partial view that rounds to "100%" reads as covered and is the same lie in
- * a new costume; one that rounds to "0%" hides that some of the ground *is*
- * usable. `covered` and `none` are separate states and are the only things
- * allowed to say all or nothing.
- */
-export function percentLabel(fraction: number): number {
-  const pct = Math.round(fraction * 100);
-  return Math.min(99, Math.max(1, pct));
 }

@@ -1,17 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import {
   beddingLikelihood,
+  coldBlendWeight,
   computeThermals,
   terrainShelter,
   ThermalPhase,
   thermalPhaseAt,
   windExposure,
+  BEDDING_MAX_SOLAR_ASPECT_WEIGHT,
 } from './wind.js';
-import { computeCurvature, computeSurface } from './surface.js';
-import { centerIndex, channel, plane, ridge, syntheticGrid } from '../testing/synthetic.js';
+import { computeSurface, computeCurvature, type SurfaceField } from './surface.js';
+import { slopeInsolation, solarPosition } from './solar.js';
+import { analyze } from '../pipeline.js';
+import {
+  benchedHillside,
+  centerIndex,
+  channel,
+  plane,
+  ridge,
+  syntheticGrid,
+} from '../testing/synthetic.js';
 
 const SIZE = 31;
 const CENTER = centerIndex(SIZE);
+const RAD = Math.PI / 180;
+/** Grade (rise/run) of a slope of `deg` degrees — the tests are written in degrees. */
+const grade = (deg: number): number => Math.tan(deg * RAD);
 
 describe('windExposure', () => {
   it('scores a face pointing into the wind as windward (+1)', () => {

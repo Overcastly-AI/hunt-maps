@@ -873,6 +873,18 @@ ungulate scent human` · `cervid olfactory acuity measurement olfactometer` ·
 
 ## Rut timing
 
+> **Pass 4 (`R9`, rut regionalisation) reworked this whole section.** Passes 2
+> and 3 established that a latitude-monotone peak-breeding function is the wrong
+> functional class and assembled an eight-row seed table. Pass 4 answers the
+> three questions the backlog row actually asked — *where is latitude-only
+> defensible, where is it wrong and by how many days, and what should the model
+> say there* — by scoring the shipped function against **40 published regional
+> peaks** and by finding the mechanism paper. Headline: the shipped function is
+> within **+1 to +7 days** everywhere at ≥ 37°N, and between **−80 and +131
+> days** across the Coastal Plain, the Deep South, Texas and Florida. It is not
+> uniformly biased — **the sign of its latitude gradient is wrong in Georgia,
+> the Carolinas and Florida, and its magnitude is 6× too small in Alabama.**
+
 ### 🟢 Breeding is photoperiod-driven; northern peak is early-to-mid November
 Whitetail breeding is controlled by **decreasing photoperiod**. Fetal-aging work
 across the Midwestern USA put the **mean estimated conception date at 10
@@ -885,11 +897,90 @@ November**, with adults at **8 November**, yearlings **11 November** and fawns
 Hunting media can support 🟡, never 🟢, and that row was mis-graded on its
 source even though its conclusion was right.
 
+**Pass 4 added the mechanism and two independent stability checks**, so that
+"photoperiod, never lunar" is now supported by physiology and not only by
+correlation:
+
+- **Mechanism.** Day length is transduced by the retina and suprachiasmatic
+  nucleus into a melatonin signal that activates the reproductive axis under
+  short days and inhibits it under long days. Experimentally, artificially long
+  days (16L:8D) in autumn **delayed** onset of puberty in Upper Michigan doe
+  fawns relative to natural-daylight controls, and melatonin dosing advances
+  first oestrus in captive whitetail by **37–119 days**. Photoperiod is
+  therefore the *proximate cause*, not a correlate.
+  [Verme & Ozoga 1987, *J. Mammalogy* 68:107 — photoperiod and puberty in doe fawns](https://academic.oup.com/jmammal/article-abstract/68/1/107/1040922) ·
+  [Out-of-season breeding of captive white-tailed deer, *Theriogenology* (PubMed)](https://pubmed.ncbi.nlm.nih.gov/11071135/) ·
+  [Reproductive management in white-tailed deer, *Agroproductividad*](https://revista-agroproductividad.org/index.php/agroproductividad/en/article/download/2063/1687/8266)
+- **Inter-annual stability.** Ontario deer–vehicle collisions, 29 years
+  (1988–2016), grouped by deer management area: **no evidence of any change in
+  rut timing over 29 years**, and the top model for the date of peak collisions
+  contained **one parameter — the management area.** Growing-degree-day (a
+  weather covariate) was never significant.
+  [Deerly departed, *Ecological Informatics / Sci. Total Env.* 2024](https://www.sciencedirect.com/science/article/pii/S2666900524000042)
+  This is a *northern-range* result and it says two things at once: timing is
+  fixed year to year (photoperiod), **and even in Ontario the only predictor
+  that survives is region.**
+
+### 🟢 How precise a "peak" can honestly be — the two dispersions
+The register previously used "±4 days" for the northern peak without a source.
+It now has one, and the number means something specific.
+
+| Quantity | Value | What it bounds |
+|---|---|---|
+| SD of a **population's annual mean** conception date, year to year | **4 days**, range 12 days | how repeatable *this herd's* peak is — the calibrated case |
+| SD of **individual** conception dates within a wild population | **13.4 days**, mean range **46 days** | how wide the actual breeding spread is — never a "peak day" |
+| SD of individual conception dates, **captive** deer (TX + MS) | 13.6 days, mean range 33 days | captive vs wild dispersion is nearly identical |
+| Fraction of breeding inside a **21-day window** centred on peak | most of it; total duration 30–45 days | the operational rut window |
+
+[Dye et al. 2012, *Wildl. Soc. Bull.* 36:107–114 — Factors affecting conception date variation](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/wsb.98) ·
+[MSU Deer Lab — Ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php)
+
+**Consequence.** A model that has *not* been calibrated to the user's herd
+cannot claim better than the region-to-region spread (below, ~±8 days at
+≥ 37°N). A model that *has* been calibrated from ≥ 3 seasons of the user's own
+observations can claim ±4 days and no better. Any UI that names a single day
+without an interval is overclaiming, in the north as well as the south.
+
 ### 🔴 `peakBreedingDayOfYear` returns **319** at ≥ 40°N — off by ~5 days
 DOY 319 is 15 November. The best measured value at that latitude is **8–10
-November = DOY 312–314**. Recommend **`314`**, uncertainty ±4 days, scope
-"Midwest / northern range". Illinois sits at ~40°N, which is exactly the branch
-boundary, so this is a like-for-like correction.
+November = DOY 312–314**. Recommend **`314`**, scope "interior/upland range,
+≥ 37°N". Illinois sits at ~40°N, which is exactly the branch boundary, so this
+is a like-for-like correction.
+
+**Pass 4: the north is flat in latitude, and 314 is the right constant.** Every
+population mean found at 37.5–43°N clusters inside 2–16 November with **no
+detectable latitude trend**:
+
+| Region | Lat | Population mean / peak | Model | Error |
+|---|---|---|---|---|
+| SW Wisconsin (188 GPS bucks + conception) | 43.0°N | breeding window 23 Oct – 12 Nov | 15 Nov | −5 d |
+| New Jersey, northern adults | 40.2°N | 3–23 Nov (mid 13 Nov) | 15 Nov | +2 d |
+| Midwest (IL/OH/IN) | 40.0°N | **10 Nov** | 15 Nov | **+5 d** |
+| West Virginia | 38.8°N | 7–15 Nov | 16 Nov | +5 d |
+| Missouri | 38.5°N | 16 Nov | 17 Nov | +1 d |
+| Virginia | 37.5°N | 16 Nov | 18 Nov | +2 d |
+| Kentucky | 37.5°N | 8–15 Nov | 18 Nov | **+7 d** |
+
+[Hunsaker et al. 2025, *Ecology and Evolution* — breeding season and movement ecology of male whitetail, SW Wisconsin](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589) ·
+[NJDEP — biology of the white-tailed deer](https://dep.nj.gov/njfw/hunting/biology-of-the-white-tailed-deer/) ·
+[VA DWR — fawning dates are key to rut timing](https://dwr.virginia.gov/blog/virginias-deer-with-justin-folks-fawning-dates-are-key-to-rut-timing/)
+
+**So the right functional class in the north is a constant, not a latitude
+ramp** — and the shipped code already uses a constant there, which is the one
+part of the function that is structurally correct. Prescription:
+
+```
+lat ≥ 37°N (and not in a South/Coastal-Plain region polygon):
+    peak = DOY 314 (10 Nov)
+    interval = ±8 d   region-to-region spread of population means, from the table above
+    (±4 d if the user has ≥ 3 seasons of their own calibration — Dye et al. 2012)
+```
+The 37°N floor is chosen because every population mean at ≥ 37°N lands inside
+8–16 November, and the first counterexample appears at **34.5–35.7°N** (North
+Carolina, below). 35–37°N is a reduced-confidence band: the interior holds
+(Tennessee 17–25 Nov, E Oklahoma 17 Nov, Arkansas 18 Nov ± 7) but the Atlantic
+Coastal Plain at the same latitude does not.
+[Oklahoma Academy of Science — breeding season of whitetail in eastern Oklahoma](https://ojs.library.okstate.edu/osu/index.php/OAS/article/view/5012/4682)
 
 ### 🔴 Latitude interpolation below 40°N — **downgraded from 🔵; the functional form is wrong**
 Current: `319 + (40 − lat)·1.2` down to 34°N, then `326 + (34 − lat)·3.5`.

@@ -46,6 +46,46 @@ export function demTileKey(tile: TileCoord): TileKey {
   return { layer: DEM_LAYER, z: tile.z, x: tile.x, y: tile.y };
 }
 
+/** Stable string form of a tile — set membership, change detection, adjacency. */
+export function tileId(tile: TileCoord): string {
+  return `${tile.z}/${tile.x}/${tile.y}`;
+}
+
+/** A tile's ground footprint, for drawing coverage on the map. */
+export function tileFootprint(tile: TileCoord): BBox {
+  return tileBBox(tile);
+}
+
+/**
+ * Order-independent fingerprint of a tile set.
+ *
+ * Lets the coverage hook tell "the camera moved" from "the tiles I need
+ * changed". Nudging the map a few pixels is the former, and re-probing storage
+ * on every frame of it would cost battery for an answer that cannot have
+ * changed.
+ */
+export function tileSetSignature(tiles: TileCoord[]): string {
+  return tiles.map(tileId).sort().join(' ');
+}
+
+/** MapLibre's `getBounds()` shape, narrowed to what this module needs. */
+export interface BoundsLike {
+  getWest(): number;
+  getSouth(): number;
+  getEast(): number;
+  getNorth(): number;
+}
+
+/** `LngLatBounds` → the engine's `BBox`. */
+export function boundsToBBox(bounds: BoundsLike): BBox {
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+  };
+}
+
 /**
  * The tile zoom MapLibre will actually request for the DEM source at `mapZoom`.
  *

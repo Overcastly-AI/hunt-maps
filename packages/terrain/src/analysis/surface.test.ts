@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeCurvature, computeRuggedness, computeSurface } from './surface.js';
+import {
+  computeCurvature,
+  computeRuggedness,
+  computeSurface,
+  computeVectorRuggedness,
+  NODATA,
+} from './surface.js';
 import {
   centerIndex,
   channel,
