@@ -25,14 +25,29 @@ An `Assumed` grade is not a failure. Hiding one is.
 | 🟡 **Doctrine** | Consistent, widely-reported field practice; no measurement behind it |
 | 🔴 **Assumed** | A number chosen because the code needed one |
 
-**Current state: 14 Measured · 10 Inferred · 9 Doctrine · 18 Assumed.**
-*(Pass 3: 12 · 6 · 9 · 17. Pass 2: 10 · 5 · 8 · 18.)*
+**Current state: 14 Measured · 12 Inferred · 9 Doctrine · 28 Assumed.**
+*(Pass 4: 14 · 10 · 9 · 18. Pass 3: 12 · 6 · 9 · 17. Pass 2: 10 · 5 · 8 · 18.)*
+
+**The 🔴 count rose by ten and that is the most honest thing in this pass.**
+Nine of those ten are not new guesses — they are constants that shipped last
+night inside `R11`/`R21`/`R22` and had never been written down. The register did
+not get worse; it got accurate. The tenth, `DEFAULT_RING_RADIUS_CELLS = 8`, was
+not named in any backlog row either and was found by reading the source.
 
 Pass 2 wrote one row per number and retracted two citations. Pass 3 reopened
 every row pass 2 had closed as a settled negative and worked them with search
 rather than with memory. Four rows moved up, one negative result was overturned
 outright, and the rows that stayed 🔴 now carry the query list that justifies
 them.
+
+**Pass 5 was a single-topic pass: `R31`, shelter versus solar aspect in severe
+cold**, plus registration of the ten ungraded bedding constants. Its two most
+useful outputs are both negative: **this register had been quoting a mean
+against a maximum** and inflating the aspect mechanism ~2×, and **no study
+exists relating whitetail bed selection to a topographic wind-exposure index**,
+which leaves the term that decides the layer's winter answer uncalibrated. The
+verdict on `R31` is that the row is right that the behaviour is wrong, and wrong
+about why — see its section under Bedding.
 
 **Pass 4 was a single-topic pass: `R9`, rut regionalisation.** It scored the
 shipped `peakBreedingDayOfYear` against **40 published regional peaks**, found
@@ -368,7 +383,16 @@ model — larger than the Tobler substitution. It also interacts with land cover
 
 ## Bedding
 
-### 🟡 `idealSlopeDeg: 22` — **reopened, and the value is wrong at the top end** *(was 🔴 "settled")*
+### 🟡 `idealSlopeDeg: 22` — ⚠️ **SUPERSEDED, kept as the record of why**
+
+> **Pass 5 status note.** `idealSlopeDeg` and `slopeToleranceDeg` **no longer
+> exist**: `R11` removed them from `BeddingOptions` and replaced the Gaussian
+> with `1/(1+(s/12)²) × sigmoid((ringSlope−15)/4)`. The live parameters are
+> registered under *Bedding-model parameters shipped by `R11`/`R21`/`R22`*
+> below. Everything in this section remains the reasoning that justified the
+> replacement and the evidence the new pad term is graded against — it is
+> retained deliberately, because the next agent who wants to reintroduce a slope
+> optimum needs to read why one was removed.
 
 **What changed.** The narrow claim from pass 2 survives twenty-plus queries:
 *no peer-reviewed study reports a preferred or mean bed-site slope angle for
@@ -489,11 +513,18 @@ What the bed-site literature actually measures, and it is never the gradient:
 - **Cover above the bed.** 140 bed sites vs 100 random: significantly more cover
   immediately above night beds than above random sites.
   [Lang & Gates 1985](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Lang-and-Gates_1985_Selection-of-Sites-for-Winter-Night-Beds-by-White-tailed-Deer.pdf)
-- **Day vs night bed differences and snow depth by aspect** (NE-facing 21.7 cm,
-  SE-facing 18.1 cm). Armstrong, Euler & Racey 1983, *J. Wildl. Manage.*
-  47:880–884
+- **Snow depth by aspect and by topographic position.** ⚠️ **Pass 5 correction —
+  this register previously split one study's numbers across two papers and
+  mis-stated the effect size.** All three figures are Lang & Gates 1985's own
+  study-area means: **bottomland 11.2 cm, SE-facing slope 18.1 cm, NE-facing
+  slope 21.7 cm**; 42.0 cm was the *deepest depth recorded during the study* on
+  the NE slope, i.e. a maximum, not a mean. See the R31 verdict below — the
+  consequence is material. Armstrong, Euler & Racey 1983, *J. Wildl. Manage.*
+  47:880–884 is a real and separate paper on day-vs-night winter beds in central
+  Ontario
   ([PDF](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Armstrong-et-al_1983_Winter-bed-site-selection-by-white-tailed-deer-in-central-Ontario.pdf) —
-  server refused retrieval; abstract-level only).
+  server refused retrieval; **no numeric result from it has ever been read**, and
+  the numbers previously attributed to it here were not its).
 - **Site temperature and canopy closure** were the most influential attributes
   in mule deer bed-site selection across 236 day-beds, 152 forage sites and 439
   random locations. Slope and aspect entered the models but were not the
@@ -617,9 +648,41 @@ winter deer range, which is a *solar* criterion, not a *wind* one:
   optimize warming from the sun."
   [Maine IFW deer habitat management system](https://www.maine.gov/ifw/docs/species_planning/mammals/whitetaileddeer/habitatmanagement.pdf)
 
-And the mechanism is measured, not asserted: snow was **18.1 cm on the SE-facing
-slope against 42.0 cm on the NE-facing slope** in the same study area.
+And the mechanism is measured, not asserted — but ⚠️ **pass 5 found this
+register had overstated it by roughly 2×, and had inverted its own conclusion.**
+
+What Lang & Gates 1985 actually measured across their three study sites:
+
+| Site | Mean snow depth | Ratio vs NE slope |
+|---|---|---|
+| Bottomland (hemlock, low, sheltered) | **11.2 cm** | 0.52 |
+| SE-facing slope (the "warm aspect") | **18.1 cm** | 0.83 |
+| NE-facing slope (the "cold aspect") | **21.7 cm** | 1.00 |
+| NE-facing slope, *deepest single reading of the study* | 42.0 cm | — |
+
 [Lang & Gates 1985](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Lang-and-Gates_1985_Selection-of-Sites-for-Winter-Night-Beds-by-White-tailed-Deer.pdf)
+*(figures quoted consistently by two independent searches of the paper's body
+text; full text still unread — see reading conditions.)*
+
+**Three corrections follow, and they matter:**
+
+1. The previously-cited "18.1 vs 42.0 cm" compares **a mean against a maximum**.
+   The like-for-like aspect effect is 18.1 vs 21.7 cm — a **3.6 cm, 1.20×**
+   difference, not the 2.32× this register and `docs/BACKLOG.md` have been
+   quoting.
+2. In this study the **sheltered bottomland had the shallowest snow of all three
+   sites** — 11.2 cm, a 10.5 cm advantage over the NE slope, **~3× larger than
+   the aspect effect**. The paper cited here as the mechanism for "go to the sun
+   slope" measured topographic position beating aspect on the very variable
+   claimed as the mechanism.
+3. That bottomland figure confounds aspect, canopy (hemlock), elevation and
+   cold-air drainage, so it is **not** a clean topographic-shelter result either.
+   The honest reading is that neither term dominates by the margin anyone here
+   has been asserting.
+
+The prescriptions themselves (four agencies, south/west aspects) are unaffected
+and stand. What does not stand is the claim that a large measured snow-depth gap
+justifies weighting aspect above shelter.
 
 **Assessment and the conflict it creates.** `beddingLikelihood`'s only aspect
 term is `cos(aspect − windFrom)` — pure leeward geometry, season-blind. On a
@@ -636,8 +699,16 @@ mechanism behind them is 🟢.
 Deer select night-bed sites with **decreased wind velocity**, and conifer stands
 buffer convective heat loss.
 [Lang & Gates 1985](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Lang-and-Gates_1985_Selection-of-Sites-for-Winter-Night-Beds-by-White-tailed-Deer.pdf)
-**Scope: winter, hemlock–northern hardwood, thermal motivation.** It supports
-"deer bed out of the wind"; it does not support "deer bed leeward for scent".
+**Scope: winter, hemlock–northern hardwood, thermal motivation, and — added
+pass 5 — *night* beds specifically.** It supports "deer bed out of the wind"; it
+does not support "deer bed leeward for scent".
+
+⚠️ **It also does not calibrate `terrainShelter()`.** Lang & Gates measured wind
+velocity *at bed sites*; they did not compute a topographic exposure index, and
+this row must not be read as grading the engine's shelter term. Pass 5 searched
+for a study relating whitetail bed selection to topographic wind exposure and
+**found none** — see the `R31` section. The 🟢 here is for the criterion, not for
+any number the engine uses to express it.
 
 ### 🟡 Leeward *aspect geometry* — `cos(aspect − windFrom)`
 The specific "bed on the leeward face to watch downwind and smell upwind"
@@ -744,6 +815,293 @@ deep-snow northern forest range. It supports the date-aware insolation layer
 claim in the Appalachians below the persistent snow line, or anywhere in the
 South. It still stands as a warning against a naive "thermal cover = dense
 conifer" layer, which we have not built and should not.
+
+---
+
+## `R31` — does shelter or solar aspect dominate the cold-season bed? *(pass 5)*
+
+**The question as filed.** With `R22`'s season term live, `beddingLikelihood`
+scores a leeward-shaded plane **0.0214** against a sun-facing exposed plane
+**0.0114** at −12 °C. Aspect swings 1.7×, shelter swings 3.2×, so lee wins by
+1.88×. `R31` asks whether the 0.25 shelter floor should rise, whether the aspect
+weight should rise, or whether the balance is defensible.
+
+### Verdict: the defect is real, but **the framing that produced it was wrong in three ways**, and the fix is much smaller than the row implies
+
+**1. The evidence for "sun beats shelter" is genuinely split, and must be
+recorded as split.** Two peer-reviewed whitetail studies, both northern, point
+in opposite directions:
+
+- **Colder → more open ground.** At all four sites, deer made greater *daytime*
+  use (55 to > 80 % probability) of open vegetation at the **lowest** daily
+  minimum temperatures; use of dense conifer *decreased* as minimum temperature
+  fell on the sites where cover was most available. The authors' own conclusion,
+  near-verbatim: the thermal benefits to free-ranging cervids from increased
+  daytime exposure to solar radiation in open areas "are likely of greater
+  relative value to their energetic balance and fitness than the potential
+  thermal benefits associated with dense cover, **particularly when ambient
+  temperatures are coldest**." 🟢, Minnesota, female, 12 years, VHF + GPS.
+  [PLOS One 2013](https://journals.plos.org/plosone/article?id=10.1371%2Fjournal.pone.0065368) ·
+  [correction 2017](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0178964)
+- **Colder → more thermal cover.** Whitetail on Anticosti Island adjusted
+  within-home-range selection to thermal conditions: they **selected thermal
+  cover during cold-stress periods**, and selection for open areas increased
+  during *warmer* periods. 🟢, Québec, adult females, two contrasted winters.
+  [Courbin, Dussault, Veillette, Giroux & Côté 2017, *Behav. Ecol.* 28:1037–1046](https://academic.oup.com/beheco/article/28/4/1037/3745028)
+  *(abstract-level only.)*
+
+**Do not pick one.** Both are competent whitetail work in deep-snow range and
+they disagree. Anything the engine does here is at best a defensible position
+inside a live disagreement, and the `Confidence` chip must say so.
+
+**2. Three of the four "shelter" citations do not support the engine's shelter
+term, because they are about a different kind of shelter.** This is the error
+that has been propagating.
+
+| Source | What it actually prescribes | Does it support a *terrain* shelter term? |
+|---|---|---|
+| Maine IFW DWA guidelines | Primary Winter Shelter = **softwood crown closure ≥ 70 %**, stand height ≥ 35 ft; Secondary = 50–70 % | **No** — canopy closure, invisible to a DEM |
+| UNH Extension *Good Forestry* 6.9 | "Functional shelter is provided by softwood stands at least 35 feet tall with softwood crown closure between **65 to 70 percent**" | **No** — canopy |
+| Lang & Gates 1985 | Deer select night beds with decreased wind velocity, in hemlock bottomland | Partly — bottomland is topographic, but confounded with hemlock canopy |
+| TOPEX / windthrow literature | The method the engine implements | Yes for the **method**; says nothing about deer |
+
+[Maine DWA guidelines](https://www.maine.gov/ifw/docs/DWA_Guidelines_2.4.10.pdf) ·
+[UNH Extension 6.9 Deer Wintering Areas](https://extension.unh.edu/goodforestry/html/6-9.htm)
+
+**No study was found in this pass that measures whitetail winter bed selection
+against a *topographic* wind-exposure index.** That is a genuine negative
+result, and it means `shelterTerm` — the term currently swinging 3.2× and
+deciding the layer's winter answer — has **no species-specific empirical
+calibration at all**. It is a sound method (TOPEX) measuring a quantity nobody
+has related to deer beds. Queries run: `terrain sheltered site versus canopy
+shelter ungulate winter bed thermal microclimate topographic position lee slope
+measured wind` · `TOPEX topographic exposure wildlife habitat model deer winter
+range wind shelter index validated` · `deer elk bed leeward slope wind direction
+measured selection topographic shelter lee side telemetry study` · `white-tailed
+deer GPS collar winter habitat selection topographic wind exposure index heat
+load index Appalachian` · `deer use of cover increases with wind speed winter
+habitat selection wind chill covariate ungulate GPS` · `deer wintering area
+microclimate wind speed reduction percent conifer canopy versus open measured
+meters per second`.
+
+**3. The single agency source that speaks to *daytime* beds says sun, and
+Ridgeline's bedding layer is a daytime layer.** Every shelter-dominant citation
+in this register is a **night-bed** study (Lang & Gates) or a whole-winter-range
+prescription (Maine, UNH). The one source that separates the two:
+
+> "Hardwood stands on south- to west-facing slopes are important for deer
+> wintering areas. **During the day, deer often bed in these stands to be warmed
+> by the sun's heat.**"
+> — [UNH Extension 6.9](https://extension.unh.edu/goodforestry/html/6-9.htm) 🟡
+
+A hunter sits over this layer during shooting light. Grading a daytime layer
+against night-bed evidence is the scope error underneath `R31`.
+
+### The magnitudes, so the weighting is not chosen by taste
+
+Both effects have been quantified, and they are **the same order**:
+
+| Effect | Magnitude | Grade | Scope |
+|---|---|---|---|
+| Solar radiation reduces metabolic heat production | **29 % and 42 %** at 780 W·m⁻²; solar heat gain = 14–21 % of intercepted radiant energy | 🟢 | **Ground squirrels**, not cervids — [J. Exp. Biol. 198:1499 (1995)](https://journals.biologists.com/jeb/article-abstract/198/7/1499/6924/Effects-of-Solar-Radiation-and-Wind-Speed-on) |
+| Sheltered topography reduces heat loss | **~half** | 🔵 | Red deer; *secondary reporting, primary unread* |
+| Full solar load used in cervid biophysical models | **400 W·m⁻²** | 🟢 | [Parker & Gillingham 1990, *J. Range Manage.*](https://web.unbc.ca/~parker/Pubs/Parker%20and%20Gillingham%201990%20J%20Range%20Manage.pdf) |
+| Wind at 15 m·s⁻¹ collapses the thermoneutral zone to 4–10 °C **"regardless of incident solar levels"** | wind swamps solar at gale strength | 🟢 | Parker & Gillingham 1990, mule deer *(abstract-level only)* |
+
+**Neither dominates.** ~30–50 % versus ~50 % is parity within the uncertainty of
+a cross-species transfer. A model that resolves this into a 1.88× win for either
+face is claiming precision nobody has measured.
+
+Two further physics findings that both cut *against* a large shelter swing in
+deep winter specifically:
+
+- **Wind and solar are not separable, and the engine's multiplicative structure
+  is right about that.** "Realistic estimates of wind chill cannot be obtained
+  unless the effect of solar radiation is taken into account, and failure to
+  include solar radiation results not only in omitting solar warming but also in
+  omitting **the effects of wind in reducing that warming**." 🟢 (caribou-
+  parameterised).
+  [A windchill and solar radiation index for homeotherms, *J. Theor. Biol.* (1974)](https://www.sciencedirect.com/science/article/abs/pii/0022519374902070)
+  *(abstract-level only.)* `aspectTerm × shelterTerm` already encodes this
+  interaction — **this is a point in the current model's favour and should not
+  be refactored away.**
+- **Thick winter pelage blunts wind's marginal effect.** "Forced convection has
+  a more pronounced effect upon the insulation of **thin** pelages than on
+  thicker pelages." A whitetail in December pelage is comparatively
+  wind-resistant relative to the same deer in October. 🔵 for the direction;
+  general mammalian pelage physics, not *Odocoileus*-specific.
+
+### Concrete prescription
+
+**Do NOT raise `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` above 0.75.** Pushing it toward
+1.0 says lee is irrelevant in winter, and Courbin 2017 measures whitetail
+selecting thermal cover *during cold stress*. The lee term must not vanish.
+
+**Do raise the shelter floor, on the ramp that already exists.** Ramp it with
+`coldBlendWeight` so the model has exactly **one** cold ramp and the two cannot
+drift apart:
+
+```
+shelterFloor(T) = 0.25 + (0.65 − 0.25) × coldBlendWeight(T) / 0.75
+shelterTerm     = shelterFloor(T) + (1 − shelterFloor(T)) × clamp01(shelter[i])
+```
+
+| Property | Value |
+|---|---|
+| **Units** | dimensionless multiplier on `beddingLikelihood` |
+| **Bounds** | floor ∈ [0.25, 0.65]; `shelterTerm` ∈ [floor, 1.0] |
+| **Engages at** | +5 °C (`BEDDING_COLD_ONSET_C`), where `coldBlendWeight` is 0 and the floor is exactly 0.25 — a **true no-op** on the warm path, matching `R22`'s pattern |
+| **Saturates at** | −10 °C (`BEDDING_SEVERE_COLD_C`), floor 0.65 |
+| **At −12 °C** | shelter swing falls 3.2× → **1.47×**; aspect swing 1.7× is unchanged; the **sun face wins by ~1.15×** |
+
+**Falsifiable target for the implementing agent.** Back-solving `R31`'s own
+measurement (`shelterTerm` ratio 3.2 with floor 0.25 ⇒ the exposed plane carries
+`shelter ≈ 0.083`), the same two planes at −12 °C with floor 0.65 should give:
+
+| Plane | Today | Predicted after the fix |
+|---|---|---|
+| Leeward, shaded | 0.0214 | **0.0214** *(unchanged — a fully sheltered cell sits at `shelterTerm = 1.0` for any floor)* |
+| Sun-facing, exposed | 0.0114 | **≈ 0.0248** |
+| Ratio | 1.88× **to lee** | **≈ 1.16× to sun** |
+
+If the leeward figure moves at all, the floor was applied to the wrong end of
+the term. If the ratio lands above ~1.3×, the floor was set higher than this
+register supports — that is an overclaim, not a better fix.
+
+**The 1.15× is the point, and it should not be tuned upward.** The evidence
+supports a *narrow* reversal, not a decisive one. On a real sidehill — an SE
+face on a NW wind in January — lee and sun co-vary and that face wins on both
+terms decisively, which is the behaviour the four agencies describe. On the
+pathological opposing-plane case `R31` measured, the honest answer is "these are
+nearly equal, sun slightly ahead in daylight," and 1.15× says that.
+
+**Grades of the prescription, stated separately because they differ:**
+
+- **Direction** (floor rises with cold) — 🔵 **Inferred**: PLOS One 2013's
+  measured increase in open-type daytime use as minimum temperature falls, plus
+  the thick-pelage convection result, plus UNH 6.9 on daytime beds. Recorded
+  against Courbin 2017, which disagrees.
+- **Endpoints 0.25 and 0.65** — 🔴 **Assumed.** Chosen to put the shelter swing
+  at parity with the measured aspect swing, because the physiology says the two
+  effects are the same order. No source sets either number. **A build agent must
+  not present this as a measured calibration.**
+- **Ramp window** — inherits `coldBlendWeight`'s grades below.
+
+### Three findings that must travel with the fix
+
+1. **Sequence after `R27`, not before.** `slopeInsolation()` is the solar input
+   and `castShadows()` is never called (`R27`, verified). A shaded bench
+   currently reads as fully sunlit. **Raising the influence of the solar side of
+   this trade while the solar field ignores terrain shadow amplifies an existing
+   error** — the sun-face score would rise on ground that is in shade at 07:00.
+   Land `R27` first.
+2. **The engine has no wind speed, and this parameter is a wind-speed
+   assumption in disguise.** `windSpeedKph` exists in `packages/shared`
+   (`domain.ts:154`) and never reaches `beddingLikelihood`, which takes only
+   `windFromDeg`. Parker & Gillingham's "regardless of incident solar levels" at
+   15 m·s⁻¹ versus near-irrelevance in calm air means the correct shelter
+   weighting **spans the whole plausible range depending on a variable we do not
+   read**. Any fixed floor — 0.25 or 0.65 — silently assumes one wind speed for
+   every condition. File as the real long-term fix; the floor ramp is the
+   interim.
+3. **`beddingLikelihood` has no day/night switch, and the literature splits on
+   exactly that axis.** Lang & Gates measured *night* beds; UNH 6.9 prescribes
+   south/west slopes for *day* beds. The layer is used in daylight, so the
+   daytime reading is the right default — but that is currently an accident, not
+   a decision, and it should be recorded as one.
+
+---
+
+## Bedding-model parameters shipped by `R11` / `R21` / `R22` *(registered pass 5)*
+
+These landed ungraded because the agent that chose them is forbidden from
+grading its own values. Registered here for the first time.
+
+### 🔵 `BEDDING_PAD_HALF_MAX_SLOPE_DEG = 12` — pad-term half-max, degrees
+`padTerm = 1/(1 + (s/12)²)`, replacing the retracted 22° Gaussian.
+
+**The shape is the strong part and it is 🟢:** Rowland et al. 2018 measured a
+**monotone declining** cervid response to slope with no interior optimum, slope
+the single strongest predictor. A Gaussian peaking at 22° was the wrong
+functional class, not merely mis-centred, and removing it is the most
+consequential bedding correction this register has produced.
+
+**The value 12 is 🔵 by the following inference, stated so it can be attacked:**
+a half-max at 12° puts the term at **0.20 at 24.2°** (top of the BC WHR
+whitetail winter-range band, 10–45 %) and **0.34 at 16.7°** (top of the
+secondary elk daily-use preference band, 15–30 %). The kernel therefore spends
+its mass across exactly the range two independent sources report as used, and is
+nearly exhausted where both report use ceasing. **What this is not:** a measured
+half-max. Converting a reported *use band* into the half-max of a Cauchy kernel
+is a transformation no source performed. Scope: BC interior + Idaho/Montana elk;
+nothing Appalachian.
+
+### 🔴 `BEDDING_RING_MIN_SLOPE_DEG = 15` — surround-slope sigmoid midpoint, degrees
+Nothing measured sets this, and **the justification in the source comment is
+wrong on its own terms.** The comment places 15° at "the bottom of the BC WHR
+band"; that band is 10–45 %, whose bottom is **5.7°** — 15° is its *centre*.
+
+The deeper problem is a category slip that survives fixing the arithmetic: BC
+WHR describes **the slope deer occupy**, not the slope *surrounding* a bed. Using
+a use-band statistic as a surround threshold assumes bed and surround are drawn
+from the same distribution, which is the exact assumption the pad/ring split
+exists to deny. Its sibling `minSurroundSlopeDeg: 18` in `detectBenches` is
+already registered as having nothing behind it; this is the soft version of the
+same unsupported number. Stays 🔴. Ordering (surround steeper than pad) is 🟡
+doctrine and is well supported; the threshold is not.
+
+### 🔴 `BEDDING_RING_SOFTNESS_DEG = 4` — logistic width, degrees
+**Not a biological parameter.** It is a numerical-stability choice preventing
+cell-to-cell flicker along breaks of slope, and the code says so. Registered
+only so it is not mistaken for one. No literature sought or needed; if it is
+ever surfaced in the UI as a biological claim, that is a defect.
+
+### 🔴 `BEDDING_VRM_FULL_COVER = 0.06` — VRM at which the cover term saturates
+Flagged by its own author as geometry, not observation (`R33`), and that
+assessment is correct and is upheld. VRM ≈ σ²/2 for small dispersion, so 0.06 is
+"surface normals vary by roughly ±20° RMS in the window". **A defensible scale
+argument is not a measurement**, and no source relates any VRM value to a deer
+bed. Queries: `vector ruggedness measure VRM values deer bed site selection
+threshold Sappington bighorn 0.06 interpretation`.
+
+**One new observation that sharpens `R33`.** VRM output ranges 0–1 in principle
+but **typical values for natural terrain run 0 to about 0.4**
+([Sappington et al. 2007](https://wildlife.onlinelibrary.wiley.com/doi/10.2193/2005-723)
+and the GRASS/`spatialEco` implementations that follow it). Saturating at 0.06
+therefore pins the cover term at its **ceiling across most real hill country**,
+so a term intended to discriminate concealment is largely constant over the
+ground a hunter is actually looking at — a modelling consequence independent of
+whether 0.06 is the "right" number. Worth measuring on a real tile before the
+ground-truthing work `R33` asks for.
+
+### 🔴 `DEFAULT_VRM_RADIUS_CELLS = 4` — cover-term window radius (9×9, ≈ 90 m at 10 m cells)
+🔵 for the **direction** — "coarser scales of ruggedness may be more related to
+viewsheds and concealment" is already in this register, and 9×9 is properly
+coarser than the 3×3 it replaced. 🔴 for **4**: no source nominates a window
+size for cervid concealment. Sappington et al. 2007 tested multiple window sizes
+for bighorn; **their conclusion on scale is found-but-unread** and is the
+cheapest available upgrade for this row.
+
+### 🔴 `DEFAULT_RING_RADIUS_CELLS = 8` — surround-ring radius (≈ 80 m at 10 m cells)
+Unregistered until now and not named in any backlog row. Same status as the VRM
+radius: a scale choice with no source. Registered so it is not invisible.
+
+### 🔴 Bedding cover-term floor `0.4` and shelter floor `0.25`
+`coverTerm = 0.4 + 0.6·(vrm/vrmFull)` and `shelterTerm = 0.25 + 0.75·shelter`
+each carry a floor that sets **how much the term is allowed to matter**, and
+neither was registered. These two constants, not the thresholds above them,
+decide which term wins when the terms disagree — which is precisely how `R31`
+happened. Both 🔴. The shelter floor is the subject of the `R31` prescription
+above; the cover floor 0.4 has had no scrutiny at all and should get some.
+
+### Cold-blend ramp — `coldBlendWeight`, graded per endpoint
+
+| Constant | Value | Grade | Basis |
+|---|---|---|---|
+| `BEDDING_COLD_ONSET_C` | +5 °C | 🔴 **Assumed** | Above **every** measured cervid lower critical temperature found (below), so the ramp begins while the deer is still thermoneutral. Harmless — the weight is near zero there — and it correctly makes the term a no-op through October. But no source sets +5 °C. A secondary summary asserting deer "benefit from increased direct exposure to sun below 5 °C" surfaced in search and **could not be traced to a primary source**; it is not cited here. |
+| `BEDDING_SEVERE_COLD_C` | −10 °C | 🔵 **Inferred** — *upgraded this pass* | Measured LCT for white-tailed deer fawns **fed a natural browse diet: −11.2 °C** (a 40 % rise in thermoneutral heat production moved it from −0.8 °C fasted to −11.2 °C fed), by indirect respiration calorimetry, 18 fasting + 18 on-feed trials. −10 °C sits **1.2 °C** from a measured physiological threshold for this species: below it a fed fawn must catabolise tissue. [Can. J. Zool. (1999)](https://cdnsciencepub.com/doi/10.1139/z99-111) *(abstract-level only.)* **Caveat: fawns.** Adults have a better surface-to-volume ratio and a lower LCT, so −10 °C is conservative for the mature buck the layer is aimed at. Corroborating band: black-tailed deer winter thermoneutral limits −6 to +18 °C. |
+| `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` | 0.75 | 🔴 **Assumed** | Chosen so lee never disappears. Defensible, unmeasured, and per the `R31` verdict **should not be raised**. |
+| Ramp shape | linear in T | 🔴 **Assumed** | Nothing measured prescribes linearity. Metabolic cost below LCT *is* approximately linear in the temperature deficit, which makes linear a reasonable default — recorded as reasoning, not as a source. |
 
 ---
 
@@ -1896,11 +2254,20 @@ is the whole point of this register.
 | 18 | Add a season/temperature-weighted **solar-aspect** term to bedding; leeward-only points at the deepest snow on a south wind in January | none → 🟡 | new |
 | 19 | `SecondRut` window `+24…+38 d` → **`+24…+31 d`**, peak +27, from the 25–28 d oestrous cycle | 🔴 → 🔵 | new |
 | 20 | Soften the `PHASE_NOTES` lockdown claim to record the sightings-vs-movement disagreement rather than assert it | 🟡 → 🔴 | new |
+| 26 | **Correct the Lang & Gates snow figure everywhere it is quoted.** "18.1 vs 42.0 cm" is a mean against a maximum; the like-for-like figures are 18.1 SE / 21.7 NE (1.20×), with the sheltered bottomland lowest of all at 11.2 cm. Present in `docs/BACKLOG.md`'s `R31` row and in this register's own pass-3 changelog. **This is the number the case for raising the aspect weight rests on** | 🟢 (corrected) | `R31` |
+| 27 | **`R31` fix: ramp the bedding shelter floor 0.25 → 0.65 on the existing `coldBlendWeight`**, engaging at +5 °C and saturating at −10 °C. Do **not** raise `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`. Target on `R31`'s opposing planes: sun face ahead by ~1.15×, not 1.9× either way | 🔴 → 🔵 (direction) | `R31` |
+| 28 | **Land `R27` (`castShadows` wiring) before item 27.** Raising the solar side of the trade while the insolation field ignores terrain shadow amplifies an existing error onto the exact ground it decides | — | `R27` blocks `R31` |
+| 29 | **Feed `windSpeedKph` into `beddingLikelihood`.** The correct shelter weighting spans the whole plausible range with wind speed (Parker & Gillingham: at 15 m·s⁻¹ wind swamps solar "regardless of incident solar levels"), and the engine reads only `windFromDeg`. Any fixed floor is a hidden wind-speed assumption | 🔴 → 🔵 | new |
+| 30 | **Record the whitetail cold-cover disagreement in the UI, do not resolve it.** PLOS One 2013 (MN, 12 yr): colder → more open. Courbin et al. 2017 (Anticosti): cold stress → more thermal cover. Both peer-reviewed, both northern whitetail | — | `R10` |
+| 31 | **Decide day-vs-night explicitly.** Every shelter-dominant citation is a night-bed or whole-range source; the only daytime-specific one prescribes south/west slopes. The layer is used in daylight by accident, not by decision | — | new |
+| 32 | Measure the realised distribution of `coverTerm` on a real tile — VRM saturating at 0.06 against a natural range of 0–0.4 likely pins it at ceiling across most hill country | — | `R33` |
 
-Item 13 would resolve more red rows than everything else combined. Items 2 and 3
-are corrections to things we currently state confidently and wrongly, and should
-go first. Items 14–17 and 19 are the pass-3 additions that come with a number
-attached and are therefore the cheapest to land.
+Item 13 would resolve more red rows than everything else combined. Items 2, 3
+and **26** are corrections to things we currently state confidently and wrongly,
+and should go first. Items 14–17 and 19 are the pass-3 additions that come with
+a number attached and are therefore the cheapest to land. **Items 27–29 are
+ordered and must stay ordered: 28 before 27, and 29 supersedes 27 whenever a
+wind speed becomes available.**
 
 ---
 
@@ -1914,7 +2281,7 @@ attached and are therefore the cheapest to land.
 | Cover term `ruggedness / 4 m` | 🔴 "invented, no literature" | concept 🔵, index choice 🔵, constant 🔴 — **plus a slope double-count defect** | Riley 1999 design intent; Sappington 2007 VRM |
 | Terrain shelter radius | not registered | 🔵 **500 m** | distance-limited TOPEX tested against 7 radii |
 | `SecondRut` +24…+38 d | unverified | 🔵 **+24…+31 d** | oestrous cycle 25–28 d, sourced |
-| Warm-aspect winter selection | not registered | 🟡, and it **conflicts with our leeward-only aspect term** | four agencies + measured 18 vs 42 cm snow by aspect |
+| Warm-aspect winter selection | not registered | 🟡, and it **conflicts with our leeward-only aspect term** | four agencies + ~~measured 18 vs 42 cm snow by aspect~~ ⚠️ **pass 5: that comparison was a mean against a maximum — see pass-5 changelog** |
 | Rut region lookup | "recommended, no data" | 🟢 **eight-row seed table** | SCDNR, GA DNR, MDWFP, TPWD, FWC, Turner 2019 |
 | Lockdown doctrine | 🟡 | 🔴 | GPS collar data contradicts it |
 | `impassableSlopeDeg: 55` | 🔴 | 🔴 **(with reason)** | the cervid slope literature has no thresholds at all, by construction |
@@ -1941,3 +2308,24 @@ attached and are therefore the cheapest to land.
 | Mean conception vs huntable peak | conflated | 🔵 **disputed, range recorded** | −14 d (MDWFP) / −4…−6 d (Hunsaker) / ≈0 d (GA DVC). Our −6 survives, inside the GPS estimate |
 | GA county + FL zone tables | "read the PDFs before implementing" | **confirmed unreachable**, ledger filed | `curl` 403 at CONNECT for both hosts. Only 3 GA counties are confirmed, from the PDF's indexed title. Secondary summaries of the GA map **contradict each other** on coastal timing |
 | Elk / mule deer rut dates | asserted in the transfer table | 🟡 **sourced** | elk peak within 5–10 d of the autumnal equinox; mule deer late Nov–mid Dec. DOY 314 is ~7 weeks wrong for elk |
+
+---
+
+## Pass-5 changelog — `R31`, shelter vs solar aspect, and the ungraded bedding set
+
+| Row | Before | After | Why |
+|---|---|---|---|
+| Lang & Gates snow depths | "18.1 cm SE vs **42.0 cm** NE", quoted as the measured mechanism | 🟢 **corrected: 11.2 bottomland / 18.1 SE / 21.7 NE (means); 42.0 was the study maximum** | A mean was being compared against a maximum, inflating the aspect effect from **1.20× to 2.32×**. The same study's **sheltered bottomland had the shallowest snow of all three sites**, a 10.5 cm advantage ≈ 3× the aspect effect |
+| Armstrong, Euler & Racey 1983 | credited with "NE 21.7 / SE 18.1 cm" | **mis-attribution retracted** | Those are Lang & Gates' figures. No numeric result from Armstrong et al. has ever been read here; the paper is real and remains found-but-unread |
+| `R31` premise ("four agencies prescribe shelter") | treated as supporting the engine's shelter term | **category error identified** | Maine IFW and UNH Extension prescribe **softwood crown closure ≥ 70 % / 65–70 %** — canopy, invisible to a DEM. The engine's shelter term is topographic |
+| Topographic wind shelter as a whitetail bed criterion | implicitly 🟢 via Lang & Gates | 🔴 **no literature found**, six distinct queries logged | Lang & Gates measured *wind velocity at night beds*, not a topographic exposure index. **The term that swings 3.2× and decides the winter answer has no species-specific calibration** |
+| "Colder → deer seek shelter" | assumed settled | **recorded as a live disagreement** | PLOS One 2013 (MN, 12 yr): colder → **more open**, authors say solar gain outweighs cover benefit "particularly when temperatures are coldest". Courbin et al. 2017 (Anticosti): cold stress → **more thermal cover**. Both peer-reviewed northern whitetail |
+| Relative magnitude of the two effects | never quantified | 🔵 **same order: solar 29–42 % vs shelter ~50 %** | J. Exp. Biol. 198:1499 (ground squirrels, 780 W·m⁻²) vs red deer sheltered-topography reporting. Parity within cross-species transfer error — **neither justifies a 1.88× win** |
+| `aspectTerm × shelterTerm` multiplicative structure | unexamined | 🔵 **vindicated** | Wind reduces solar warming as well as adding loss (*J. Theor. Biol.* 1974) — the interaction is real and the product already encodes it. Do not refactor to additive |
+| `BEDDING_SEVERE_COLD_C = −10 °C` | ungraded | 🔵 **Inferred** | Measured LCT for fed whitetail fawns = **−11.2 °C** (Can. J. Zool. 1999). Within 1.2 °C of a species-specific physiological threshold. Caveat: fawns, so conservative for adults |
+| `BEDDING_PAD_HALF_MAX_SLOPE_DEG = 12` | ungraded | 🔵 **Inferred**, shape 🟢 | Rowland 2018's monotone decline is measured; 12° places the term at 0.20 at the top of the BC WHR band and 0.34 at the top of the elk band. The *shape* fix mattered more than the value |
+| `BEDDING_RING_MIN_SLOPE_DEG = 15` | ungraded | 🔴 **Assumed**, and its stated justification is wrong | The comment calls 15° "the bottom of the BC WHR band"; that band bottoms at **5.7°** — 15° is its centre. And a *use* band cannot set a *surround* threshold without assuming what the pad/ring split exists to deny |
+| `BEDDING_VRM_FULL_COVER = 0.06` | ungraded, flagged by author | 🔴 **Assumed — upheld**, with a new consequence | Natural terrain VRM runs 0–~0.4, so saturating at 0.06 pins the cover term at ceiling across most hill country. `R33`'s ground-truthing stands |
+| `DEFAULT_VRM_RADIUS_CELLS = 4`, `DEFAULT_RING_RADIUS_CELLS = 8`, `BEDDING_RING_SOFTNESS_DEG = 4`, cover floor `0.4`, shelter floor `0.25`, `BEDDING_COLD_ONSET_C = 5`, `BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75`, linear ramp | unregistered | 🔴 **Assumed, all seven** | Four of them were in no backlog row at all. The two **floors** are the constants that decide which term wins a disagreement — i.e. the actual cause of `R31` — and neither had been looked at |
+| Wind speed | not considered | 🔴 **new gap** | `windSpeedKph` exists in `packages/shared/src/domain.ts:154` and never reaches the engine. Every fixed shelter floor is a hidden wind-speed assumption |
+| Day vs night beds | not distinguished | 🔴 **new gap** | The literature splits on exactly this axis and the layer's daytime reading is currently an accident rather than a decision |
