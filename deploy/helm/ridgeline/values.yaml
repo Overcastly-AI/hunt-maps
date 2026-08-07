@@ -9,8 +9,22 @@ fullnameOverride: ""
 # -----------------------------------------------------------------------------
 # Images
 # -----------------------------------------------------------------------------
-# Published by .github/workflows/publish-images.yml on every push to main and
-# to claude/** branches, and on v* tags.
+# Built locally by default, NOT pulled. That is not a preference — the
+# registry images do not exist:
+#
+#   - hunt-maps-web has never built successfully.
+#   - hunt-maps-api built only on a feature branch, so its tags are
+#     `claude-…` and `sha-…`. There is no `latest`: the workflow gates that
+#     tag on `is_default_branch`, and no run has ever completed on main.
+#   - both packages are private regardless.
+#
+# GitHub Actions stopped scheduling runs entirely partway through
+# development and did not resume, so pointing this chart at ghcr by default
+# would guarantee ImagePullBackOff on both services — a failure that reports
+# "unauthorized" and reads like a permissions problem rather than a missing
+# image. See deploy/helm/README.md for the build-and-side-load step, and
+# switch these back to ghcr.io/overcastly-ai/hunt-maps-{api,web} once a run
+# has genuinely published them.
 #
 # `IfNotPresent` rather than `Always`: for local work with a side-loaded image,
 # `Always` makes a kind/minikube node reach for a registry copy of a tag that
@@ -28,8 +42,8 @@ image:
 
 api:
   image:
-    repository: ghcr.io/overcastly-ai/hunt-maps-api
-    tag: latest
+    repository: ridgeline/api
+    tag: dev
   replicaCount: 1
   service:
     port: 3001
@@ -57,8 +71,8 @@ api:
 
 web:
   image:
-    repository: ghcr.io/overcastly-ai/hunt-maps-web
-    tag: latest
+    repository: ridgeline/web
+    tag: dev
   replicaCount: 1
   service:
     port: 80
@@ -112,7 +126,7 @@ externalDatabase:
 # -----------------------------------------------------------------------------
 # Redis — off, and it should stay off until something uses it
 # -----------------------------------------------------------------------------
-# docker-compose.yml starts Redis and passes REDIS_URL to the API, but nothing
+# docker-compose.dev.yml starts Redis and passes REDIS_URL to the API, but nothing
 # in apps/api consumes it: there is no redis/ioredis/bull dependency in
 # apps/api/package.json and no import anywhere in apps/api/src. Shipping it
 # enabled would mean every operator runs a cache that nothing reads.
