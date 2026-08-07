@@ -77,6 +77,30 @@
               "maximum": 100
             }
           }
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod-level security context. runAsUser must be numeric when runAsNonRoot is true \u2014 the kubelet cannot verify a named user and refuses to start the container.",
+          "properties": {
+            "runAsNonRoot": {
+              "type": "boolean"
+            },
+            "runAsUser": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "runAsGroup": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fsGroup": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "seccompProfile": {
+              "type": "object"
+            }
+          }
         }
       }
     },
@@ -105,6 +129,30 @@
         },
         "pdb": {
           "$ref": "#/definitions/pdb"
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod-level security context. runAsUser must be numeric when runAsNonRoot is true \u2014 the kubelet cannot verify a named user and refuses to start the container.",
+          "properties": {
+            "runAsNonRoot": {
+              "type": "boolean"
+            },
+            "runAsUser": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "runAsGroup": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fsGroup": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "seccompProfile": {
+              "type": "object"
+            }
+          }
         }
       }
     },
@@ -142,6 +190,30 @@
             },
             "storageClass": {
               "type": "string"
+            }
+          }
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod-level security context. runAsUser must be numeric when runAsNonRoot is true \u2014 the kubelet cannot verify a named user and refuses to start the container.",
+          "properties": {
+            "runAsNonRoot": {
+              "type": "boolean"
+            },
+            "runAsUser": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "runAsGroup": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fsGroup": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "seccompProfile": {
+              "type": "object"
             }
           }
         }
@@ -215,6 +287,30 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "description": "Pod-level security context. runAsUser must be numeric when runAsNonRoot is true \u2014 the kubelet cannot verify a named user and refuses to start the container.",
+      "properties": {
+        "runAsNonRoot": {
+          "type": "boolean"
+        },
+        "runAsUser": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runAsGroup": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fsGroup": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seccompProfile": {
+          "type": "object"
         }
       }
     }

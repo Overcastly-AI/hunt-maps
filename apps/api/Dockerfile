@@ -61,7 +61,15 @@ ENV NODE_ENV=production
 # inside a postinstall that reads like a corrupt install.
 COPY --from=build --chown=node:node /app /app
 ENV HOME=/home/node
-USER node
+
+# Numeric, not `USER node`. Kubernetes `runAsNonRoot: true` makes the kubelet
+# verify the user is not root *before* starting the container, and it can only
+# do that from a numeric UID — a name it cannot resolve. `USER node` produces:
+#   container has runAsNonRoot and image has non-numeric user (node),
+#   cannot verify user is non-root
+# and the pod never starts (Init:CreateContainerConfigError). 1000:1000 is the
+# `node` user the base image ships.
+USER 1000:1000
 
 WORKDIR /app/apps/api
 EXPOSE 3001
