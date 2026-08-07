@@ -22,6 +22,26 @@ The analytics engine, validated against analytically-known surfaces.
 - [x] Pinch-point detection; corridor centreline tracing
 - [x] Saved terrain filter AST with validation; 7 doctrine-encoding presets
 - [x] 140 unit tests against closed-form synthetic surfaces
+- [x] **Bedding model corrected — `BACKLOG R21`, `R11`, `R22`, 166 tests.**
+      Three defects in `beddingLikelihood`, all of which rendered a confident
+      colour a hunter would act on:
+      - the cover term was Riley TRI, which correlates with slope *by
+        construction*, so every steep cell was rewarded twice — once by the
+        slope term and again by "cover". Replaced with Sappington VRM over a
+        9×9 window (summed-area, O(n), radius-independent), which is the
+        alternative Sappington et al. 2007 built for exactly this reason.
+      - the slope term was a Gaussian peaking at 22°, which contradicted
+        `detectBenches`' own geometry and told a user a 10° shelf was worse
+        bedding than a 22° sidehill. Now monotone, half-max at 12°, sharing
+        `ringSlopeStats` with `detectBenches` so the two cannot drift again.
+      - the only aspect term was leeward geometry, season-blind, so on a south
+        wind in January it pointed at north-facing ground — the deepest snow
+        and coldest aspect on the property. Now blended with a solar-aspect
+        term weighted by temperature, and a **no-op when temperature is
+        unset**, asserted bit-identical rather than approximately equal.
+      Not closed by this: shelter still dominates the cold-season answer
+      (`BACKLOG R31`), and the layer renders dimmer because `HEAT_RAMP` is
+      absolute while the model is ordinal (`R32`).
 
 ## ✅ Phase 1 — Full-stack foundation
 
