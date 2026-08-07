@@ -21,6 +21,23 @@ RUN pnpm --filter @hunt-maps/terrain build \
  && pnpm --filter @hunt-maps/api exec prisma generate \
  && pnpm --filter @hunt-maps/api build
 
+# Assert the entrypoint exists, at build time, with a message that says what
+# to do about it.
+#
+# `nest build` does NOT emit dist/main.js here. The API's tsconfig spans the
+# workspace packages, so TypeScript keeps the directory structure relative to
+# their common root and the entrypoint lands at dist/apps/api/src/main.js.
+# Nothing catches that: the image builds, `docker build` is green, the layer
+# is pushed — and the container dies on start with MODULE_NOT_FOUND. Pin it
+# here so a tsconfig change that moves the output fails the build rather than
+# the deployment.
+RUN test -f apps/api/dist/apps/api/src/main.js \
+ || (echo "ERROR: expected entrypoint at apps/api/dist/apps/api/src/main.js" \
+  && echo "nest build emitted this instead:" \
+  && find apps/api/dist -name 'main.js' \
+  && echo "Update the CMD in this Dockerfile and apps/api/package.json to match." \
+  && exit 1)
+
 FROM base AS runtime
 # OCI metadata. `org.opencontainers.image.source` is what makes GitHub link a
 # published package back to this repository — without it the package page has
@@ -31,9 +48,28 @@ LABEL org.opencontainers.image.source="https://github.com/Overcastly-AI/hunt-map
       org.opencontainers.image.title="Ridgeline API" \
       org.opencontainers.image.description="NestJS + Prisma + PostGIS backend for the Ridgeline hunting map"
 ENV NODE_ENV=production
-COPY --from=build /app /app
+
+# Run as the unprivileged `node` user the base image already ships (uid 1000).
+#
+# `--chown` on the COPY rather than a separate `chown -R` afterwards: a chown
+# of an entire node_modules tree is a full extra image layer the size of the
+# tree, which roughly doubles the image for no benefit.
+#
+# HOME is set explicitly because pnpm and Prisma both write there — pnpm for
+# its store metadata, Prisma for query-engine caches. Without it they inherit
+# root's /root, which uid 1000 cannot write, and the failure is an EACCES deep
+# inside a postinstall that reads like a corrupt install.
+COPY --from=build --chown=node:node /app /app
+ENV HOME=/home/node
+USER node
+
 WORKDIR /app/apps/api
 EXPOSE 3001
+
 # Migrate on boot so a fresh volume comes up with PostGIS enabled and the
 # schema in place, rather than failing on the first spatial query.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
+#
+# The Helm chart overrides this: on Kubernetes the migration runs as a
+# pre-upgrade hook Job instead, because with more than one replica every pod
+# would otherwise race to apply the same migration on every rollout.
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/apps/api/src/main.js"]

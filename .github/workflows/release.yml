@@ -74,6 +74,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # Keyless cosign signing exchanges this OIDC token for a short-lived
+      # certificate, so there is no private key to store or rotate. Without it
+      # the signing step fails with an auth error that looks like a registry
+      # problem.
+      id-token: write
 
     strategy:
       # Don't let one image failing cancel the other — a release with the API
@@ -95,6 +100,7 @@ jobs:
           # disagree.
           ref: v${{ needs.release.outputs.version }}
 
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -118,6 +124,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -127,12 +134,33 @@ jobs:
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.version=${{ needs.release.outputs.version }}
-          # amd64 only. Nothing here deploys to arm, and building it under
-          # QEMU roughly triples the release time for an architecture no one
-          # pulls. Add linux/arm64 when there is a real arm target.
-          platforms: linux/amd64
+          # Both architectures. arm64 costs build time under QEMU, but a
+          # release artefact that only runs on one architecture is not a
+          # release — Apple Silicon and Graviton are both ordinary targets,
+          # and finding out at `docker run` is far more expensive than the
+          # extra minutes here. Development images (publish-images.yml) stay
+          # amd64-only, where the tradeoff genuinely does favour speed.
+          platforms: linux/amd64,linux/arm64
+          # Supply-chain metadata: a signed SLSA provenance attestation and an
+          # SBOM, both attached to the image in the registry.
+          provenance: mode=max
+          sbom: true
           cache-from: type=gha,scope=release-${{ matrix.name }}
           cache-to: type=gha,scope=release-${{ matrix.name }},mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the published image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          # Sign by digest, never by tag. A tag is mutable — signing
+          # `:latest` produces a signature that stops matching the moment the
+          # tag moves, which is worse than no signature because it looks like
+          # tampering.
+          cosign sign --yes \
+            "ghcr.io/${{ github.repository_owner }}/hunt-maps-${{ matrix.name }}@${DIGEST}"
 
       - name: Summarise
         run: |
@@ -150,6 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # attach the packaged chart to the release
+      packages: write # push the chart to GHCR as an OCI artifact
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,7 +192,26 @@ jobs:
       - name: Lint and package
         run: |
           helm lint ./deploy/helm/ridgeline
+          # Render every conditional path before publishing. Most chart bugs
+          # live in a branch the default values never exercise, and a chart
+          # that only renders with defaults is a chart that breaks the first
+          # time someone turns something on.
+          helm template rl ./deploy/helm/ridgeline >/dev/null
+          helm template rl ./deploy/helm/ridgeline \
+            --set ingress.enabled=true --set networkPolicy.enabled=true \
+            --set api.pdb.enabled=true --set web.pdb.enabled=true \
+            --set api.autoscaling.enabled=true >/dev/null
+          helm template rl ./deploy/helm/ridgeline \
+            --set externalDatabase.url=postgresql://u:p@h:5432/d >/dev/null
           helm package ./deploy/helm/ridgeline --destination dist
+
+      - name: Push the chart to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+          helm push \
+            "dist/ridgeline-${{ needs.release.outputs.version }}.tgz" \
+            "oci://ghcr.io/${{ github.repository_owner }}/charts"
 
       - name: Attach to the release
         env:

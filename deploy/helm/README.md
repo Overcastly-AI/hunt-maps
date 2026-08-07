@@ -62,6 +62,90 @@ helm upgrade ridgeline ./deploy/helm/ridgeline -n ridgeline \
   --set image.pullSecrets[0].name=ghcr
 ```
 
+## Giving it a hostname
+
+```bash
+helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+  --version 1.0.0 -n ridgeline --create-namespace \
+  --set ingress.enabled=true \
+  --set ingress.host=ridgeline.localtest.me \
+  --set ingress.className=nginx
+```
+
+`*.localtest.me` resolves to 127.0.0.1 from public DNS, so there is nothing to
+add to `/etc/hosts`.
+
+**`CORS_ORIGINS` picks the host up automatically.** Forgetting it is the most
+common way this chart produces a broken-looking install — the app loads, the
+map chrome renders, and every request for data is blocked by the browser citing
+an origin nobody typed. The chart appends `scheme://host` to whatever
+`api.corsOrigins` holds, and takes the scheme from your `ingress.tls` config,
+so an https host does not silently get an http origin.
+
+Two things that are on you:
+
+- **An ingress controller has to exist.** kind and k3d ship none by default, so
+  the Ingress object is created, `kubectl get ingress` looks right, and nothing
+  routes. On kind, install ingress-nginx and create the cluster with
+  `extraPortMappings` for 80/443 — without those the controller is reachable
+  only from inside the node.
+- **`ingress.className` must match the controller.** A wrong or missing class
+  is silently ignored by every controller in the cluster, which presents
+  identically to having no controller at all.
+
+Docker Desktop's Kubernetes publishes an ingress controller on localhost:80
+directly, so `http://ridgeline.localtest.me` works with no port.
+
+## Production posture
+
+| Control | Default | Notes |
+|---|---|---|
+| Non-root containers | **on** | API runs as uid 1000, web as uid 101 via `nginx-unprivileged`. `runAsNonRoot` is enforced, so a regression to a root image fails the pod rather than quietly running privileged. CI proves it by running both images and asserting `id -u != 0`. |
+| `readOnlyRootFilesystem` | on (API, web-off) | The API gets `emptyDir` mounts at `/tmp` and `/home/node` because pnpm and Prisma both write at runtime. nginx-unprivileged needs its own temp dirs, so it is off there rather than weakening the chart-wide default. |
+| `allowPrivilegeEscalation` / capabilities | off / `drop: ALL` | Every container. |
+| `seccompProfile` | `RuntimeDefault` | Every pod. |
+| Postgres `fsGroup` | `999` | Load-bearing: without it the PersistentVolume is owned by root and `initdb` aborts on a directory it just mounted. |
+| `values.schema.json` | on | A misspelled key is otherwise silently ignored and the default applies. CI asserts the schema still rejects three known-bad inputs. |
+| `startupProbe` on the API | on | Until it passes, liveness is not evaluated. Without it a slow first boot — cold Prisma engine, large migration — trips liveness and the pod restarts forever, which reads as a crash rather than a timeout. |
+| PodDisruptionBudgets | **off** | A PDB with one replica blocks node drains, which on a laptop cluster looks like a stuck `kubectl`. |
+| HorizontalPodAutoscaler | **off** | Enabling it makes the HPA own the replica count; `replicaCount` is then ignored. Scales up in 30s and down over 5 minutes — bursty analysis, expensive restarts. |
+| NetworkPolicy | **off** | Default-deny to the database. Off because it is worse than useless unenforced: kind's default CNI ignores NetworkPolicy entirely, so it renders, appears in `kubectl get netpol`, and restricts nothing. |
+
+## Verifying a release actually works
+
+```bash
+helm test ridgeline -n ridgeline
+```
+
+Asserts two things a green rollout does not prove: that the API's health
+endpoint reports PostGIS **reachable** (a pod can be Running against a database
+it cannot query), and that the web tier's nginx really proxies `/api` through.
+That proxy path is rendered from the release name, so it breaks on a rename in
+a way nothing else catches — the shell serves perfectly and every data request
+502s.
+
+## Supply chain
+
+Release images are multi-arch (`amd64` + `arm64`), carry a SLSA provenance
+attestation and an SBOM, and are **signed with cosign** keyless. Signing is by
+digest, never by tag: a tag is mutable, so a signature against `:latest` stops
+matching the moment the tag moves, which looks like tampering.
+
+Verify before deploying:
+
+```bash
+cosign verify ghcr.io/overcastly-ai/hunt-maps-api:1.0.0 \
+  --certificate-identity-regexp 'https://github.com/Overcastly-AI/hunt-maps/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The chart is published as an OCI artifact too:
+
+```bash
+helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+  --version 1.0.0 -n ridgeline --create-namespace
+```
+
 ## Two things that look like bugs and are not
 
 **The basemap needs internet from your browser, not from the cluster.** The

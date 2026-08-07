@@ -20,8 +20,8 @@ see below.
 
 **Build on the host** is the only path that works today, because the published
 images do not exist. `hunt-maps-web` has never built successfully, and
-`hunt-maps-api` built only on a feature branch — so it carries `claude-…` and
-`sha-…` tags but no `latest`, which the workflow gates on `is_default_branch`.
+`hunt-maps-api` built only on a feature branch — so it carries a branch tag and
+`sha-…`, but no `latest`, which the workflow gates on `is_default_branch`.
 
 GitHub Actions stopped scheduling runs partway through development and did not
 resume, including after the repository was made public. Until that is fixed
@@ -128,6 +128,6 @@ docker compose logs api    # most failures surface here
   authentication error that looks like a wrong password because it is one: the
   database still has the original.
 - **`unauthorized` pulling an image** — GHCR package is private, `docker login
-  ghcr.io` with a `read:packages` PAT.
+ghcr.io` with a `read:packages` PAT.
 - **web up, map blank, API calls 502** — the API is not healthy yet; it waits
   for Postgres and then runs migrations. Give it the 60s start period.

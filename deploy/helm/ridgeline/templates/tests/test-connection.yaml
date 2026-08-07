@@ -1,0 +1,53 @@
+{{- /*
+`helm test ridgeline -n <ns>` — a real post-install assertion, not a smoke
+signal. It checks the two things that can be independently broken and that a
+green rollout does not prove:
+
+  1. The API's own health endpoint reports PostGIS reachable. A pod can be
+     Running against a database it cannot actually query.
+  2. The web container's nginx really proxies /api to the API service. That
+     path is configured by a ConfigMap rendered from the release name, so it
+     breaks on a rename in a way nothing else notices — the app serves its
+     shell perfectly and every request for data 502s.
+*/ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "ridgeline.fullname" . }}-test
+  labels:
+    {{- include "ridgeline.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: test
+      image: curlimages/curl:8.11.1
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ['ALL']
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "1/2 API health reports PostGIS reachable"
+          body=$(curl -fsS --max-time 10 \
+            "http://{{ include "ridgeline.api.fullname" . }}:{{ .Values.api.service.port }}/api/health")
+          echo "$body"
+          echo "$body" | grep -q '"postgis"' || {
+            echo "health response has no postgis field"; exit 1; }
+
+          echo "2/2 web proxies /api through to the API"
+          curl -fsS --max-time 10 \
+            "http://{{ include "ridgeline.web.fullname" . }}:{{ .Values.web.service.port }}/api/health" >/dev/null
+
+          echo "both checks passed"

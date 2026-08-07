@@ -26,7 +26,12 @@ ARG VITE_DEM_TEMPLATE=""
 ENV VITE_DEM_TEMPLATE=$VITE_DEM_TEMPLATE
 RUN pnpm --filter @hunt-maps/web build
 
-FROM nginx:alpine AS runtime
+# nginx-unprivileged rather than nginx: the stock image starts its master
+# process as root to bind port 80, which means a container that cannot run
+# under a restricted PodSecurityContext. This variant listens on 8080 as uid
+# 101 and needs no root at any point. The port change is why the chart and
+# compose files target 8080 rather than 80.
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 # OCI metadata. `org.opencontainers.image.source` is what makes GitHub link a
 # published package back to this repository — without it the package page has
 # no repo, no README and no visible provenance, which is the difference between
@@ -38,4 +43,4 @@ LABEL org.opencontainers.image.source="https://github.com/Overcastly-AI/hunt-map
 
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+EXPOSE 8080

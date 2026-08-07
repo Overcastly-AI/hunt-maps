@@ -70,16 +70,81 @@ docker compose up -d --build   # then http://localhost:8080
 # api  → http://localhost:3001/api/docs
 ```
 
-### Deploying
+## Deploying
 
-| Target | Where | Notes |
+Released images are published to GHCR on every merge to `main`, versioned by
+semantic-release. Nothing needs building, and the repository does not need to
+exist on the machine running the cluster.
+
+### Kubernetes (Helm)
+
+```bash
+helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+  --version 1.0.0 --namespace ridgeline --create-namespace
+
+kubectl -n ridgeline rollout status deploy/ridgeline-api
+kubectl -n ridgeline port-forward svc/ridgeline-web 8080:80
+```
+
+Then http://localhost:8080. The API is proxied at `/api` through the same
+origin, so one forward is all you need.
+
+Verify the release actually works — this asserts things a green rollout does
+not prove, namely that the API reports PostGIS *reachable* and that the web
+tier really proxies `/api`:
+
+```bash
+helm test ridgeline -n ridgeline
+```
+
+**Both GHCR packages must be public**, or the pull fails with `unauthorized` —
+which reads like a missing tag rather than a permissions problem. Package
+visibility is separate from repository visibility and does not follow it. Make
+them public under *your profile → Packages → package settings*, or supply a
+pull secret (see `deploy/helm/README.md`).
+
+Useful values:
+
+| Value | Default | Why you would change it |
 |---|---|---|
-| Single Docker host (VPS) | `deploy/compose/` | Publishes only the web port; Postgres and the API stay on the internal network |
-| Kubernetes | `deploy/helm/` | Migrations run in an initContainer, secrets generate once and survive upgrades |
+| `api.image.tag` / `web.image.tag` | `""` → chart `appVersion` | Pin an older version, or test a development image |
+| `api.corsOrigins` | `http://localhost:8080` | Must match the address you actually load the app from, or the browser blocks every API call |
+| `postgis.persistence.size` | `8Gi` | Observations plus denormalised terrain; DEM tiles are **not** stored server-side |
+| `externalDatabase.url` | `""` | Use managed PostGIS instead of the in-chart StatefulSet |
+| `ingress.enabled` | `false` | A port-forward behaves the same on every cluster; ingress does not |
+| `networkPolicy.enabled` | `false` | Default-deny to the database. Only meaningful where the CNI enforces it — kind's default does not |
+| `api.autoscaling.enabled` | `false` | Enabling it makes the HPA own the replica count; `replicaCount` is then ignored |
 
-Both build images from source. The GHCR images referenced in the publish
-workflow are **not currently published** — see `deploy/helm/README.md` for why
-and how to switch over once they are.
+Values are validated against `values.schema.json`, so a misspelled key is an
+install-time error naming the field rather than a silently applied default.
+
+Full guide, including the production posture table and supply-chain
+verification: **[`deploy/helm/README.md`](deploy/helm/README.md)**.
+
+### Single Docker host (VPS)
+
+```bash
+cd deploy/compose
+cp .env.example .env && $EDITOR .env      # JWT_SECRET and POSTGRES_PASSWORD required
+docker compose up -d
+```
+
+Only the web container publishes a port; Postgres and the API stay on the
+internal network. See **[`deploy/compose/README.md`](deploy/compose/README.md)**
+— it covers TLS, backups, and the fact that a PWA without HTTPS silently has no
+service worker.
+
+### Supply chain
+
+Release images are multi-arch (`amd64` + `arm64`), carry a SLSA provenance
+attestation and an SBOM, and are signed with cosign keyless — by digest, not by
+tag:
+
+```bash
+cosign verify ghcr.io/overcastly-ai/hunt-maps-api:1.0.0 \
+  --certificate-identity-regexp 'https://github.com/Overcastly-AI/hunt-maps/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
 
 ### Local development
 

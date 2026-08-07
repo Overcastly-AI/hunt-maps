@@ -46,6 +46,8 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "ridgeline.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -54,9 +56,11 @@ spec:
         - name: web
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.web.containerSecurityContext | nindent 12 }}
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
           volumeMounts:
             - name: nginx-conf
               mountPath: /etc/nginx/conf.d

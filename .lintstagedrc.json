@@ -1,0 +1,4 @@
+{
+  "*.{ts,tsx,js,jsx,json,md,css,yml,yaml}": "prettier --write",
+  "*.{ts,tsx}": "bash -c 'pnpm -r lint'"
+}
