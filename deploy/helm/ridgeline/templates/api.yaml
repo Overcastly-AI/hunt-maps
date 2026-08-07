@@ -54,7 +54,7 @@ spec:
       initContainers:
         # Migrations run here rather than in the app container's command.
         #
-        # The image's own CMD is `prisma migrate deploy && node dist/main.js`,
+        # The image's own CMD is `prisma migrate deploy && node <entrypoint>`,
         # which is right for docker-compose and wrong for Kubernetes: with more
         # than one replica, every pod races to apply the same migration on every
         # rollout. Prisma's advisory lock means one wins and the rest block, so
@@ -116,7 +116,7 @@ spec:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           workingDir: /app/apps/api
           # Migrations are handled above; run only the server here.
-          command: ["node", "dist/main.js"]
+          command: ["node", "dist/apps/api/src/main.js"]
           ports:
             - name: http
               containerPort: {{ .Values.api.service.port }}

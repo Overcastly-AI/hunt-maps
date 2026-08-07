@@ -21,6 +21,23 @@ RUN pnpm --filter @hunt-maps/terrain build \
  && pnpm --filter @hunt-maps/api exec prisma generate \
  && pnpm --filter @hunt-maps/api build
 
+# Assert the entrypoint exists, at build time, with a message that says what
+# to do about it.
+#
+# `nest build` does NOT emit dist/main.js here. The API's tsconfig spans the
+# workspace packages, so TypeScript keeps the directory structure relative to
+# their common root and the entrypoint lands at dist/apps/api/src/main.js.
+# Nothing catches that: the image builds, `docker build` is green, the layer
+# is pushed — and the container dies on start with MODULE_NOT_FOUND. Pin it
+# here so a tsconfig change that moves the output fails the build rather than
+# the deployment.
+RUN test -f apps/api/dist/apps/api/src/main.js \
+ || (echo "ERROR: expected entrypoint at apps/api/dist/apps/api/src/main.js" \
+  && echo "nest build emitted this instead:" \
+  && find apps/api/dist -name 'main.js' \
+  && echo "Update the CMD in this Dockerfile and apps/api/package.json to match." \
+  && exit 1)
+
 FROM base AS runtime
 # OCI metadata. `org.opencontainers.image.source` is what makes GitHub link a
 # published package back to this repository — without it the package page has
@@ -55,4 +72,4 @@ EXPOSE 3001
 # The Helm chart overrides this: on Kubernetes the migration runs as a
 # pre-upgrade hook Job instead, because with more than one replica every pod
 # would otherwise race to apply the same migration on every rollout.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/apps/api/src/main.js"]
