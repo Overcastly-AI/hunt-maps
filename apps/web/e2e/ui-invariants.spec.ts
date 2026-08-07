@@ -780,6 +780,13 @@ async function measureDensity(page: Page, panelSelector: string, bodySelector: s
 // happens with the browser context genuinely offline, so no tile can sneak in
 // from the network at the destination.
 test.describe('9. Offline coverage describes the view on screen', () => {
+  // The chip renders `text-transform: uppercase`, so these are what a hunter
+  // actually reads. Asserted in rendered casing deliberately — comparing
+  // against the source string would be checking what we passed in, not what
+  // was painted.
+  const COVERED = 'COVERED';
+  const NOT_DOWNLOADED = 'NOT DOWNLOADED';
+
   for (const viewport of [DESKTOP, MOBILE]) {
     test(`${viewport.width}px — a badge earned here is not carried five hundred miles`, async ({
       page,
@@ -796,7 +803,7 @@ test.describe('9. Offline coverage describes the view on screen', () => {
 
       await expect
         .poll(() => chipText(page), { timeout: 15_000 })
-        .toBe('Covered');
+        .toBe(COVERED);
 
       // Rendered state, not DOM state: the chip must actually be painted in the
       // "ok" token colour. A class name proves what we asked for; the computed
@@ -816,9 +823,9 @@ test.describe('9. Offline coverage describes the view on screen', () => {
         `after panning 500 miles offline the badge showed: ${labels.join(' → ')}. ` +
           `"Covered" in that sequence means the app told a hunter that ground with no stored ` +
           `elevation is ready to use with no signal.`,
-      ).not.toContain('Covered');
+      ).not.toContain(COVERED);
 
-      await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe('Not downloaded');
+      await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe(NOT_DOWNLOADED);
       expect(await chipColor(page)).toBe(await tokenColor(page, '--color-warn'));
 
       // And the sheet's full sentence agrees with the chip — the two are
@@ -843,7 +850,7 @@ test.describe('9. Offline coverage describes the view on screen', () => {
     await seedTilesForView(page, 0.5);
     await remeasure(page);
 
-    await expect.poll(() => chipText(page), { timeout: 15_000 }).toContain('Partial');
+    await expect.poll(() => chipText(page), { timeout: 15_000 }).toContain('PARTIAL');
     expect(await chipColor(page)).toBe(await tokenColor(page, '--color-warn'));
 
     await expect
@@ -856,7 +863,7 @@ test.describe('9. Offline coverage describes the view on screen', () => {
     await clearTiles(page);
     await remeasure(page);
 
-    await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe('Not downloaded');
+    await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe(NOT_DOWNLOADED);
     // Nothing measured means nothing to draw. An overlay left over from a
     // previous view would be a hatch that lags the map by one pan.
     expect(await renderedFeatureCount(page, 'rl-offline-coverage-fill')).toBe(0);

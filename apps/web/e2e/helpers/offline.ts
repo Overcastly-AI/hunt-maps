@@ -128,7 +128,14 @@ export async function jumpTo(page: Page, lng: number, lat: number): Promise<void
   );
 }
 
-/** The chip's rendered text, with the decorative glyph stripped. */
+/**
+ * The chip's **rendered** text, with the decorative glyph stripped.
+ *
+ * `innerText`, not `textContent`: the chip is `text-transform: uppercase`, so
+ * what a hunter actually reads is "COVERED", and `textContent` would report the
+ * source string instead. Comparing against the rendered casing is the point —
+ * this suite asserts what the user got, not what we passed in.
+ */
 export async function chipText(page: Page): Promise<string> {
   return (await page.getByTestId('coverage-chip').innerText()).replace(/[●○◐◌!]/g, '').trim();
 }
