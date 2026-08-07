@@ -222,11 +222,49 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
       shelter,
       vectorRuggedness: cover,
       ...request.bedding,
-      season: beddingSeason(request, surface),
+      season: beddingSeason(
+        request,
+        surface,
+        request.latitude ?? grid.centerLat,
+        request.longitude ?? grid.centerLng,
+      ),
     });
   }
 
   return result;
+}
+
+/**
+ * Build the cold-season aspect inputs for `beddingLikelihood`, or `undefined`.
+ *
+ * Returns `undefined` unless the caller supplied a temperature *and* that
+ * temperature is cold enough to give the solar term non-zero weight, so the warm
+ * path never pays for an insolation pass and never diverges by a float ulp from
+ * the leeward-only result.
+ *
+ * The insolation is evaluated at **mean solar noon** — the moment the aspect
+ * contrast between faces is largest and the one that governs how much snow a
+ * slope sheds (18.1 cm on the SE face vs 42.0 cm on the NE face, Lang & Gates
+ * 1985). Mean solar noon rather than true solar noon: the equation of time moves
+ * it by at most ±16 minutes, which shifts the sun's azimuth by ~4° and changes
+ * nothing about which face wins, whereas making the field depend on the local
+ * time zone would make it depend on politics.
+ */
+function beddingSeason(
+  request: AnalysisRequest,
+  surface: SurfaceField,
+  latitude: number,
+  longitude: number,
+): BeddingOptions['season'] {
+  const temperatureC = request.temperatureC;
+  if (temperatureC === undefined || coldBlendWeight(temperatureC) <= 0) return undefined;
+  const date = request.date ?? new Date();
+  const noonUtc = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12) -
+      (longitude / 15) * 3600000,
+  );
+  const sun = solarPosition(noonUtc, latitude, longitude);
+  return { temperatureC, insolation: slopeInsolation(surface, sun) };
 }
 
 /**
@@ -249,5 +287,13 @@ export function requiredHalo(request: AnalysisRequest): number {
   if (want.has('bench')) halo = Math.max(halo, (request.bench?.ringRadius ?? 8) + 1);
   if (want.has('skyView')) halo = Math.max(halo, 24);
   if (want.has('shelter') || want.has('bedding')) halo = Math.max(halo, 20);
+  if (want.has('bedding')) {
+    // The bedding cover term is a VRM window, which reads radius+1 cells out
+    // (radius for the window, one more for the Horn kernel at its edge). Below
+    // the shelter ray-march this is slack, but it must be stated: a caller who
+    // raises `coverRadiusCells` for a 1 m DEM and does not widen the halo gets a
+    // seam grid across the flagship layer.
+    halo = Math.max(halo, (request.coverRadiusCells ?? DEFAULT_VRM_RADIUS_CELLS) + 1);
+  }
   return halo;
 }

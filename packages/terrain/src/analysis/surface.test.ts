@@ -163,4 +163,67 @@ describe('computeRuggedness', () => {
     expect(flat[CENTER]).toBeCloseTo(0, 6);
     expect(steep[CENTER]).toBeGreaterThan(flat[CENTER]);
   });
+
+  it('matches the closed form g·s·√6 on a plane — i.e. it tracks slope', () => {
+    // This is not a nice property, it is the defect: TRI cannot be used as a
+    // cover proxy alongside a slope term, because on smooth ground it *is* a
+    // slope term. Pinned here so the reason VRM exists stays visible.
+    for (const grade of [0.1, 0.3, 0.6, 1.0]) {
+      const tri = computeRuggedness(syntheticGrid(plane(0, grade), { size: SIZE, cellSize: 2 }));
+      expect(tri[CENTER]).toBeCloseTo(grade * 2 * Math.sqrt(6), 4);
+    }
+  });
+});
+
+describe('computeVectorRuggedness', () => {
+  it('is exactly zero on a plane at every grade — the point of VRM', () => {
+    // A plane has one surface normal everywhere, so the resultant vector has
+    // full length and dispersion is nil, no matter how steep it is. This is the
+    // property TRI lacks and the reason Sappington et al. 2007 built VRM.
+    for (const grade of [0, 0.1, 0.3, 0.6, 1.0, 1.6]) {
+      const vrm = computeVectorRuggedness(
+        syntheticGrid(plane(0.2, grade), { size: SIZE, halo: 8, cellSize: 2 }),
+      );
+      expect(vrm[CENTER], `grade ${grade}`).toBeLessThan(1e-6);
+    }
+  });
+
+  it('rises with orientation dispersion, not with steepness', () => {
+    // Corrugated ground: same mean grade as the smooth plane, but the normals
+    // sweep back and forth across the window.
+    const smooth = computeVectorRuggedness(
+      syntheticGrid(plane(0, 0.6), { size: SIZE, halo: 8 }),
+    );
+    const broken = computeVectorRuggedness(
+      syntheticGrid((x, y) => 0.6 * y + 5 * Math.sin((2 * Math.PI * x) / 80), {
+        size: SIZE,
+        halo: 8,
+      }),
+    );
+    expect(smooth[CENTER]).toBeLessThan(1e-6);
+    expect(broken[CENTER]).toBeGreaterThan(0.01);
+    expect(broken[CENTER]).toBeLessThanOrEqual(1);
+  });
+
+  it('stays in [0, 1] and reports no-data as NaN', () => {
+    const grid = syntheticGrid(paraboloid(-0.002), { size: SIZE, halo: 8 });
+    grid.set(5, 5, NODATA);
+    const vrm = computeVectorRuggedness(grid);
+    expect(Number.isNaN(vrm[5 * SIZE + 5])).toBe(true);
+    for (let i = 0; i < vrm.length; i++) {
+      if (Number.isNaN(vrm[i])) continue;
+      expect(vrm[i]).toBeGreaterThanOrEqual(0);
+      expect(vrm[i]).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('does not let a NODATA hole leak a fake cliff into the neighbourhood', () => {
+    // A Horn gradient straddling the sentinel is a 32 km cliff; if those cells
+    // were counted, one void would paint a ring of maximum "cover" around it.
+    const grid = syntheticGrid(plane(0, 0.3), { size: SIZE, halo: 8 });
+    grid.set(16, 16, NODATA);
+    const vrm = computeVectorRuggedness(grid);
+    // Two cells away from the hole: window still touches it, value must stay ~0.
+    expect(vrm[16 * SIZE + 18]).toBeLessThan(1e-6);
+  });
 });

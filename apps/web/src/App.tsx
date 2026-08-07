@@ -108,9 +108,6 @@ export default function App() {
     // evictable under storage pressure with no warning, and discovering that in
     // the field is the worst failure this app has.
     void requestPersistentStorage();
-    void openTileStore()
-      .then((store) => store.stats())
-      .then((s) => setOfflineReady(s.tileCount > 0));
     return () => protocol.unregister();
   }, [protocol]);
 
@@ -203,10 +200,19 @@ export default function App() {
         atUtc={atUtc}
         filterStackId={filterStackId}
         onPointInspect={setInspect}
-        onReady={(map) => {
-          mapRef.current = map;
+        onReady={(instance) => {
+          mapRef.current = instance;
+          setMap(instance);
         }}
         onMove={setCenter}
+        coverage={coverage}
+        /*
+         * Shown whenever the Layers sheet is open — that is the surface making
+         * the claim, so the map should be showing its evidence at the same
+         * time — and always while coverage is partial, which is the one state
+         * where the text alone is actively misleading about *where* the gap is.
+         */
+        showCoverage={sheetOpen || coverage?.state === 'partial'}
       />
 
       <div className="map-chrome">
@@ -260,7 +266,7 @@ export default function App() {
           opacities={opacities}
           windFromDeg={windFromDeg}
           savedFilters={filters}
-          offlineReady={offlineReady}
+          coverage={coverage}
           onToggle={handleToggle}
           onOpacity={handleOpacity}
           onToggleFilter={handleToggleFilter}
