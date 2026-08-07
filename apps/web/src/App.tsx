@@ -8,6 +8,8 @@ import {
   type TerrainPredicate,
 } from '@hunt-maps/terrain';
 import {
+  CommandBar,
+  CommandBarCell,
   ConditionsBar,
   DownloadIcon,
   LayersIcon,
@@ -262,8 +264,16 @@ export default function App() {
         </div>
 
         <div className="chrome-bottomleft">
-          <Rail>
-            <RailButton
+          {/*
+           * `CommandBar` (BACKLOG R44) replaces the old `.rl-rail` stack.
+           * Both cells here are panel toggles — Layers and the region
+           * picker (labelled "Offline") — which is the whole reason this
+           * bar's height never has to change: adding Filters or Property
+           * later (`docs/AUDIT-PRODUCT.md` rec's IA table) means adding a
+           * tab inside the one drawer slot, not a third cell here.
+           */}
+          <CommandBar>
+            <CommandBarCell
               label="Layers"
               active={sheetOpen}
               onClick={() => {
@@ -276,9 +286,10 @@ export default function App() {
               }}
             >
               <LayersIcon />
-            </RailButton>
-            <RailButton
-              label="Save this area for offline use"
+            </CommandBarCell>
+            <CommandBarCell
+              label="Offline"
+              description="Save this area for offline use"
               active={pickerOpen}
               onClick={() => {
                 setPickerOpen((open) => !open);
@@ -286,8 +297,8 @@ export default function App() {
               }}
             >
               <DownloadIcon />
-            </RailButton>
-          </Rail>
+            </CommandBarCell>
+          </CommandBar>
 
           <ConditionsBar
             windFromDeg={windFromDeg}

@@ -125,6 +125,18 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       viewports instead of desktop-only, and a new group compares painted
       surface against interactive surface — the gap that let a control look
       three times larger than it was.
+- [x] **The rail is gone — `CommandBar`, `BACKLOG R44`.** The structural half
+      of the founder's "left side bar is really hard to work with": the P0
+      symptoms shipped first, this removes why they were possible. The drawer's
+      clearance used to be `calc(var(--space-touch) * N + ...)` where N *was*
+      the button count, hand-written in a file that did not contain the
+      buttons — so a fourth button silently overlapped, and `R42` had to
+      duplicate that arithmetic into three places. It is now one token,
+      independent of cell count. Cells are `flex: 1 1 0` with no explicit
+      width, which makes `R43`'s dead-zone defect **structurally impossible**
+      rather than merely fixed, and every control now carries a visible word
+      instead of an icon and a `title` that touch devices never show. Bottom
+      chrome at 390px: 216px → ~128px, ~88px of map back.
 - [ ] Property boundary drawing and editing on the map *(🔴 scorecard gap)*
 - [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
 - [ ] Observation capture optimised for gloved, one-handed, in-the-field use

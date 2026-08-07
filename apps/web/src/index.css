@@ -95,18 +95,22 @@
  *
  * This overrides `.rl-sheet--drawer`'s own `bottom` offset
  * (`packages/design/src/styles.css`), which only budgets for a single
- * touch-target-tall control. This app's own rail stacks two buttons in that
- * corner — Layers and Save; the "Add waypoint" placeholder that made it
- * three was deleted in R45, a real capability was never behind it — so the
- * sheet needs twice the clearance (`--space-touch` x2 plus a gap on each
- * side). A fact about *this app's* specific chrome arrangement, not about
- * the sheet component itself, which is why the override lives here rather
- * than in the design package. Scoped to widths above the sheet's own mobile
- * breakpoint so it never fights the mobile clearance below.
+ * touch-target-tall control. A fact about *this app's* specific chrome
+ * arrangement, not about the sheet component itself, which is why the
+ * override lives here rather than in the design package. Scoped to widths
+ * above the sheet's own mobile breakpoint so it never fights the mobile
+ * clearance below.
+ *
+ * Used to be `calc(var(--space-touch) * 2 + var(--space-6) * 2)` — "two
+ * buttons" hand-counted in a file that does not contain the buttons
+ * (`docs/AUDIT-PRODUCT.md` F7, BACKLOG R44). `CommandBar` (BACKLOG R44)
+ * replaced the stacked rail with a fixed-height row, so this is now the
+ * bar's own measured height plus one gap, regardless of how many cells the
+ * bar holds — the `* N` is gone, not just correct for today's count.
  */
 @media (min-width: 861px) {
   .rl-sheet--drawer {
-    bottom: calc(var(--space-touch) * 2 + var(--space-6) * 2);
+    bottom: calc(var(--layout-command-bar-height) + var(--space-6));
   }
 }
 
@@ -147,11 +151,27 @@
 }
 
 /*
- * On a phone the conditions bar spans the full width and sits above the rail.
- * Wind and time are the two things a hunter re-checks constantly; see F3 in
- * `docs/AUDIT-PRODUCT.md` (2026-08-07 pass) for the finding that this row's
- * *own* stacking order still contradicts that intent — tracked at BACKLOG
- * R44, not fixed in this pass.
+ * On a phone the conditions bar spans the full width and sits above the
+ * command bar. `column-reverse` places the *first* DOM child (`CommandBar`,
+ * `App.tsx`) at the main-start edge, which is the *bottom* once the axis is
+ * reversed — so the command bar sits on the true bottom edge and the
+ * conditions bar sits above it.
+ *
+ * F3 (`docs/AUDIT-PRODUCT.md`, 2026-08-07 pass) reads this arrangement as a
+ * defect: wind and time are the two things a hunter re-checks constantly, so
+ * the finding wants *them* on the bottom edge instead. That swap was tried
+ * while building `CommandBar` (BACKLOG R44) — plain `column`, `ConditionsBar`
+ * last — and reverted: the wind/time popover opens *upward* from inside the
+ * conditions bar (`bottom: calc(100% + var(--space-2))`,
+ * `packages/design/src/styles.css`'s `.rl-popover`), and with the conditions
+ * bar moved to the very bottom, that upward-opening popover lands squarely on
+ * top of the command bar sitting right above it — a real, measured overlap
+ * (group 4's `390px — wind popover open` test), not a cosmetic one. Fixing
+ * F3 properly needs the popover to know how much chrome sits above its own
+ * anchor and clear it, which is `Popover` positioning logic, not something
+ * `CommandBar`'s container shape can settle on its own — left open,
+ * deliberately, rather than reintroducing a mobile chrome collision to close
+ * a different finding. Tracked at BACKLOG R44 rather than silently dropped.
  */
 @media (max-width: 860px) {
   .map-chrome {
@@ -165,36 +185,6 @@
     flex-direction: column-reverse;
     align-items: stretch;
     justify-self: stretch;
-  }
-
-  /*
-   * R43 — the rail's own buttons must fill the glass they are painted on.
-   *
-   * `align-items: stretch` above stretches `.rl-rail` itself to the full
-   * width of this corner (~366px on a 390px phone), but `.rl-rail__btn` sets
-   * a *definite* `width: var(--space-touch)` (`packages/design/src/
-   * styles.css`), and a flex item with a definite size never stretches. Each
-   * button stayed a 44px island pinned to the left edge of an otherwise dead
-   * glass bar, with no border, divider or gradient marking where the live
-   * control ends — roughly 85% of the painted surface belonged to no button
-   * at all (`docs/QA-FIELD.md` finding 1). `.rl-conditions__cell` directly
-   * above genuinely *is* tappable edge-to-edge, so that correct neighbour
-   * trained the thumb to expect the same rule here, where it was false.
-   *
-   * The fix is the field audit's own hard constraint: content-sized, no
-   * fixed-width child inside a stretched container — the same shape
-   * `.rl-conditions__cell` already uses, just reached differently (that row
-   * is a `row` flex container whose cells *shrink*-to-fit; this one is a
-   * `column` flex container whose buttons, once no longer pinned to a
-   * definite width, take `.rl-rail`'s own default `align-items: stretch` and
-   * *grow*-to-fit instead). Either direction lands on the same rule: no
-   * definite size on the child, so the container's own stretch behaviour is
-   * what decides its size, and the painted and interactive surfaces can
-   * never disagree by construction. Icon stays centred by `.rl-rail__btn`'s
-   * own `justify-content: center`.
-   */
-  .chrome-bottomleft .rl-rail__btn {
-    width: auto;
   }
 
   /*
@@ -215,14 +205,20 @@
    * the same row as untracked by any collision check.)
    *
    * The two custom properties below are this app's own bottom-left and
-   * top-right chrome group heights on a phone, hand-computed from the same
-   * tokens the groups themselves are built from — the same "sibling
-   * clearance I can't measure at build time" shape as the desktop `* 2`
-   * override above, and the same debt (BACKLOG R44/F7): a button added to
-   * either rail has to be reflected here by hand, or this regresses exactly
-   * the way it was found. `--layout-conditions-bar-height` is the one
-   * measured (not computed) number in the mix — see its definition in
-   * `packages/design/src/tokens.ts` for why.
+   * top-right chrome group heights on a phone. `--rl-mobile-bottom-clearance`
+   * used to hand-count `(var(--space-touch) * 2 + 3px)` for the old rail's
+   * button stack — the same debt as the desktop `* 2` override above
+   * (BACKLOG R44/F7) — and now reads `CommandBar`'s own fixed height
+   * instead, so a cell added to the bar (there is room for one more before
+   * the tool tray in `docs/AUDIT-PRODUCT.md` rec's IA table needs building)
+   * never has to touch this file. `--rl-mobile-top-clearance` still hand-
+   * counts the top-right rail's three buttons (`* 3`) — that one survives
+   * this pass on purpose: it belongs to BACKLOG R48 (drop zoom on mobile,
+   * move locate into the thumb arc), which is explicitly out of scope here
+   * and deletes the top-right rail on mobile outright when it ships, rather
+   * than needing this arithmetic fixed in place. `--layout-conditions-bar-
+   * height` is the one measured (not computed) number in the mix — see its
+   * definition in `packages/design/src/tokens.ts` for why.
    */
   .rl-sheet--drawer {
     /* Top-right rail (zoom in/out, locate — still three buttons; R45 only
@@ -231,11 +227,11 @@
     --rl-mobile-top-clearance: calc(
       var(--space-3) + (var(--space-touch) * 3 + 4px) + var(--space-3)
     );
-    /* map-chrome's own bottom padding/safe-area, the two-button rail, the
-       gap above it, ConditionsBar's measured height, and a breathing gap. */
+    /* map-chrome's own bottom padding/safe-area, the command bar, the gap
+       above it, ConditionsBar's measured height, and a breathing gap. */
     --rl-mobile-bottom-clearance: calc(
       max(var(--space-3), env(safe-area-inset-bottom)) +
-        (var(--space-touch) * 2 + 3px) + var(--space-3) +
+        var(--layout-command-bar-height) + var(--space-3) +
         var(--layout-conditions-bar-height) + var(--space-3)
     );
     top: var(--rl-mobile-top-clearance);

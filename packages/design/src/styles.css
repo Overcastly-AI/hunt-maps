@@ -176,6 +176,84 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+ * Command bar — labelled cells, one row, fixed height (BACKLOG R44)
+ *
+ * Replaces `.rl-rail` in the bottom-left corner. `overflow: hidden` is safe
+ * here in a way it was not for `.rl-conditions`: nothing anchors a popover to
+ * a command-bar cell (Layers and Offline both open a `Sheet`, not a
+ * `Popover`), so there is nothing for the clip to cut off.
+ *
+ * `flex: 1 1 0` on the cell, not the container, is the whole fix for R43's
+ * dead-glass defect: each cell grows to fill its own equal share of
+ * whatever width the container is given (fixed by content on desktop,
+ * stretched to the corner's full width on mobile via `.chrome-bottomleft`'s
+ * `align-items: stretch`), so the button's own painted box *is* its share of
+ * the row — there is no separate glass surface around a smaller fixed-width
+ * child for a gloved tap to land on and miss.
+ * -------------------------------------------------------------------------- */
+
+.rl-command {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rl-command__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: 1 1 0;
+  min-width: var(--space-touch);
+  min-height: var(--space-touch);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.rl-command__cell:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+/* Press feedback — see `.rl-rail__btn:active` for why every button gets this. */
+.rl-command__cell:active {
+  background: var(--color-line-strong);
+  color: var(--color-text);
+}
+
+.rl-command__cell[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.rl-command__icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.rl-command__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.rl-command__label {
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+/* --------------------------------------------------------------------------
  * Sheet — the layers panel, sliding over the map
  * -------------------------------------------------------------------------- */
 

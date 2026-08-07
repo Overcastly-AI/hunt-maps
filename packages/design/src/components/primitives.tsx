@@ -57,6 +57,86 @@ export function RailButton({ label, active, children, ...rest }: RailButtonProps
 }
 
 // ---------------------------------------------------------------------------
+// Command bar
+// ---------------------------------------------------------------------------
+
+export interface CommandBarCellProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /**
+   * A short, always-visible word naming the control — e.g. "Layers",
+   * "Offline". Required, and rendered as text, not just an `aria-label`:
+   * `title` never fires on a touchscreen, so an icon with only a hover
+   * tooltip is inert in the field (`docs/AUDIT-PRODUCT.md` F4). The word is
+   * the affordance.
+   */
+  label: string;
+  active?: boolean;
+  /**
+   * A fuller accessible name, for when the visible word under-states the
+   * action — e.g. the visible word "Offline" behind the description "Save
+   * this area for offline use". Optional; when set it replaces the
+   * accessible name entirely, so it must contain `label` (a substring match
+   * is enough) or a screen-reader user and a sighted user end up being told
+   * two unrelated things about the same control — WCAG 2.5.3 Label in Name.
+   */
+  description?: string;
+  /** The icon. Decorative — `label` already carries the name, so this is `aria-hidden`. */
+  children: ReactNode;
+}
+
+export function CommandBarCell({
+  label,
+  active,
+  description,
+  children,
+  className,
+  ...rest
+}: CommandBarCellProps) {
+  return (
+    <button
+      type="button"
+      className={cx('rl-command__cell', className)}
+      aria-label={description}
+      title={description ?? label}
+      aria-pressed={active}
+      {...rest}
+    >
+      <span className="rl-command__icon" aria-hidden="true">
+        {children}
+      </span>
+      <span className="rl-command__label">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * A horizontal bar of labelled cells whose height does not depend on how many
+ * cells it holds.
+ *
+ * Replaces `.rl-rail` in the bottom-left corner (`docs/AUDIT-PRODUCT.md`
+ * recs #17-#18, BACKLOG R44). `.rl-rail` stacked buttons in a column, so its
+ * container had to reserve `--space-touch * N` of clearance for whatever *N*
+ * happened to be that week — a constant hand-computed in a different file
+ * from the buttons it counted (F7), and it had already produced a real
+ * defect (F6, the dead middle button nobody could tell apart from the two
+ * live ones) before the roadmap even reached its planned nine controls. A
+ * row does not have this problem: cells lay out side by side and the bar's
+ * own height is fixed by its tallest cell, never by how many there are.
+ *
+ * Every cell is built the way `.rl-conditions__cell` is — no explicit width,
+ * sized by its own flex share of the row rather than pinned inside a
+ * container that stretches around it. That is not a style choice; it is the
+ * field audit's hard constraint (`docs/QA-FIELD.md`, "Note to the sibling
+ * audit"): a fixed-width child inside a stretched container is exactly the
+ * shape that left ~85% of `.rl-rail`'s painted glass belonging to no button
+ * at all on a phone (BACKLOG R43). Here the button *is* the flex item that
+ * grows to fill its share of the row, so the painted surface and the
+ * interactive surface can never disagree, at any cell count.
+ */
+export function CommandBar({ children }: { children: ReactNode }) {
+  return <div className="rl-command rl-glass">{children}</div>;
+}
+
+// ---------------------------------------------------------------------------
 // Sheet
 // ---------------------------------------------------------------------------
 

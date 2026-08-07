@@ -427,7 +427,7 @@ test.describe('4. No chrome collisions', () => {
   // The four persistent groups exist in every one of these states — passing
   // their names here means a rect that comes back `null` (its selector
   // matched nothing) is a loud failure, not a silent "nothing to overlap".
-  const PERSISTENT = ['rail (top-right)', 'rail (bottom-left)', 'conditions bar', 'chrome-bottomleft group'];
+  const PERSISTENT = ['rail (top-right)', 'command bar', 'conditions bar', 'chrome-bottomleft group'];
 
   for (const viewport of [DESKTOP, MOBILE]) {
     test(`${viewport.width}px — nothing open`, async ({ page }) => {
@@ -493,9 +493,10 @@ test.describe('4. No chrome collisions', () => {
     // while watching the layer list. Before R42 this pairing was reachable at
     // DESKTOP only: on a phone the sheet physically covered the Wind trigger,
     // so there was no way to *open* the popover while the sheet was open in
-    // the first place. The four *persistent* chrome groups (both rails, the
-    // conditions bar, their bottom-left container) must still never collide
-    // with anything, sheet included, at either viewport. The one pair
+    // the first place. The four *persistent* chrome groups (the top-right
+    // rail, the command bar, the conditions bar, their bottom-left container)
+    // must still never collide with anything, sheet included, at either
+    // viewport. The one pair
     // excluded here is the sheet and the popover themselves: a popover is, by
     // definition, a transient overlay anchored to its trigger and free to
     // float over other panels — the same way a native `<select>` dropdown is
@@ -589,14 +590,14 @@ async function assertNoCollisions(
   const rects = await collectChromeRects(page);
   const named: Array<[string, typeof rects.sheet]> = [
     ['rail (top-right)', rects.railTopRight],
-    ['rail (bottom-left)', rects.railBottomLeft],
+    ['command bar', rects.commandBar],
     ['conditions bar', rects.conditions],
     // NOTE: `chrome-bottomleft group` is deliberately absent from this list.
-    // It is the *container* of the bottom-left rail and the conditions bar,
-    // so it overlaps both of them by construction and a pairwise check
-    // against it can only ever fail. It still appears in `expectPresent`
-    // below, which is what actually guards against a selector silently
-    // matching nothing — the reason it was added in the first place.
+    // It is the *container* of the command bar and the conditions bar, so it
+    // overlaps both of them by construction and a pairwise check against it
+    // can only ever fail. It still appears in `expectPresent` below, which is
+    // what actually guards against a selector silently matching nothing — the
+    // reason it was added in the first place.
     ['layers sheet', rects.sheet],
     ['wind/time popover', rects.popover],
   ];
@@ -638,19 +639,20 @@ async function assertNoCollisions(
     }
   }
 
-  // The rail and the conditions bar are checked above as two separate rects,
-  // which does not cover the gap *between* them — a sheet edge landing inside
-  // that gap would pass both of those checks while still visually overlapping
-  // the bottom-left cluster as a whole. Checking `.chrome-bottomleft`'s own
-  // bounding box against the sheet closes that gap. Not run against the
-  // popover or folded into the loop above: the popover is anchored to a cell
-  // *inside* this same group and legitimately overlaps its own row's taller
-  // neighbour (the 3-button rail) the same way it overlaps the sheet — see
-  // the "both open" test's comment for why that specific pairing is allowed.
+  // The command bar and the conditions bar are checked above as two separate
+  // rects, which does not cover the gap *between* them — a sheet edge landing
+  // inside that gap would pass both of those checks while still visually
+  // overlapping the bottom-left cluster as a whole. Checking
+  // `.chrome-bottomleft`'s own bounding box against the sheet closes that
+  // gap. Not run against the popover or folded into the loop above: the
+  // popover is anchored to a cell *inside* this same group and legitimately
+  // overlaps its own row's neighbour (the command bar) the same way it
+  // overlaps the sheet — see the "both open" test's comment for why that
+  // specific pairing is allowed.
   if (rects.bottomLeftGroup && rects.sheet) {
     expect(
       rectsOverlap(rects.bottomLeftGroup, rects.sheet),
-      `chrome-bottomleft (rail + conditions bar) and layers sheet overlap: ` +
+      `chrome-bottomleft (command bar + conditions bar) and layers sheet overlap: ` +
         `${JSON.stringify(rects.bottomLeftGroup)} vs ${JSON.stringify(rects.sheet)}`,
     ).toBe(false);
   }
@@ -1379,7 +1381,7 @@ test.describe('11. Offline region picker (R4)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. Glass containers paint no more than their interactive children (R43)
+// 12. Glass containers paint no more than their interactive children (R43, R44)
 // ---------------------------------------------------------------------------
 //
 // The failure class this guards is distinct from both "1. Hit-testability"
@@ -1402,14 +1404,21 @@ test.describe('11. Offline region picker (R4)', () => {
 // (`.chrome-bottomleft`'s `align-items: stretch` override only fires under
 // the 860px breakpoint), so a desktop-only version of this check would never
 // have caught it.
-test.describe('12. Glass container painted surface matches its interactive children (R43)', () => {
+//
+// `.rl-rail` in `.chrome-bottomleft` was replaced by `CommandBar`'s `.rl-
+// command` (BACKLOG R44) — the same field-audit constraint applies to its
+// cells (`.rl-command__cell`), which is why this group covers it rather than
+// trusting the new primitive by construction. `.chrome-topright .rl-rail`
+// (zoom/locate) is untouched by R44 and still exercises the original R43
+// regression directly.
+test.describe('12. Glass container painted surface matches its interactive children (R43, R44)', () => {
   // Generous, not tight: covers `.rl-glass`'s 1px border on each side (2px)
   // plus a few px of sub-pixel/rounding noise. It is nowhere near the ~322px
   // surplus the regression this pins actually produced.
   const TOLERANCE_PX = 12;
 
   const containers: Array<{ name: string; container: string; children: string }> = [
-    { name: 'bottom-left rail', container: '.chrome-bottomleft .rl-rail', children: '.rl-rail__btn' },
+    { name: 'command bar', container: '.chrome-bottomleft .rl-command', children: '.rl-command__cell' },
     { name: 'top-right rail', container: '.chrome-topright .rl-rail', children: '.rl-rail__btn' },
     { name: 'conditions bar', container: '.rl-conditions', children: '.rl-conditions__cell' },
   ];

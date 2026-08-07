@@ -390,17 +390,18 @@ export async function collectChromeTextNodes(
 
 export interface ChromeRects {
   railTopRight: { x: number; y: number; width: number; height: number } | null;
-  railBottomLeft: { x: number; y: number; width: number; height: number } | null;
+  /** `CommandBar` (BACKLOG R44) — replaced the old bottom-left `.rl-rail`. */
+  commandBar: { x: number; y: number; width: number; height: number } | null;
   conditions: { x: number; y: number; width: number; height: number } | null;
   /**
-   * The bounding box of `.chrome-bottomleft` as a whole — the rail and the
-   * conditions bar together, plus the gap between them. Checking the rail and
-   * the conditions bar as two separate rects (below) does not cover that gap,
-   * and a sheet whose edge lands *inside* it would pass both of those checks
-   * while still visually overlapping the group and creating exactly the
-   * elementFromPoint trap this invariant exists to catch. This closes that
-   * measurement gap without replacing the two finer-grained checks, which
-   * still give a more specific failure message when only one piece collides.
+   * The bounding box of `.chrome-bottomleft` as a whole — the command bar and
+   * the conditions bar together, plus the gap between them. Checking the two
+   * as separate rects (below) does not cover that gap, and a sheet whose edge
+   * lands *inside* it would pass both of those checks while still visually
+   * overlapping the group and creating exactly the elementFromPoint trap this
+   * invariant exists to catch. This closes that measurement gap without
+   * replacing the two finer-grained checks, which still give a more specific
+   * failure message when only one piece collides.
    */
   bottomLeftGroup: { x: number; y: number; width: number; height: number } | null;
   sheet: { x: number; y: number; width: number; height: number } | null;
@@ -418,7 +419,7 @@ export async function collectChromeRects(page: Page): Promise<ChromeRects> {
     };
     return {
       railTopRight: rectOf('.chrome-topright .rl-rail'),
-      railBottomLeft: rectOf('.chrome-bottomleft .rl-rail'),
+      commandBar: rectOf('.chrome-bottomleft .rl-command'),
       conditions: rectOf('.rl-conditions'),
       bottomLeftGroup: rectOf('.chrome-bottomleft'),
       sheet: rectOf('.rl-sheet'),

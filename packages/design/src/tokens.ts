@@ -250,6 +250,22 @@ export const layout = {
    * impossible on the device this product is used on.
    */
   'conditions-bar-height': '56px',
+  /**
+   * `CommandBar`'s own rendered height (BACKLOG R44) — one row, icon +
+   * label, `.rl-command__cell`'s `--space-3` vertical padding plus
+   * `.rl-glass`'s 1px border top and bottom. Computed from the same tokens
+   * the bar is built from (icon 20px vs. an 11px/1.45 label line both lose
+   * to `--space-touch`'s 44px floor, +2px border = 46px) and padded up a
+   * couple of pixels the same way `conditions-bar-height` is, so a
+   * font-metrics difference across platforms cannot reopen the gap this
+   * exists to guarantee.
+   *
+   * This is the number that replaces the old `--space-touch * N` arithmetic
+   * in `apps/web/src/index.css` — the bar's own clearance is now one fixed
+   * value regardless of how many cells it holds, which is the entire point
+   * of building it as a row instead of a stack.
+   */
+  'command-bar-height': '48px',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */
