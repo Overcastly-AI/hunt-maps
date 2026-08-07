@@ -152,7 +152,6 @@ latest. Three GA counties are confirmed, out of 159.
 | R38 | `windSpeedKph` exists in the contract and never reaches the engine — every fixed shelter floor is a hidden wind-speed assumption | P1 | M | `terrain-scientist` + `backend-builder` | Found by `game-biologist` while prescribing `R31`. `windSpeedKph` is defined at `packages/shared/src/domain.ts:154` and is never passed into `beddingLikelihood` or any other operator — the engine models wind *direction* and ignores wind *speed* entirely. Parker & Gillingham report wind swamping solar gain "regardless of incident solar levels" at 15 m·s⁻¹ and being near-irrelevant in calm air, so the shelter-vs-solar trade `R31` tunes is **not a constant** — it is a function of a variable the engine already has a field for and does not read. That makes `R31`'s floor an interim fix by construction, and it means the same fixed floor is simultaneously too high on a still day and too low in a gale. Thread `windSpeedKph` through to the bedding composite and make the shelter floor a function of it; retire the fixed endpoints when it lands. Depends on `R31` shipping first (so there is a floor to make variable). |
 | R39 | `BEDDING_VRM_FULL_COVER = 0.06` pins the cover term at its ceiling across most real hill country | P1 | S | `terrain-scientist` | Sharpens `R33` with a consequence nobody had noticed. Natural terrain VRM runs roughly 0 to ~0.4; saturating the cover term at 0.06 means it reaches **1.0 across most of the ground a hunter actually looks at**. A term whose whole job is to discriminate concealment is therefore near-constant over real hill country — it is not wrong so much as *inert*, contributing almost no ranking information while appearing in the product as though it does. This is independent of whether 0.06 is the "right" threshold. **First step is measurement, not tuning:** compute the realised VRM distribution over a real 1 m LiDAR tile and a real Terrarium tile at z14–z15, publish the percentiles, and set the normaliser from that — then re-grade. Same treatment for `DEFAULT_VRM_RADIUS_CELLS = 4`. Depends on nothing; makes `R33` concrete. |
 | R40 | `beddingLikelihood`'s **cover** term still swallows unknown data — the same defect `R30` just fixed one term over | P1 | S | `terrain-scientist` | Named by the agent that fixed `R30`, in the half of the function it deliberately did not touch. `clamp01(vectorRuggedness[i])` maps a `NaN` (no elevation under the cell) to 0, which then hits the 0.4 cover floor — so ground the engine **cannot see** comes back as a confident *low* bedding score, which reads on the map as "checked, and it is not bedding". That is CLAUDE.md's worst failure class, and it is the identical shape to the shelter bug `R30` closed: unknown silently becoming a definite answer. It was left alone on purpose — `computeVectorRuggedness`'s NaN semantics are a separate operator, and touching them while the `R32` bedding-ramp work was landing risked a collision. That reasoning was right and the asymmetry is now a real open defect. Fix: propagate unknown out of the cover term the way `R30` propagates it out of shelter, so a cell with no data is `NaN` (greyed) rather than low-scoring. Add the same three-operator agreement test `R30` added. Depends on nothing; `R32` has landed. |
-| R41 | The API's `gridForBBox` allocates a halo it never fills, so the mosaic edge is pure `NODATA` | P1 | S–M | `backend-builder` | Found by `terrain-scientist` while fixing `R30`, outside its territory. `apps/api/src/terrain/dem.service.ts:232` blits only the tiles covering the requested bbox into a grid that was allocated *with* a halo — so everything beyond roughly 8 cells (as far as `fillVoids` reaches) is the `NODATA` sentinel. Before `R30` that halo read as terrain 33 km down and the edge silently reported full sun / fully exposed. **After `R30` the failure is now correct but visible:** shelter and bedding return `NaN` in a ~12-cell band at the mosaic edge, so server-rendered tiles will have a greyed rim. `buildCostSurface` already ignores non-finite attraction so corridors are unaffected, and `samplePoint` centres its query so point readouts are unaffected. Either fill the halo with a ring of neighbour tiles (matching what the browser's 9-tile fetch already does) or stop allocating one and let the operators fail loudly at the true edge. **A decorative halo is worse than none** — it looks like the guard is satisfied when it is not. Depends on `R30` (shipped). |
 | R33 | Ground-truth `BEDDING_VRM_FULL_COVER = 0.06` against real LiDAR | P2 | M | `game-biologist` + `terrain-scientist` | The weakest number in the `R21` set, and flagged as such by the agent that chose it rather than caught later by review — which is the behaviour `docs/EVIDENCE.md` exists to reward. It is **geometry, not observation**: VRM ≈ σ²/2, so 0.06 corresponds to roughly ±20° RMS dispersion of surface normals within the window. That is a defensible scale argument and nothing more; no measurement says a deer beds where normal dispersion crosses 0.06. Grade stays 🔴 Assumed until it is checked against known bed locations on real 1 m LiDAR. Same treatment for `DEFAULT_VRM_RADIUS_CELLS = 4` (9×9 ≈ 90 m at 10 m cells), which is a coarse-scale-concealment argument, not a measurement. Depends on `R21` (shipped). |
 | R34 | Coverage does not count the gradient-apron neighbour tiles | P2 | S–M | `offline-steward` | Named by the agent that shipped `R8` rather than found later in review. The analysis path fetches each tile **plus its 8 neighbours** for the gradient apron, but the coverage probe counts only the tiles the view draws from. A hunter standing exactly on the boundary of a downloaded region therefore sees a seam at the screen edge that the badge said nothing about — a small, real instance of the class `R8` exists to kill. **The trade is deliberate and must not be reversed carelessly:** counting the ring would under-report every region whose edge lands at the screen edge, turning "Covered" into "Partial — 94%" for a download that is in fact complete for everything on screen, which trains a user to ignore the badge. Options are to count the ring only for the tiles actually on screen, to report the seam separately from the coverage figure, or to extend region downloads by one tile so the apron is always satisfied — **prefer the last**, since it fixes the ground truth instead of the report. Depends on `R8` (shipped); couples to `R4`. |
 | R35 | No user control to hide the coverage overlay | P2 | S | `map-builder` | The hatched extent shipped with `R8` is shown whenever the Layers sheet is open or coverage is partial, and there is no way to turn it off. That is the right default — the overlay is the only thing that tells a hunter *which* half of the draw is missing — but a permanent hatch over a map being used for something else is exactly the kind of chrome that gets a good signal ignored. Add a `showCoverage` toggle in the Layers sheet, defaulting on, persisted. Cartography and placement are `map-builder`'s call. Depends on `R8` (shipped). |
@@ -218,6 +217,42 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
   lowers experienced grade), not a slope-threshold bonus.
 
 ## Done — recent
+
+- [x] **`R41` — the API allocated a halo it never filled, and the guard that
+      should have caught it did not exist.** `gridForBBox` blitted only the
+      tiles covering the bbox into a haloed grid, so everything past ~8 cells
+      was `NODATA`. Before `R30` that band silently reported full sun; after
+      `R30` it correctly returned `NaN`, so server tiles would have shown a
+      greyed rim. **Filled it** — a one-tile ring of neighbours, matching the
+      9-tile fetch `gridForTile` already does, so the browser and server render
+      paths agree about the same ground. `HeightGrid.set` already clips writes
+      outside the padded bounds, so a whole ring tile can be blitted at its
+      natural offset and only the sliver inside the halo lands.
+      **The bigger find, beyond what this row named:** `terrain.service.ts` and
+      `corridor.service.ts` call `gridForBBox` with `requiredHalo(request)`
+      **unclamped**, unlike the `gridForTile` callers which clamp to
+      `tileSize`. And `HeightGrid.empty` sets `grid.halo` to exactly what it is
+      given, so `analyze()`'s own `grid.halo < required` check **could never
+      fire** for those two callers — there was no guard at all for a mosaic
+      request needing more halo than one ring can supply. There is now, before
+      any tile in a potentially 256-tile mosaic is fetched.
+      Measured against the unmodified code on a synthetic flat DEM:
+
+      | | before | after |
+      | --- | --- | --- |
+      | DEM fetches, 1-tile mosaic, halo 20 | 1 | 9 |
+      | halo cells passing `isElevation()` | fails at the first | 100% |
+      | `terrainShelter` NaN cells (24×24, halo 20) | **288 / 576** | **0 / 576** |
+      | `gridForBBox(halo = tileSize+6)` | resolved, no guard | throws `{required:30, available:24}` |
+
+      `InsufficientHaloError` was unhandled anywhere in `apps/api` and would
+      have surfaced as a raw 500. Now a global filter returns **422** with
+      `requiredHaloCells` / `availableHaloCells` / `layers`, so a client can
+      grey the layer and say why. API tests 14 → 19.
+      Verified rather than trusted: `buildCostSurface` skips non-finite
+      attraction (`cost.ts:86-89`) so corridors were never exposed, and
+      `samplePoint` pads ~450 m around the point so readouts read from near the
+      mosaic centre — both confirmed by reading the source, not assumed.
 
 - [x] **`R32` (P0) — the bedding layer painted nothing.** Measured on the built
       app: **0.00%** of map-canvas pixels carried colour with bedding enabled
