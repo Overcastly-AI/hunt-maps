@@ -1,3 +1,9 @@
+## [1.1.3](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.2...v1.1.3) (2026-08-07)
+
+### Fixes
+
+* **helm:** runAsNonRoot needs a numeric UID — the API pod could never start ([#11](https://github.com/Overcastly-AI/hunt-maps/issues/11)) ([ead2d32](https://github.com/Overcastly-AI/hunt-maps/commit/ead2d32cf6e75f2931c8ce062c7534562139d9dc))
+
 ## [1.1.2](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.1...v1.1.2) (2026-08-07)
 
 ### Fixes
