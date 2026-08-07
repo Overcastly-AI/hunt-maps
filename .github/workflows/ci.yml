@@ -190,7 +190,7 @@ jobs:
 
           docker run -d --name api --network ridgeline-ci -p 3001:3001 \
             -e DATABASE_URL=postgresql://ridgeline:ci@db:5432/ridgeline \
-            -e JWT_SECRET=ci-smoke-test-secret \
+            -e JWT_SECRET=ci-smoke-test-secret-at-least-32-characters-long \
             -e NODE_ENV=production -e PORT=3001 \
             ridgeline-api:ci
           docker run -d --name web --network ridgeline-ci -p 8080:8080 ridgeline-web:ci
@@ -213,12 +213,19 @@ jobs:
 
           echo "api and web both healthy as non-root"
 
-      - name: Container logs on failure
+      - name: Container state and logs on failure
         if: failure()
         run: |
-          docker logs db  || true
-          docker logs api || true
-          docker logs web || true
+          # Status first. A container that exited tells you immediately that
+          # this is a startup failure rather than a health-check timeout, and
+          # the two have completely different causes.
+          echo '--- container state ---'
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+          for c in db api web; do
+            code=$(docker inspect -f '{{.State.ExitCode}}' "$c" 2>/dev/null || echo '?')
+            echo "--- $c (exit=$code) ---"
+            docker logs "$c" 2>&1 | tail -60 || true
+          done
 
   chart:
     # The chart is a release artefact, so it gets the same gate as the code.
