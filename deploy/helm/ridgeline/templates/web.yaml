@@ -47,7 +47,7 @@ spec:
     spec:
       serviceAccountName: {{ include "ridgeline.serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml (.Values.web.podSecurityContext | default .Values.podSecurityContext) | nindent 8 }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

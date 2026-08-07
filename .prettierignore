@@ -1,0 +1,16 @@
+# Helm templates are Go templates, not YAML. Prettier parses them as YAML and
+# fails on the first `{{- include ... }}`:
+#   SyntaxError: Block collections are not allowed within flow collections
+# There is nothing to fix in the file — the parser is simply the wrong one.
+# `helm lint` and the render checks in CI are what validate these.
+deploy/helm/*/templates/
+
+# Generated from tokens.ts; a CI test fails if the two drift, so formatting it
+# independently would create a diff that looks like drift.
+packages/design/src/tokens.css
+
+# Build output and dependencies.
+**/dist/
+**/node_modules/
+pnpm-lock.yaml
+CHANGELOG.md

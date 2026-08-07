@@ -33,10 +33,14 @@ image:
   #     --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
   pullSecrets: []
 
-# Applied to every pod in the chart. Both images run as non-root (the API as
-# uid 1000, the web as uid 101 via nginx-unprivileged), so `runAsNonRoot` is
-# enforceable rather than aspirational — a regression to a root image fails the
-# pod instead of quietly running privileged.
+# Baseline for every pod. `runAsUser` is deliberately NOT here: the API runs as
+# 1000 and the web as 101, so a single chart-wide UID would be wrong for one of
+# them — each component overrides below.
+#
+# Note `runAsNonRoot: true` requires a *numeric* UID to be resolvable, either
+# from the image's USER or from runAsUser here. With a named user and no
+# runAsUser the kubelet cannot verify the user is not root and refuses to start
+# the container at all, with Init:CreateContainerConfigError.
 podSecurityContext:
   runAsNonRoot: true
   seccompProfile:
@@ -49,6 +53,15 @@ containerSecurityContext:
     drop: ['ALL']
 
 api:
+  # uid/gid 1000 is the `node` user in the official node images, which is what
+  # apps/api/Dockerfile switches to.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
   image:
     repository: ghcr.io/overcastly-ai/hunt-maps-api
     tag: '' # empty → Chart.appVersion
@@ -93,6 +106,16 @@ api:
     targetCPUUtilizationPercentage: 70
 
 web:
+  # uid/gid 101 is the user in nginxinc/nginx-unprivileged. The static files
+  # and nginx's own temp dirs are owned by it, so this cannot be shared with
+  # the API's 1000.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+
   image:
     repository: ghcr.io/overcastly-ai/hunt-maps-web
     tag: '' # empty → Chart.appVersion
