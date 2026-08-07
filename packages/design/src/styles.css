@@ -152,6 +152,19 @@ body {
   color: var(--color-text);
 }
 
+/*
+ * Press feedback. `:hover` never fires on a touchscreen, so gloved, with no
+ * toast, a miss and a hit used to be visually identical at the moment of the
+ * tap (`docs/QA-FIELD.md` finding 1/2) — there was no `:active` rule anywhere
+ * in this file, for any button. `--color-line-strong` rather than `--color-
+ * raised` (the hover colour) so a mouse user's hover-then-press still reads
+ * as two distinct states, not one.
+ */
+.rl-rail__btn:active {
+  background: var(--color-line-strong);
+  color: var(--color-text);
+}
+
 .rl-rail__btn[aria-pressed='true'] {
   background: var(--color-accent);
   color: var(--color-accent-ink);
@@ -329,6 +342,11 @@ body {
   background: var(--color-raised);
 }
 
+/* Press feedback — see `.rl-rail__btn:active` for why this exists at all. */
+.rl-conditions__cell:active {
+  background: var(--color-line-strong);
+}
+
 .rl-conditions__label {
   font-family: var(--font-condensed);
   font-size: var(--text-xs);
@@ -485,6 +503,11 @@ body {
 .rl-btn--primary:hover:not(:disabled) {
   background: var(--color-accent-bright);
 }
+/* Press feedback, darker than the resting colour rather than the hover's
+   brighter one — see `.rl-rail__btn:active` for why every button gets this. */
+.rl-btn--primary:active:not(:disabled) {
+  background: var(--color-accent-dim);
+}
 
 .rl-btn--ghost {
   background: var(--color-raised);
@@ -494,11 +517,18 @@ body {
 .rl-btn--ghost:hover:not(:disabled) {
   border-color: var(--color-line-strong);
 }
+.rl-btn--ghost:active:not(:disabled) {
+  background: var(--color-line-strong);
+  border-color: var(--color-line-strong);
+}
 
 .rl-btn--danger {
   background: transparent;
   border-color: color-mix(in srgb, var(--color-blaze) 50%, transparent);
   color: var(--color-blaze);
+}
+.rl-btn--danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-blaze) 16%, transparent);
 }
 
 .rl-btn--link {
@@ -519,6 +549,9 @@ body {
 .rl-btn--link:hover:not(:disabled) {
   color: var(--color-accent-bright);
   text-decoration: underline;
+}
+.rl-btn--link:active:not(:disabled) {
+  color: var(--color-accent-dim);
 }
 
 .rl-btn--block {

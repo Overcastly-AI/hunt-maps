@@ -427,6 +427,77 @@ export async function collectChromeRects(page: Page): Promise<ChromeRects> {
   });
 }
 
+export interface GlassSurplus {
+  /** `null` only if the container selector matched nothing. */
+  container: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * The union of every visible child's own bounding box — not the
+   * container's, so an oversized glass background around correctly-sized
+   * buttons shows up as a gap between the two, rather than being hidden
+   * inside a single averaged measurement. `null` only when the container
+   * exists but has no visible matching children (nothing to compare against,
+   * a different defect from a surplus).
+   */
+  childUnion: { x: number; y: number; width: number; height: number } | null;
+}
+
+/**
+ * How much bigger a shared-background glass container is than the union of
+ * its own interactive children.
+ *
+ * The direct measurement for `docs/QA-FIELD.md` finding 1 (BACKLOG R43):
+ * `.rl-rail` stretched to the full width of its mobile corner while
+ * `.rl-rail__btn` stayed a fixed 44px, leaving ~85% of the painted glass
+ * belonging to no button at all — correctly 44×44 by every touch-target and
+ * hit-testability check, which both sample only the button's *own* rect and
+ * so never see the dead space around it. This is the check that does.
+ */
+export async function measureGlassSurplus(
+  page: Page,
+  containerSelector: string,
+  childSelector: string,
+): Promise<GlassSurplus> {
+  return page.evaluate(
+    ({ containerSelector, childSelector }: { containerSelector: string; childSelector: string }) => {
+      const container = document.querySelector(containerSelector);
+      if (!container) return { container: null, childUnion: null };
+      const cr = container.getBoundingClientRect();
+
+      const children = Array.from(container.querySelectorAll(childSelector)).filter((el) => {
+        const s = window.getComputedStyle(el);
+        if (s.display === 'none' || s.visibility === 'hidden') return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+
+      if (children.length === 0) {
+        return {
+          container: { x: cr.x, y: cr.y, width: cr.width, height: cr.height },
+          childUnion: null,
+        };
+      }
+
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      for (const el of children) {
+        const r = el.getBoundingClientRect();
+        left = Math.min(left, r.left);
+        top = Math.min(top, r.top);
+        right = Math.max(right, r.right);
+        bottom = Math.max(bottom, r.bottom);
+      }
+
+      return {
+        container: { x: cr.x, y: cr.y, width: cr.width, height: cr.height },
+        childUnion: { x: left, y: top, width: right - left, height: bottom - top },
+      };
+    },
+    { containerSelector, childSelector },
+  );
+}
+
 /** Whether two axis-aligned rects overlap (touching edges do not count). */
 export function rectsOverlap(
   a: { x: number; y: number; width: number; height: number } | null,

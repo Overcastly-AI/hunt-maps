@@ -3,6 +3,7 @@ import {
   auditInteractiveElements,
   collectChromeRects,
   collectChromeTextNodes,
+  measureGlassSurplus,
   rectsOverlap,
 } from './helpers/dom-audit';
 import { contrastRatio, estimateBackground, parseCssColor, requiredContrastRatio } from './helpers/contrast';
@@ -140,18 +141,34 @@ test.describe('0. Regression guard — clipped-ancestor hit-testing', () => {
 // button, for instance). An element whose bounding box says "here" while the
 // browser's hit-test says "somewhere else" is a control a real tap will miss.
 //
-// The one deliberate exception: an element that sits behind the currently
-// open Layers sheet or Wind popover and is not part of it. On a phone the
-// bottom sheet covers the rail behind it rather than sliding it clear
-// (documented in `apps/web/src/index.css`) — that is intentional occlusion by
-// a higher, later-painted panel, not the clipping bug. `auditInteractiveElements`
-// tells these two cases apart by checking whether the *un-hit* element is
-// geometrically inside the currently-open overlay's own DOM subtree: a
-// control that is part of the popover/sheet is always asserted normally (that
-// is exactly where a clipping regression would reappear); a control merely
-// covered by it is skipped. This cannot silently swallow a repeat of the
-// original bug, because the original bug's buttons *were* inside the
-// clipping ancestor's subtree.
+// The one remaining deliberate exception: an element that sits behind the
+// currently open Wind/Time popover and is not part of it — a control on the
+// Layers sheet the popover is legitimately floating over (group 4's "layers
+// sheet and wind popover both open" allows exactly this pair, and the
+// separate "every control in the popover is clickable" test proves the
+// popover, not the sheet, wins the hit test there). `auditInteractiveElements`
+// tells that apart from a real clipping regression by checking whether the
+// *un-hit* element is geometrically inside the currently-open overlay's own
+// DOM subtree: a control that is part of the popover/sheet is always
+// asserted normally (that is exactly where a clipping regression would
+// reappear); a control merely covered by a deliberately-floating popover is
+// skipped. This cannot silently swallow a repeat of the original bug,
+// because the original bug's buttons *were* inside the clipping ancestor's
+// subtree.
+//
+// Until BACKLOG R42, there was a second exception here: on a phone, the
+// Layers sheet ran to `bottom: 0` and covered `.chrome-bottomleft` (the rail
+// and the ConditionsBar) outright while open, which included the Wind
+// control every wind-dependent layer needs — so the flagship "sweep the wind
+// while the layer list is open" move was unreachable on the one device this
+// product is used on (`docs/AUDIT-PRODUCT.md`, 2026-08-07 pass). That
+// occlusion is gone: the mobile sheet now reserves clearance for
+// `.chrome-bottomleft` instead of painting over it
+// (`apps/web/src/index.css`), so nothing in the persistent chrome should ever
+// be `coveredByOpenOverlay` again. Group 4 below (now run at MOBILE as well
+// as DESKTOP) is the direct geometric proof of that — it fails loudly if a
+// future change reintroduces the overlap, rather than this test silently
+// re-widening its own exemption to match.
 //
 // A second, unrelated reason `elementFromPoint` can miss a real control:
 // `elementFromPoint` is viewport-relative and returns `null` for anything
@@ -392,145 +409,176 @@ test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
 // The floating map controls must never overlap each other's bounding boxes —
 // two glass surfaces stacked on top of one another is unreadable and the
 // underneath one becomes an elementFromPoint trap for whatever is on top.
-// Desktop only: on a phone the Layers sheet is designed to cover the bottom
-// rail while open rather than push it aside (see the hit-testability comment
-// above), which is an *intentional* overlap, not a collision to flag. The
-// last case below covers the sheet and a popover open together — see that
-// test for the one pair excluded from the check and why.
-test.describe('4. No chrome collisions (desktop)', () => {
-  // The three persistent groups exist in every one of these states — passing
+//
+// Run at both DESKTOP and MOBILE. Until BACKLOG R42 this group was desktop
+// only, on the reasoning that the mobile Layers sheet was *designed* to cover
+// the bottom rail while open — an intentional overlap, not a collision to
+// flag. That reasoning is why nothing here ever measured the mobile
+// arrangement, and it is also why nobody noticed the mobile sheet covered the
+// one control (Wind) every wind-dependent layer needs, making the product's
+// flagship move unreachable on a phone. R42 removed the overlap instead of
+// re-justifying it, so there is nothing left to exempt: the mobile chrome
+// must now hold the exact same "nothing collides" contract the desktop
+// chrome always has. The last two cases below cover the sheet and a popover
+// open together — see those tests for the one pair excluded from the check
+// and why, and note that pairing was *impossible* to reach on a phone before
+// R42 (the popover's trigger was covered by the sheet it now opens over).
+test.describe('4. No chrome collisions', () => {
+  // The four persistent groups exist in every one of these states — passing
   // their names here means a rect that comes back `null` (its selector
   // matched nothing) is a loud failure, not a silent "nothing to overlap".
   const PERSISTENT = ['rail (top-right)', 'rail (bottom-left)', 'conditions bar', 'chrome-bottomleft group'];
 
-  test('nothing open', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await closeLayersSheet(page);
-    await assertNoCollisions(page, { expectPresent: PERSISTENT });
-  });
-
-  test('layers sheet open', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await waitForRectStable(page.locator('.rl-sheet'));
-    await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'layers sheet'] });
-  });
-
-  test('wind popover open', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await closeLayersSheet(page);
-    await page.getByRole('button', { name: /Wind from/ }).click();
-    await waitForRectStable(page.locator('.rl-popover'));
-    await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'wind/time popover'] });
-  });
-
-  test('region picker open', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await openRegionPicker(page);
-    await waitForRectStable(page.locator('.rl-sheet'));
-    await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'layers sheet'] });
-  });
-
-  /**
-   * Only one panel may occupy the drawer slot.
-   *
-   * The Layers sheet and the region picker are both `.rl-sheet--drawer` and
-   * are absolutely positioned at identical coordinates. Two of them open at
-   * once would overlap *exactly*, and the one underneath becomes an
-   * `elementFromPoint` trap for every control in the one on top — the same
-   * failure the popover/sheet stacking bug produced, reached from a new
-   * direction. Asserted on the rendered DOM rather than on App's state,
-   * because the state being right is not what a user experiences.
-   */
-  test('opening the region picker closes the Layers sheet, and vice versa', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP); // Layers open by default
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
-
-    // Clicked directly rather than through `openRegionPicker`, which closes the
-    // Layers sheet first for the benefit of narrow viewports — that would
-    // defang the very thing this asserts.
-    await page.getByRole('button', { name: 'Save this area for offline use' }).click();
-    await waitForRectStable(page.locator('.rl-sheet'));
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
-    await expect(page.getByTestId('region-elevation-story')).toBeVisible();
-
-    await page.getByRole('button', { name: 'Layers' }).click();
-    await waitForRectStable(page.locator('.rl-sheet'));
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
-    await expect(page.getByTestId('region-elevation-story')).toHaveCount(0);
-  });
-
-  // Layers and a popover are now independent state (App.tsx) and can both be
-  // open at once — the product's flagship move is sweeping the wind dial
-  // while watching the layer list. The three *persistent* chrome groups (both
-  // rails, the conditions bar) must still never collide with anything, sheet
-  // included. The one pair excluded here is the sheet and the popover
-  // themselves: a popover is, by definition, a transient overlay anchored to
-  // its trigger and free to float over other panels — the same way a native
-  // `<select>` dropdown is allowed to cover page content beneath it. That is
-  // a different thing from two *persistent* glass panels landing on top of
-  // one another, which is what this invariant exists to catch.
-  test('layers sheet and wind popover both open', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP); // sheet already open by default
-    await page.getByRole('button', { name: /Wind from/ }).click();
-    await waitForRectStable(page.locator('.rl-popover'));
-    await expect(page.locator('.rl-sheet')).toBeVisible();
-    await assertNoCollisions(page, {
-      allow: [['layers sheet', 'wind/time popover']],
-      expectPresent: [...PERSISTENT, 'layers sheet', 'wind/time popover'],
+  for (const viewport of [DESKTOP, MOBILE]) {
+    test(`${viewport.width}px — nothing open`, async ({ page }) => {
+      await gotoAndSettle(page, viewport);
+      await closeLayersSheet(page);
+      await assertNoCollisions(page, { expectPresent: PERSISTENT });
     });
-  });
 
-  /**
-   * The invariant that the `allow` above needs to be safe.
-   *
-   * Whitelisting an overlap says "these two are *meant* to share space". It
-   * says nothing about which one a click lands on, and that is a separate
-   * question decided by stacking contexts rather than by rectangles. This
-   * exact pair passed the collision test while every control in the popover
-   * was dead: `.rl-popover` sets `z-index: 25` against a sheet at 20, but
-   * `.rl-conditions` creates a stacking context with `backdrop-filter`, and
-   * `.rl-sheet` is a *sibling* of `.map-chrome` rather than a descendant — so
-   * the comparison that actually decided paint order was `.map-chrome`'s 10
-   * against the sheet's 20, which nothing nested inside the chrome can win.
-   *
-   * So: whenever an overlap is deliberately allowed, the thing on top must be
-   * proven to be on top by hit-testing, not assumed from its z-index.
-   */
-  test('every control in the popover is clickable while the sheet is open', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP); // sheet already open by default
-    await page.getByRole('button', { name: /Wind from/ }).click();
-    await waitForRectStable(page.locator('.rl-popover'));
-    await expect(page.locator('.rl-sheet')).toBeVisible();
+    test(`${viewport.width}px — layers sheet open`, async ({ page }) => {
+      await gotoAndSettle(page, viewport);
+      await waitForRectStable(page.locator('.rl-sheet'));
+      await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'layers sheet'] });
+    });
 
-    const dead = await page.evaluate(() => {
-      const popover = document.querySelector('.rl-popover');
-      if (!popover) throw new Error('popover not open');
-      const out: Array<{ label: string; hit: string }> = [];
-      for (const el of popover.querySelectorAll('button, input, select, a[href]')) {
-        const r = el.getBoundingClientRect();
-        if (!r.width || !r.height) continue;
-        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-        if (!(hit === el || el.contains(hit))) {
-          out.push({
-            label: (el.textContent ?? '').trim().slice(0, 16) || el.tagName,
-            hit: hit ? `${hit.tagName}.${hit.className}` : 'null',
-          });
+    test(`${viewport.width}px — wind popover open`, async ({ page }) => {
+      await gotoAndSettle(page, viewport);
+      await closeLayersSheet(page);
+      await page.getByRole('button', { name: /Wind from/ }).click();
+      await waitForRectStable(page.locator('.rl-popover'));
+      await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'wind/time popover'] });
+    });
+
+    test(`${viewport.width}px — region picker open`, async ({ page }) => {
+      await gotoAndSettle(page, viewport);
+      await openRegionPicker(page);
+      await waitForRectStable(page.locator('.rl-sheet'));
+      await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'layers sheet'] });
+    });
+
+    /**
+     * Only one panel may occupy the drawer slot.
+     *
+     * The Layers sheet and the region picker are both `.rl-sheet--drawer` and
+     * are absolutely positioned at identical coordinates. Two of them open at
+     * once would overlap *exactly*, and the one underneath becomes an
+     * `elementFromPoint` trap for every control in the one on top — the same
+     * failure the popover/sheet stacking bug produced, reached from a new
+     * direction. Asserted on the rendered DOM rather than on App's state,
+     * because the state being right is not what a user experiences.
+     */
+    test(`${viewport.width}px — opening the region picker closes the Layers sheet, and vice versa`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport); // Layers open by default
+      await expect(page.locator('.rl-sheet')).toHaveCount(1);
+
+      // Clicked directly rather than through `openRegionPicker`, which closes the
+      // Layers sheet first for the benefit of narrow viewports — that would
+      // defang the very thing this asserts.
+      await page.getByRole('button', { name: 'Save this area for offline use' }).click();
+      await waitForRectStable(page.locator('.rl-sheet'));
+      await expect(page.locator('.rl-sheet')).toHaveCount(1);
+      await expect(page.getByTestId('region-elevation-story')).toBeVisible();
+
+      await page.getByRole('button', { name: 'Layers' }).click();
+      await waitForRectStable(page.locator('.rl-sheet'));
+      await expect(page.locator('.rl-sheet')).toHaveCount(1);
+      await expect(page.getByTestId('region-elevation-story')).toHaveCount(0);
+    });
+
+    // Layers and a popover are independent state (App.tsx) and can both be
+    // open at once — the product's flagship move is sweeping the wind dial
+    // while watching the layer list. Before R42 this pairing was reachable at
+    // DESKTOP only: on a phone the sheet physically covered the Wind trigger,
+    // so there was no way to *open* the popover while the sheet was open in
+    // the first place. The four *persistent* chrome groups (both rails, the
+    // conditions bar, their bottom-left container) must still never collide
+    // with anything, sheet included, at either viewport. The one pair
+    // excluded here is the sheet and the popover themselves: a popover is, by
+    // definition, a transient overlay anchored to its trigger and free to
+    // float over other panels — the same way a native `<select>` dropdown is
+    // allowed to cover page content beneath it. That is a different thing
+    // from two *persistent* glass panels landing on top of one another, which
+    // is what this invariant exists to catch.
+    test(`${viewport.width}px — layers sheet and wind popover both open`, async ({ page }) => {
+      await gotoAndSettle(page, viewport); // sheet already open by default
+      await page.getByRole('button', { name: /Wind from/ }).click();
+      await waitForRectStable(page.locator('.rl-popover'));
+      await expect(page.locator('.rl-sheet')).toBeVisible();
+      await assertNoCollisions(page, {
+        allow: [['layers sheet', 'wind/time popover']],
+        expectPresent: [...PERSISTENT, 'layers sheet', 'wind/time popover'],
+      });
+    });
+
+    /**
+     * The invariant that the `allow` above needs to be safe.
+     *
+     * Whitelisting an overlap says "these two are *meant* to share space". It
+     * says nothing about which one a click lands on, and that is a separate
+     * question decided by stacking contexts rather than by rectangles. This
+     * exact pair passed the collision test while every control in the popover
+     * was dead: `.rl-popover` sets `z-index: 25` against a sheet at 20, but
+     * `.rl-conditions` creates a stacking context with `backdrop-filter`, and
+     * `.rl-sheet` is a *sibling* of `.map-chrome` rather than a descendant — so
+     * the comparison that actually decided paint order was `.map-chrome`'s 10
+     * against the sheet's 20. That fix (`.map-chrome { z-index: 30 }`) used to
+     * be scoped to desktop, on the reasoning that the mobile sheet was meant to
+     * sit on top of the rail/conditions row anyway; R42 made it unconditional,
+     * so this is now the direct proof it also holds at MOBILE, where the pairing
+     * was unreachable before R42 at all.
+     *
+     * So: whenever an overlap is deliberately allowed, the thing on top must be
+     * proven to be on top by hit-testing, not assumed from its z-index.
+     */
+    test(`${viewport.width}px — every control in the popover is clickable while the sheet is open`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport); // sheet already open by default
+      await page.getByRole('button', { name: /Wind from/ }).click();
+      await waitForRectStable(page.locator('.rl-popover'));
+      await expect(page.locator('.rl-sheet')).toBeVisible();
+
+      const dead = await page.evaluate(() => {
+        const popover = document.querySelector('.rl-popover');
+        if (!popover) throw new Error('popover not open');
+        const out: Array<{ label: string; hit: string }> = [];
+        for (const el of popover.querySelectorAll('button, input, select, a[href]')) {
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          if (!(hit === el || el.contains(hit))) {
+            out.push({
+              label: (el.textContent ?? '').trim().slice(0, 16) || el.tagName,
+              hit: hit ? `${hit.tagName}.${hit.className}` : 'null',
+            });
+          }
         }
-      }
-      return out;
+        return out;
+      });
+
+      expect(
+        dead,
+        dead
+          .map((d) => `popover control "${d.label}" is painted but a click there lands on ${d.hit}`)
+          .join('\n'),
+      ).toEqual([]);
+
+      // And prove it end to end: Playwright's actionability check fails on an
+      // intercepted click, so this would have caught the defect on its own —
+      // and on a phone, this exact click is the flagship "sweep the wind"
+      // move R42 was about, performed with the Layers sheet still open.
+      await page.getByRole('button', { name: 'NW', exact: true }).click({ timeout: 5000 });
+
+      // R42's actual prize: with the sheet still open and wind now set,
+      // bedding (which every wind-dependent layer correctly refuses to render
+      // without one) must have gone from disabled to enabled with no panel
+      // ever closed in between.
+      await expect(page.getByRole('checkbox', { name: /Bedding likelihood/ })).toBeEnabled();
     });
-
-    expect(
-      dead,
-      dead
-        .map((d) => `popover control "${d.label}" is painted but a click there lands on ${d.hit}`)
-        .join('\n'),
-    ).toEqual([]);
-
-    // And prove it end to end: Playwright's actionability check fails on an
-    // intercepted click, so this would have caught the defect on its own.
-    await page.getByRole('button', { name: 'NW', exact: true }).click({ timeout: 5000 });
-  });
+  }
 });
 
 async function assertNoCollisions(
@@ -1328,4 +1376,72 @@ test.describe('11. Offline region picker (R4)', () => {
       ).toBeVisible();
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Glass containers paint no more than their interactive children (R43)
+// ---------------------------------------------------------------------------
+//
+// The failure class this guards is distinct from both "1. Hit-testability"
+// and "3. Touch targets", and neither of those caught it: `.chrome-bottomleft`
+// stretched `.rl-rail` to the full width of its mobile corner (~366px on a
+// 390px phone), but `.rl-rail__btn` held a *definite* 44px width, so a flex
+// item with a definite size never stretched. Each button stayed a correctly
+// 44×44, unobstructed, hit-testable island — every existing check passed —
+// pinned to the left edge of ~322px of otherwise-identical dark glass that
+// belonged to no button at all (`docs/QA-FIELD.md` finding 1). A gloved tap
+// anywhere else in that bar landed on nothing, with no border, divider or
+// gradient to say why, right next to `.rl-conditions__cell` — genuinely
+// tappable edge-to-edge — training the thumb to expect the same rule here.
+//
+// The check: for a shared-background glass container with more than one
+// interactive child, the container's own box must not exceed the union of
+// its children's boxes by more than a small tolerance (padding/border, not
+// slack for dead space) in either dimension. Run at MOBILE as well as
+// DESKTOP — the defect this pins was mobile-only by construction
+// (`.chrome-bottomleft`'s `align-items: stretch` override only fires under
+// the 860px breakpoint), so a desktop-only version of this check would never
+// have caught it.
+test.describe('12. Glass container painted surface matches its interactive children (R43)', () => {
+  // Generous, not tight: covers `.rl-glass`'s 1px border on each side (2px)
+  // plus a few px of sub-pixel/rounding noise. It is nowhere near the ~322px
+  // surplus the regression this pins actually produced.
+  const TOLERANCE_PX = 12;
+
+  const containers: Array<{ name: string; container: string; children: string }> = [
+    { name: 'bottom-left rail', container: '.chrome-bottomleft .rl-rail', children: '.rl-rail__btn' },
+    { name: 'top-right rail', container: '.chrome-topright .rl-rail', children: '.rl-rail__btn' },
+    { name: 'conditions bar', container: '.rl-conditions', children: '.rl-conditions__cell' },
+  ];
+
+  for (const viewport of [DESKTOP, MOBILE]) {
+    for (const c of containers) {
+      test(`${viewport.width}px — ${c.name}`, async ({ page }) => {
+        await gotoAndSettle(page, viewport);
+        await closeLayersSheet(page);
+        await waitForRectStable(page.locator(c.container));
+
+        const { container, childUnion } = await measureGlassSurplus(page, c.container, c.children);
+        expect(container, `${c.name}: container selector "${c.container}" matched nothing`).not.toBeNull();
+        expect(
+          childUnion,
+          `${c.name}: no visible children matched "${c.children}" to compare against`,
+        ).not.toBeNull();
+
+        const widthSurplus = container!.width - childUnion!.width;
+        const heightSurplus = container!.height - childUnion!.height;
+
+        expect(
+          widthSurplus,
+          `${c.name} is ${widthSurplus.toFixed(1)}px wider than the union of its own interactive ` +
+            `children (container ${container!.width.toFixed(1)}px vs children ${childUnion!.width.toFixed(1)}px) — ` +
+            `that surplus is glass a gloved tap can land on that does nothing.`,
+        ).toBeLessThanOrEqual(TOLERANCE_PX);
+        expect(
+          heightSurplus,
+          `${c.name} is ${heightSurplus.toFixed(1)}px taller than the union of its own interactive children.`,
+        ).toBeLessThanOrEqual(TOLERANCE_PX);
+      });
+    }
+  }
 });

@@ -13,7 +13,6 @@ import {
   LayersIcon,
   LocateIcon,
   MinusIcon,
-  PinIcon,
   PlusIcon,
   Rail,
   RailButton,
@@ -277,9 +276,6 @@ export default function App() {
               }}
             >
               <LayersIcon />
-            </RailButton>
-            <RailButton label="Add waypoint" onClick={() => undefined}>
-              <PinIcon />
             </RailButton>
             <RailButton
               label="Save this area for offline use"

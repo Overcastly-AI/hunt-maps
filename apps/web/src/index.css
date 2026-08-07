@@ -95,54 +95,63 @@
  *
  * This overrides `.rl-sheet--drawer`'s own `bottom` offset
  * (`packages/design/src/styles.css`), which only budgets for a single
- * touch-target-tall control. This app's own rail stacks three buttons in
- * that corner (`--space-touch` x3 plus a gap on each side), so the sheet
- * needs three times the clearance — a fact about *this app's* specific
- * chrome arrangement, not about the sheet component itself, which is why the
- * override lives here rather than in the design package. Scoped to widths
- * above the sheet's own mobile breakpoint so it never fights the intentional
- * full-width bottom-sheet behaviour below that.
+ * touch-target-tall control. This app's own rail stacks two buttons in that
+ * corner — Layers and Save; the "Add waypoint" placeholder that made it
+ * three was deleted in R45, a real capability was never behind it — so the
+ * sheet needs twice the clearance (`--space-touch` x2 plus a gap on each
+ * side). A fact about *this app's* specific chrome arrangement, not about
+ * the sheet component itself, which is why the override lives here rather
+ * than in the design package. Scoped to widths above the sheet's own mobile
+ * breakpoint so it never fights the mobile clearance below.
  */
 @media (min-width: 861px) {
   .rl-sheet--drawer {
-    bottom: calc(var(--space-touch) * 3 + var(--space-6) * 2);
-  }
-
-  /*
-   * Lift the whole chrome layer above the drawer, so the wind and time
-   * popovers — which open upward out of the conditions bar and across the
-   * drawer's column — are clickable while the layers sheet is open.
-   *
-   * Why it has to be *here*, on `.map-chrome`, and not on the popover: the
-   * popover already sets `z-index: 25` against a sheet at 20, which looks
-   * like it should win and cannot. Two ancestors defeat it. `.rl-conditions`
-   * carries `backdrop-filter` for the glass, and backdrop-filter creates a
-   * stacking context, so the popover's 25 only orders it *within the
-   * conditions bar*. And `.rl-sheet` is not a descendant of `.map-chrome` at
-   * all — it is a sibling under `.app-shell` — so the comparison that
-   * actually decides paint order is `.map-chrome`'s 10 against the sheet's
-   * 20. Nothing nested inside the chrome can escape that, at any z-index.
-   *
-   * The result was the popover painting under the sheet with its lower half
-   * hit-testing into `.rl-group` behind it: visible, and dead. Same failure
-   * class as the earlier `overflow: hidden` bug, and the same lesson — an
-   * ancestor property, invisible at the call site, silently overriding a
-   * child's own correct-looking rule.
-   *
-   * Desktop only. Below 861px the sheet is a full-width bottom sheet that is
-   * *meant* to cover this row while open (see the comment in the max-width
-   * block); raising the chrome there would leave the rail punched through a
-   * panel that is deliberately on top.
-   */
-  .map-chrome {
-    z-index: 30;
+    bottom: calc(var(--space-touch) * 2 + var(--space-6) * 2);
   }
 }
 
 /*
- * On a phone the conditions bar spans the full width and sits above the sheet.
- * Wind and time are the two things a hunter re-checks constantly, so they get
- * the bottom edge — the only part of a large phone a thumb reaches reliably.
+ * Lift the whole chrome layer above any open sheet, so the wind and time
+ * popovers — which open upward out of the conditions bar — are clickable
+ * while the Layers sheet (or the region picker, which shares the same drawer
+ * slot) is open.
+ *
+ * Why it has to be *here*, on `.map-chrome`, and not on the popover: the
+ * popover already sets `z-index: 25` against a sheet at 20, which looks like
+ * it should win and cannot. Two ancestors defeat it. `.rl-conditions` carries
+ * `backdrop-filter` for the glass, and backdrop-filter creates a stacking
+ * context, so the popover's 25 only orders it *within the conditions bar*.
+ * And `.rl-sheet` is not a descendant of `.map-chrome` at all — it is a
+ * sibling under `.app-shell` — so the comparison that actually decides paint
+ * order is `.map-chrome`'s 10 against the sheet's 20. Nothing nested inside
+ * the chrome can escape that, at any z-index.
+ *
+ * The result, before this rule, was the popover painting under the sheet
+ * with its lower half hit-testing into `.rl-group` behind it: visible, and
+ * dead. Same failure class as the earlier `overflow: hidden` bug, and the
+ * same lesson — an ancestor property, invisible at the call site, silently
+ * overriding a child's own correct-looking rule.
+ *
+ * Used to be scoped to `@media (min-width: 861px)`, because below that width
+ * the sheet ran to `bottom: 0` and was *meant* to cover this row while open —
+ * raising the chrome there would have punched the rail through a panel
+ * deliberately on top of it. R42 (below) removed that: the mobile sheet now
+ * reserves clearance for `.chrome-bottomleft` instead of covering it, which
+ * makes opening the wind popover *while the sheet is open* newly possible on
+ * a phone — the flagship "sweep the wind, watch bedding repaint" move this
+ * product exists for. It has to win the same stacking-context fight there
+ * that it already won on desktop, so this rule now applies unconditionally.
+ */
+.map-chrome {
+  z-index: 30;
+}
+
+/*
+ * On a phone the conditions bar spans the full width and sits above the rail.
+ * Wind and time are the two things a hunter re-checks constantly; see F3 in
+ * `docs/AUDIT-PRODUCT.md` (2026-08-07 pass) for the finding that this row's
+ * *own* stacking order still contradicts that intent — tracked at BACKLOG
+ * R44, not fixed in this pass.
  */
 @media (max-width: 860px) {
   .map-chrome {
@@ -159,11 +168,90 @@
   }
 
   /*
-   * The mobile bottom sheet rises from the bottom edge and covers this row
-   * outright while open, rather than making room for it — there is no
-   * "sideways" on a full-width sheet. That is a deliberate, temporary
-   * occlusion by a panel the user can dismiss, not the trigger-displacement
-   * bug described above: nothing here moves, it is only painted over.
+   * R43 — the rail's own buttons must fill the glass they are painted on.
+   *
+   * `align-items: stretch` above stretches `.rl-rail` itself to the full
+   * width of this corner (~366px on a 390px phone), but `.rl-rail__btn` sets
+   * a *definite* `width: var(--space-touch)` (`packages/design/src/
+   * styles.css`), and a flex item with a definite size never stretches. Each
+   * button stayed a 44px island pinned to the left edge of an otherwise dead
+   * glass bar, with no border, divider or gradient marking where the live
+   * control ends — roughly 85% of the painted surface belonged to no button
+   * at all (`docs/QA-FIELD.md` finding 1). `.rl-conditions__cell` directly
+   * above genuinely *is* tappable edge-to-edge, so that correct neighbour
+   * trained the thumb to expect the same rule here, where it was false.
+   *
+   * The fix is the field audit's own hard constraint: content-sized, no
+   * fixed-width child inside a stretched container — the same shape
+   * `.rl-conditions__cell` already uses, just reached differently (that row
+   * is a `row` flex container whose cells *shrink*-to-fit; this one is a
+   * `column` flex container whose buttons, once no longer pinned to a
+   * definite width, take `.rl-rail`'s own default `align-items: stretch` and
+   * *grow*-to-fit instead). Either direction lands on the same rule: no
+   * definite size on the child, so the container's own stretch behaviour is
+   * what decides its size, and the painted and interactive surfaces can
+   * never disagree by construction. Icon stays centred by `.rl-rail__btn`'s
+   * own `justify-content: center`.
+   */
+  .chrome-bottomleft .rl-rail__btn {
+    width: auto;
+  }
+
+  /*
+   * R42 — the sheet (Layers or the region picker; both use
+   * `.rl-sheet--drawer`) must stop covering `.chrome-bottomleft` while open.
+   *
+   * It used to run to `bottom: 0`, so it painted straight over the rail and
+   * the ConditionsBar rather than making room for them — including Wind,
+   * which bedding (and every other wind-dependent layer) is correctly
+   * disabled without. Turning bedding on from a cold start on a phone took
+   * eight interactions with a mandatory panel-close in the middle: open the
+   * sheet, discover bedding needs a wind, close the sheet (the only way to
+   * reach Wind), set it, reopen the sheet, scroll back, toggle. The flagship
+   * move this product exists for — sweep the wind dial, watch leeward
+   * bedding repaint live — was reachable on a desktop and not on the device
+   * this product is actually used on. (`docs/AUDIT-PRODUCT.md`, 2026-08-07
+   * pass, "the finding that matters most"; `docs/QA-FIELD.md` finding 3 flags
+   * the same row as untracked by any collision check.)
+   *
+   * The two custom properties below are this app's own bottom-left and
+   * top-right chrome group heights on a phone, hand-computed from the same
+   * tokens the groups themselves are built from — the same "sibling
+   * clearance I can't measure at build time" shape as the desktop `* 2`
+   * override above, and the same debt (BACKLOG R44/F7): a button added to
+   * either rail has to be reflected here by hand, or this regresses exactly
+   * the way it was found. `--layout-conditions-bar-height` is the one
+   * measured (not computed) number in the mix — see its definition in
+   * `packages/design/src/tokens.ts` for why.
+   */
+  .rl-sheet--drawer {
+    /* Top-right rail (zoom in/out, locate — still three buttons; R45 only
+       removed a button from the bottom-left rail) plus the grid padding on
+       each side of it, so the sheet's top edge can never creep up into it. */
+    --rl-mobile-top-clearance: calc(
+      var(--space-3) + (var(--space-touch) * 3 + 4px) + var(--space-3)
+    );
+    /* map-chrome's own bottom padding/safe-area, the two-button rail, the
+       gap above it, ConditionsBar's measured height, and a breathing gap. */
+    --rl-mobile-bottom-clearance: calc(
+      max(var(--space-3), env(safe-area-inset-bottom)) +
+        (var(--space-touch) * 2 + 3px) + var(--space-3) +
+        var(--layout-conditions-bar-height) + var(--space-3)
+    );
+    top: var(--rl-mobile-top-clearance);
+    bottom: var(--rl-mobile-bottom-clearance);
+    /* Fully determined by `top` + `bottom` now; the design package's own
+       `62vh` cap (`packages/design/src/styles.css`) would only ever bind if
+       this computed height exceeded it, which it does not on any viewport
+       this app supports, but `none` says so rather than leaving it to a
+       coincidence of arithmetic. */
+    max-height: none;
+  }
+
+  /*
+   * The dead reserved corner (`docs/AUDIT-PRODUCT.md` F9) — never rendered,
+   * kept `display: none` so its own reserved grid area can't trap a stray
+   * pointer event.
    */
   .chrome-bottomright {
     display: none;

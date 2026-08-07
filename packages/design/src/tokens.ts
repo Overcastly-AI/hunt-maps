@@ -236,6 +236,20 @@ export const layout = {
   'sheet-max-height': '62vh',
   'rail-gap': '12px',
   'breakpoint-compact': '860px',
+  /**
+   * `ConditionsBar`'s own rendered height on a phone — two stacked lines
+   * (label + value) inside `.rl-conditions__cell`'s padding, plus the shared
+   * `.rl-glass` border. Measured directly with `getBoundingClientRect` at
+   * 390px (~51-52px, both with and without a wind set — the row is always
+   * two lines) and padded up to a round number so a font-metrics difference
+   * across platforms cannot re-open the gap it exists to guarantee: the
+   * mobile Layers/Offline sheet's clearance in `apps/web/src/index.css`,
+   * which must stop above this row rather than painting over it (BACKLOG
+   * R42) — the wind control has to stay reachable while the sheet is open,
+   * or the app's flagship "sweep the wind, watch bedding repaint" move is
+   * impossible on the device this product is used on.
+   */
+  'conditions-bar-height': '56px',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */

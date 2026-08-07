@@ -111,6 +111,20 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       standing exactly on a download boundary can see a seam the badge did not
       warn about (`BACKLOG R34`). `R4`, the region picker that lets a hunter act
       on any of this, shipped in the same phase — see below.
+- [x] **Map chrome fixed at the root — `BACKLOG R42`/`R43`/`R45`.** The
+      founder reported the left rail as "really hard to work with"; two
+      independent audits found *different* causes and both are closed.
+      Opening Layers on a phone had been hiding the wind control, so the
+      wind-sweep — the interaction no competitor has — could not be performed
+      on the device this product is for; it took eight steps with a mandatory
+      panel-close, and now takes three with none. Separately the mobile rail
+      was ~88% dead space that looked pressable (a definite-width flex child
+      in a stretched container), surplus 322.0px → 2.0px, with `:active`
+      states added across the design system where there had been none for any
+      button. Invariants 49 → **62**: collision checking now runs at both
+      viewports instead of desktop-only, and a new group compares painted
+      surface against interactive surface — the gap that let a control look
+      three times larger than it was.
 - [ ] Property boundary drawing and editing on the map *(🔴 scorecard gap)*
 - [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
 - [ ] Observation capture optimised for gloved, one-handed, in-the-field use

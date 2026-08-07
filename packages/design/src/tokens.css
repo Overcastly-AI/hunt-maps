@@ -107,6 +107,7 @@
   --layout-sheet-max-height: 62vh;
   --layout-rail-gap: 12px;
   --layout-breakpoint-compact: 860px;
+  --layout-conditions-bar-height: 56px;
 
   /* motion */
   --motion-fast: 120ms;
