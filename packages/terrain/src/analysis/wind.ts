@@ -29,9 +29,15 @@
  * at 08:00 is burnt at 17:00.
  */
 
+import { isElevation } from '../dem/encoding.js';
+import { emptyScan, scanHorizon } from './horizon.js';
 import type { CurvatureField, SurfaceField } from './surface.js';
 import { azimuthDelta } from './surface.js';
 import { DEFAULT_RING_RADIUS_CELLS, ringSlopeStats, type RingSlopeStats } from './landform.js';
+
+/** Module-local aliases — see the note in `horizon.ts` on CommonJS inlining. */
+const isElev = isElevation;
+const scanRay = scanHorizon;
 
 const RAD = Math.PI / 180;
 
@@ -71,12 +77,39 @@ export function windExposure(surface: SurfaceField, windFromDeg: number): Float3
 }
 
 /**
- * TOPEX-style terrain shelter, 0..1 (1 = fully sheltered).
+ * Upwind horizon angle treated as full shelter, degrees.
+ *
+ * Named rather than inlined because it is now load-bearing twice: it sets the
+ * scale of the index *and* it is the ceiling that lets a cell keep a definite
+ * answer when the upwind ray runs off the edge of the DEM (see `horizon.ts`).
+ * 🔴 Assumed — a saturation scale, not a measurement.
+ */
+export const SHELTER_FULL_HORIZON_DEG = 30;
+
+/**
+ * Upwind search distance, in cells. Exported so `requiredHalo()` sizes the halo
+ * from the same number the march uses; two independent literals is how a
+ * seam grid gets into a shipped layer.
+ */
+export const DEFAULT_SHELTER_RADIUS_CELLS = 20;
+
+/**
+ * TOPEX-style terrain shelter, 0..1 (1 = fully sheltered), `NaN` where the
+ * upwind terrain needed to answer is not in the grid.
  *
  * Marches upwind and takes the maximum horizon angle: a cell tucked below a
  * steep crest 40 m upwind is sheltered; a cell on an open plain with the same
  * aspect is not. Weighting the exposure index by this is what stops the leeward
  * layer from lighting up every gently south-tilted acre of a flat farm field.
+ *
+ * ## Missing data
+ *
+ * An unreadable upwind cell used to be skipped, which — because `NODATA` is a
+ * finite −32768 — meant a cell whose entire upwind ray lay in an unwritten halo
+ * reported **0, fully exposed**, the most confident wrong answer available
+ * (`R30`). It now reports `NaN` instead, *except* where the visible terrain has
+ * already reached `SHELTER_FULL_HORIZON_DEG`: missing ground can only raise a
+ * horizon, so a saturated cell stays 1 whatever is hiding in the gap.
  */
 export function terrainShelter(
   heightAt: (x: number, y: number) => number,
@@ -84,30 +117,30 @@ export function terrainShelter(
   height: number,
   cellSize: number,
   windFromDeg: number,
-  radiusCells = 20,
+  radiusCells = DEFAULT_SHELTER_RADIUS_CELLS,
 ): Float32Array {
   const out = new Float32Array(width * height);
   const azRad = windFromDeg * RAD;
   // Step INTO the wind (toward where it comes from).
   const dx = Math.sin(azRad);
   const dy = -Math.cos(azRad);
+  const fullRad = SHELTER_FULL_HORIZON_DEG * RAD;
+  const fullTan = Math.tan(fullRad);
+  const scan = emptyScan();
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const z0 = heightAt(x, y);
-      if (!Number.isFinite(z0)) {
+      if (!isElev(z0)) {
         out[y * width + x] = NaN;
         continue;
       }
-      let maxAngle = 0;
-      for (let r = 1; r <= radiusCells; r++) {
-        const zr = heightAt(Math.round(x + dx * r), Math.round(y + dy * r));
-        if (!Number.isFinite(zr)) continue;
-        const angle = Math.atan2(zr - z0, r * cellSize);
-        if (angle > maxAngle) maxAngle = angle;
-      }
-      // 30° of upwind horizon is treated as full shelter.
-      out[y * width + x] = Math.min(1, maxAngle / (30 * RAD));
+      scanRay(heightAt, x, y, dx, dy, z0, cellSize, radiusCells, fullTan, scan);
+      const shelter = Math.min(1, Math.atan(scan.maxTan) / fullRad);
+      // The saturation test is repeated here rather than trusted from the scan
+      // so the boundary is exact: `scanHorizon` pins on a strict `>`, and a ray
+      // landing on precisely 30° is still a definite 1.
+      out[y * width + x] = scan.incomplete && shelter < 1 ? NaN : shelter;
     }
   }
   return out;
@@ -459,7 +492,22 @@ export function beddingLikelihood(
       const ringTerm = 1 / (1 + Math.exp(-(ringSlope - ringMin) / ringSoft));
 
       // Shelter term: without an upwind obstruction, "leeward" is meaningless.
-      const shelterTerm = options.shelter ? 0.25 + 0.75 * clamp01(options.shelter[i]) : 1;
+      //
+      // A `NaN` here means `terrainShelter` ran out of upwind DEM, not that the
+      // cell is unsheltered, and the two must not be conflated: `clamp01` would
+      // fold unknown onto the 0.25 floor and hand back a confident low score for
+      // ground the engine cannot see (`R30`). Unknown input, unknown output —
+      // every term of this product is a requirement, so one unknown factor makes
+      // the whole cell unknown.
+      let shelterTerm = 1;
+      if (options.shelter) {
+        const s = options.shelter[i];
+        if (Number.isNaN(s)) {
+          out[i] = NaN;
+          continue;
+        }
+        shelterTerm = 0.25 + 0.75 * clamp01(s);
+      }
 
       // Cover term: orientation dispersion, deliberately slope-independent.
       const coverTerm = options.vectorRuggedness

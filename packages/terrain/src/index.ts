@@ -12,7 +12,9 @@
 export * from './dem/encoding.js';
 export * from './dem/tilemath.js';
 export * from './dem/grid.js';
+export * from './dem/halo.js';
 
+export * from './analysis/horizon.js';
 export * from './analysis/surface.js';
 export * from './analysis/landform.js';
 export * from './analysis/shading.js';

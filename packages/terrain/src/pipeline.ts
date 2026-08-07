@@ -16,6 +16,7 @@
  */
 
 import { HeightGrid } from './dem/grid.js';
+import { InsufficientHaloError } from './dem/halo.js';
 import {
   computeCurvature,
   computeRuggedness,
@@ -36,6 +37,7 @@ import {
   type WoodOptions,
 } from './analysis/landform.js';
 import {
+  DEFAULT_SKY_VIEW_RADIUS_CELLS,
   hillshade,
   multidirectionalHillshade,
   skyViewFactor,
@@ -45,6 +47,7 @@ import { slopeInsolation, solarPosition, type SolarPosition } from './analysis/s
 import {
   beddingLikelihood,
   coldBlendWeight,
+  DEFAULT_SHELTER_RADIUS_CELLS,
   terrainShelter,
   windExposure,
   type BeddingOptions,
@@ -119,6 +122,27 @@ export interface AnalysisResult extends TerrainFields {
  * how many requested layers depend on it.
  */
 export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisResult {
+  // Refuse an undersized halo instead of computing on terrain that is not there.
+  //
+  // Both shipped callers clamp with `Math.min(requiredHalo(request), tileSize)`,
+  // because a 3x3 DEM fetch cannot supply more than one tile of halo. That clamp
+  // used to be a silent truncation: the operators ran anyway, read the `NODATA`
+  // sentinel as elevation, and reported open ground (`R30`). Failing here is what
+  // makes the clamp honest. The error is duck-typed via `isInsufficientHaloError`
+  // so a caller can grey the layer out — "this needs a wider fetch" is a normal,
+  // recoverable state, not a crash.
+  const required = requiredHalo(request);
+  if (grid.halo < required) {
+    throw new InsufficientHaloError({
+      required,
+      available: grid.halo,
+      layers: request.layers,
+      detail:
+        'Every cell within that distance of the tile edge would be computed from ' +
+        'no-data, which reads as open ground.',
+    });
+  }
+
   const want = new Set<string>(request.layers);
   const { width, height, cellSize } = grid;
   const heightAt = (x: number, y: number): number =>
@@ -285,8 +309,12 @@ export function requiredHalo(request: AnalysisRequest): number {
     halo = Math.max(halo, request.tpiLargeRadius ?? 20, request.weiss?.largeRadius ?? 20);
   }
   if (want.has('bench')) halo = Math.max(halo, (request.bench?.ringRadius ?? 8) + 1);
-  if (want.has('skyView')) halo = Math.max(halo, 24);
-  if (want.has('shelter') || want.has('bedding')) halo = Math.max(halo, 20);
+  // Both radii come from the operators themselves rather than being restated
+  // here. Two independent literals is how the march quietly outgrows the halo.
+  if (want.has('skyView')) halo = Math.max(halo, DEFAULT_SKY_VIEW_RADIUS_CELLS);
+  if (want.has('shelter') || want.has('bedding')) {
+    halo = Math.max(halo, DEFAULT_SHELTER_RADIUS_CELLS);
+  }
   if (want.has('bedding')) {
     // The bedding cover term is a VRM window, which reads radius+1 cells out
     // (radius for the window, one more for the Horn kernel at its edge). Below
