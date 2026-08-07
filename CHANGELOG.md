@@ -1,3 +1,20 @@
+## [1.1.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.0.0...v1.1.0) (2026-08-07)
+
+### Features
+
+* **deploy:** production hardening across images, chart and release pipeline ([024fee1](https://github.com/Overcastly-AI/hunt-maps/commit/024fee1551095710c885aeb8f6d114e101449890))
+* **helm:** derive CORS origins from the ingress host ([6a8c5c0](https://github.com/Overcastly-AI/hunt-maps/commit/6a8c5c0d4202d0b893222acf2c7f54520bda8831))
+* production hardening, semantic releases, and container smoke tests ([#8](https://github.com/Overcastly-AI/hunt-maps/issues/8)) ([fcf8335](https://github.com/Overcastly-AI/hunt-maps/commit/fcf8335d945d8bf101664bc91bf292732c42063c))
+
+### Fixes
+
+* **api:** the image could never start — entrypoint was at a different path ([1fb3539](https://github.com/Overcastly-AI/hunt-maps/commit/1fb35393562e305d193c6f9d1044f3dae8767992))
+* **helm:** reject a too-short jwtSecret at install instead of at pod start ([e7132b7](https://github.com/Overcastly-AI/hunt-maps/commit/e7132b7f052c89ceaf3b64233cce4f1560891aa8))
+
+### Documentation
+
+* **backlog:** file the agent-tooling rename as P2 ([d608d03](https://github.com/Overcastly-AI/hunt-maps/commit/d608d037d40e69b3e1a13db91469dffc85f4566e))
+
 ## 1.0.0 (2026-08-07)
 
 ### Features
