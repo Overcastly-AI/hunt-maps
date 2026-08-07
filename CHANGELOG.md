@@ -1,3 +1,11 @@
+## [1.1.2](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.1...v1.1.2) (2026-08-07)
+
+### Fixes
+
+* **ci:** lowercase the owner for cosign and helm push ([1eaab7f](https://github.com/Overcastly-AI/hunt-maps/commit/1eaab7fe87bf1efdd0fda3749200793e420b76cc))
+* **ci:** namespace the published chart under the repository, not a bare charts/ ([08736c7](https://github.com/Overcastly-AI/hunt-maps/commit/08736c75e8793c08d481cc47b724859a648a85cb))
+* lowercase OCI refs and namespace the chart under the repo ([#10](https://github.com/Overcastly-AI/hunt-maps/issues/10)) ([a189452](https://github.com/Overcastly-AI/hunt-maps/commit/a1894520ddb79d564a1040d80ea4ed82f4455090))
+
 ## [1.1.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.0...v1.1.1) (2026-08-07)
 
 ### Fixes
