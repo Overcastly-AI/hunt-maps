@@ -1,3 +1,14 @@
+## [1.1.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.0...v1.1.1) (2026-08-07)
+
+### Fixes
+
+* **ci:** release job failed after publishing, skipping images and chart ([a798c83](https://github.com/Overcastly-AI/hunt-maps/commit/a798c83b3e0d589601bba8d11baaea97fe716fbf))
+* release pipeline stranded v1.1.0 without images or chart ([#9](https://github.com/Overcastly-AI/hunt-maps/issues/9)) ([3c92583](https://github.com/Overcastly-AI/hunt-maps/commit/3c92583283358f223b21c83cba9b35948199513b))
+
+### Documentation
+
+* make the Helm install one command, defaulting to ridgeline.localtest.me ([6adacc5](https://github.com/Overcastly-AI/hunt-maps/commit/6adacc5bf02257db6e015cf80331f0710efa952c))
+
 ## [1.1.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.0.0...v1.1.0) (2026-08-07)
 
 ### Features
