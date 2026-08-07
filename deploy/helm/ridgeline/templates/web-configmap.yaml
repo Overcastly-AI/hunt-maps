@@ -26,7 +26,9 @@ data:
     resolver {{ .Values.web.dnsResolver }} valid=10s ipv6=off;
 
     server {
-      listen 80;
+      # 8080, not 80 — the image runs unprivileged as uid 101 and cannot bind
+      # a port below 1024.
+      listen 8080;
       root /usr/share/nginx/html;
       index index.html;
 

@@ -84,9 +84,9 @@ services:
       api:
         condition: service_started
     ports:
-      - '${WEB_PORT:-8080}:80'
+      - '${WEB_PORT:-8080}:8080'
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/index.html >/dev/null || exit 1']
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:8080/index.html >/dev/null || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3

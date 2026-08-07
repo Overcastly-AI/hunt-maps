@@ -45,6 +45,8 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "ridgeline.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -65,6 +67,8 @@ spec:
         - name: migrate
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           workingDir: /app/apps/api
           command:
             - sh
@@ -94,10 +98,22 @@ spec:
                 secretKeyRef:
                   name: {{ include "ridgeline.secretName" . }}
                   key: database-url
+          volumeMounts:
+            # readOnlyRootFilesystem is on, and both pnpm and Prisma write at
+            # runtime — pnpm to its store metadata under $HOME, Prisma to
+            # query-engine caches and /tmp. Without these the container dies
+            # with an EACCES from inside a dependency, which reads as a broken
+            # install rather than a filesystem policy.
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/node
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           workingDir: /app/apps/api
           # Migrations are handled above; run only the server here.
           command: ["node", "dist/main.js"]
@@ -134,6 +150,17 @@ spec:
           # /api/health reports PostGIS reachability, so readiness tracks the
           # thing that actually matters: whether spatial queries can run. A
           # plain TCP check would mark a pod ready that cannot serve a map.
+          startupProbe:
+            # Until this passes, liveness and readiness are not evaluated at
+            # all. Without it a slow first boot — Prisma engine warmup on a
+            # cold node, or a large migration — trips the liveness probe and
+            # the pod restarts in a loop that looks like a crash rather than
+            # a timeout. 30 x 5s gives it 2.5 minutes before anything panics.
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /api/health
@@ -152,6 +179,21 @@ spec:
             failureThreshold: 5
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            # readOnlyRootFilesystem is on, and both pnpm and Prisma write at
+            # runtime — pnpm to its store metadata under $HOME, Prisma to
+            # query-engine caches and /tmp. Without these the container dies
+            # with an EACCES from inside a dependency, which reads as a broken
+            # install rather than a filesystem policy.
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/node
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

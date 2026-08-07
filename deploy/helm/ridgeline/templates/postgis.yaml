@@ -41,6 +41,8 @@ spec:
         {{- include "ridgeline.labels" . | nindent 8 }}
         app.kubernetes.io/component: postgis
     spec:
+      securityContext:
+        {{- toYaml .Values.postgis.podSecurityContext | nindent 8 }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -49,6 +51,8 @@ spec:
         - name: postgis
           image: "{{ .Values.postgis.image.repository }}:{{ .Values.postgis.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.postgis.containerSecurityContext | nindent 12 }}
           ports:
             - name: postgres
               containerPort: 5432

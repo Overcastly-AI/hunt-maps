@@ -1,0 +1,10 @@
+# Keep the packaged chart to just the chart.
+.DS_Store
+.git
+.gitignore
+*.tgz
+*.orig
+*.bak
+*~
+.vscode/
+.idea/

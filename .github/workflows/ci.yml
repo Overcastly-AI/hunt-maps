@@ -146,7 +146,120 @@ jobs:
             }
             process.exit(bad ? 1 : 0);
           '
-      - name: Build API image
-        run: docker build -f apps/api/Dockerfile -t ridgeline-api .
-      - name: Build web image
-        run: docker build -f apps/web/Dockerfile -t ridgeline-web .
+      # The images are built and actually run in the `smoke` job below, so
+      # they are not built twice here.
+
+  smoke:
+    # Builds both images and actually RUNS them. `docker build` succeeding
+    # proves only that the image assembles — it says nothing about whether the
+    # process inside can start, which is exactly what changed when both images
+    # moved to non-root users. Every other gate in this repo would stay green
+    # while the containers crash-looped on a permissions error.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        run: |
+          docker build -f apps/api/Dockerfile -t ridgeline-api:ci .
+          docker build -f apps/web/Dockerfile -t ridgeline-web:ci .
+
+      - name: Assert both images run as non-root
+        run: |
+          for img in ridgeline-api:ci ridgeline-web:ci; do
+            uid=$(docker run --rm --entrypoint sh "$img" -c 'id -u')
+            echo "$img runs as uid $uid"
+            if [ "$uid" = "0" ]; then
+              echo "::error::$img runs as root"
+              exit 1
+            fi
+          done
+
+      - name: Run the stack and hit the endpoints
+        run: |
+          docker network create ridgeline-ci
+          docker run -d --name db --network ridgeline-ci \
+            -e POSTGRES_USER=ridgeline -e POSTGRES_PASSWORD=ci \
+            -e POSTGRES_DB=ridgeline postgis/postgis:16-3.4
+          # Wait for the database rather than sleeping a fixed amount; a fixed
+          # sleep is how this kind of job becomes intermittently red.
+          for i in $(seq 1 60); do
+            docker exec db pg_isready -U ridgeline >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+          docker run -d --name api --network ridgeline-ci -p 3001:3001 \
+            -e DATABASE_URL=postgresql://ridgeline:ci@db:5432/ridgeline \
+            -e JWT_SECRET=ci-smoke-test-secret \
+            -e NODE_ENV=production -e PORT=3001 \
+            ridgeline-api:ci
+          docker run -d --name web --network ridgeline-ci -p 8080:8080 ridgeline-web:ci
+
+          # The API migrates on boot, so allow for that before calling it dead.
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::API never became healthy"
+            docker logs api
+            exit 1
+          fi
+          curl -fsS http://localhost:3001/api/health | tee /dev/stderr
+
+          curl -fsS http://localhost:8080/index.html >/dev/null \
+            || { echo "::error::web did not serve index.html"; docker logs web; exit 1; }
+
+          echo "api and web both healthy as non-root"
+
+      - name: Container logs on failure
+        if: failure()
+        run: |
+          docker logs db  || true
+          docker logs api || true
+          docker logs web || true
+
+  chart:
+    # The chart is a release artefact, so it gets the same gate as the code.
+    # Rendering only the default values is not enough: most chart bugs live in
+    # a conditional branch that defaults never reach, and they surface at
+    # `helm install` on someone else's cluster.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: Lint
+        run: helm lint ./deploy/helm/ridgeline
+
+      - name: Render every conditional path
+        run: |
+          helm template rl ./deploy/helm/ridgeline >/dev/null
+          helm template rl ./deploy/helm/ridgeline \
+            --set ingress.enabled=true --set networkPolicy.enabled=true \
+            --set api.pdb.enabled=true --set web.pdb.enabled=true \
+            --set api.autoscaling.enabled=true --set redis.enabled=true >/dev/null
+          helm template rl ./deploy/helm/ridgeline \
+            --set externalDatabase.url=postgresql://u:p@h:5432/d >/dev/null
+          helm template rl ./deploy/helm/ridgeline \
+            --set postgis.persistence.enabled=false >/dev/null
+
+      - name: Values schema rejects invalid input
+        # A schema nobody exercises rots into decoration. These three must
+        # fail; if any starts passing, the schema has stopped constraining
+        # the thing it claims to.
+        run: |
+          fails() {
+            if helm template rl ./deploy/helm/ridgeline "$@" >/dev/null 2>&1; then
+              echo "::error::expected these values to be rejected: $*"
+              exit 1
+            fi
+          }
+          fails --set api.logLevel=verbose
+          fails --set externalDatabase.url=mysql://nope
+          fails --set api.service.port=99999
+          echo "values.schema.json rejects invalid input ✓"
+
+      - name: Package
+        run: helm package ./deploy/helm/ridgeline --destination /tmp/chart

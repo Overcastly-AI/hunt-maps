@@ -33,6 +33,21 @@ image:
   #     --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
   pullSecrets: []
 
+# Applied to every pod in the chart. Both images run as non-root (the API as
+# uid 1000, the web as uid 101 via nginx-unprivileged), so `runAsNonRoot` is
+# enforceable rather than aspirational — a regression to a root image fails the
+# pod instead of quietly running privileged.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ['ALL']
+
 api:
   image:
     repository: ghcr.io/overcastly-ai/hunt-maps-api
@@ -62,6 +77,21 @@ api:
 
   logLevel: info
 
+  # Off by default: a PDB with a single replica blocks node drains outright,
+  # which on a laptop cluster reads as a stuck kubectl rather than as policy.
+  pdb:
+    enabled: false
+    minAvailable: ""
+    maxUnavailable: 1
+
+  # Off by default so it cannot fight `replicaCount`. Enable it and
+  # replicaCount is ignored — the HPA owns the replica count from then on.
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
 web:
   image:
     repository: ghcr.io/overcastly-ai/hunt-maps-web
@@ -80,6 +110,21 @@ web:
   # name is `kube-dns` on kind, minikube, k3s and Docker Desktop alike, even
   # when the implementation behind it is CoreDNS.
   dnsResolver: kube-dns.kube-system.svc.cluster.local
+
+  pdb:
+    enabled: false
+    minAvailable: ""
+    maxUnavailable: 1
+
+  # nginx-unprivileged needs to write its own runtime state — pid file, client
+  # body and proxy temp dirs — so it cannot take the chart-wide
+  # readOnlyRootFilesystem without tmpfs mounts for each. Overridden here
+  # rather than weakening the default for everything else.
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ['ALL']
 
 # -----------------------------------------------------------------------------
 # Database
@@ -110,6 +155,27 @@ postgis:
       memory: 256Mi
     limits:
       memory: 1Gi
+
+  # uid/gid 999 is the `postgres` user in the official image. fsGroup is the
+  # load-bearing one: without it the PersistentVolume is owned by root and
+  # initdb aborts with a permissions error on a directory it just mounted.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+
+  # readOnlyRootFilesystem stays off: Postgres writes its socket and lock file
+  # to /var/run/postgresql, which is not the data volume. Making it read-only
+  # would need a tmpfs mount there, and a database that cannot open its own
+  # socket fails in a way that looks like a network problem.
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ['ALL']
 
 # Point at an existing database instead of running one in-cluster.
 # When set, this wins and `postgis.enabled` is ignored.
@@ -156,6 +222,17 @@ ingress:
   annotations: {}
   host: ridgeline.local
   tls: []
+
+# Default-deny ingress to the database, allowing only the API. This is the
+# control that contains the blast radius if something inside the cluster is
+# compromised — everything else in this chart guards the edge.
+#
+# Off by default because it is worse than useless when unenforced: kind's
+# default CNI (kindnet) ignores NetworkPolicy entirely, so the policy renders,
+# `kubectl get netpol` shows it, and nothing is actually restricted. Turn it on
+# where the CNI enforces it (Cilium, Calico) and verify with a real deny test.
+networkPolicy:
+  enabled: false
 
 serviceAccount:
   create: true
