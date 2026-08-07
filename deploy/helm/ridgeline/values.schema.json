@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "Ridgeline chart values",
-  "description": "Validated by Helm on install, upgrade, lint and template. The point is to turn a typo into an install-time error naming the field, rather than a pod that starts and behaves subtly wrong — a misspelled key is otherwise silently ignored and the default applies.",
+  "description": "Validated by Helm on install, upgrade, lint and template. The point is to turn a typo into an install-time error naming the field, rather than a pod that starts and behaves subtly wrong \u2014 a misspelled key is otherwise silently ignored and the default applies.",
   "type": "object",
   "properties": {
     "image": {
@@ -15,7 +15,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "properties": { "name": { "type": "string" } },
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
             "required": ["name"]
           }
         }
@@ -24,11 +28,20 @@
     "api": {
       "type": "object",
       "properties": {
-        "image": { "$ref": "#/definitions/image" },
-        "replicaCount": { "type": "integer", "minimum": 0 },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0
+        },
         "service": {
           "type": "object",
-          "properties": { "port": { "$ref": "#/definitions/port" } }
+          "properties": {
+            "port": {
+              "$ref": "#/definitions/port"
+            }
+          }
         },
         "corsOrigins": {
           "type": "string",
@@ -38,14 +51,26 @@
           "type": "string",
           "enum": ["fatal", "error", "warn", "info", "debug", "trace"]
         },
-        "dem3depTemplate": { "type": "string" },
-        "pdb": { "$ref": "#/definitions/pdb" },
+        "dem3depTemplate": {
+          "type": "string"
+        },
+        "pdb": {
+          "$ref": "#/definitions/pdb"
+        },
         "autoscaling": {
           "type": "object",
           "properties": {
-            "enabled": { "type": "boolean" },
-            "minReplicas": { "type": "integer", "minimum": 1 },
-            "maxReplicas": { "type": "integer", "minimum": 1 },
+            "enabled": {
+              "type": "boolean"
+            },
+            "minReplicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxReplicas": {
+              "type": "integer",
+              "minimum": 1
+            },
             "targetCPUUtilizationPercentage": {
               "type": "integer",
               "minimum": 1,
@@ -58,41 +83,66 @@
     "web": {
       "type": "object",
       "properties": {
-        "image": { "$ref": "#/definitions/image" },
-        "replicaCount": { "type": "integer", "minimum": 0 },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 0
+        },
         "service": {
           "type": "object",
-          "properties": { "port": { "$ref": "#/definitions/port" } }
+          "properties": {
+            "port": {
+              "$ref": "#/definitions/port"
+            }
+          }
         },
         "dnsResolver": {
           "type": "string",
           "minLength": 1,
           "description": "Cluster DNS service. nginx resolves the API through this at request time; an empty value produces an nginx config that fails to load."
         },
-        "pdb": { "$ref": "#/definitions/pdb" }
+        "pdb": {
+          "$ref": "#/definitions/pdb"
+        }
       }
     },
     "postgis": {
       "type": "object",
       "properties": {
-        "enabled": { "type": "boolean" },
+        "enabled": {
+          "type": "boolean"
+        },
         "auth": {
           "type": "object",
           "properties": {
-            "database": { "type": "string", "minLength": 1 },
-            "username": { "type": "string", "minLength": 1 },
-            "password": { "type": "string" }
+            "database": {
+              "type": "string",
+              "minLength": 1
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "password": {
+              "type": "string"
+            }
           }
         },
         "persistence": {
           "type": "object",
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": {
+              "type": "boolean"
+            },
             "size": {
               "type": "string",
               "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|K|M|G|T)?$"
             },
-            "storageClass": { "type": "string" }
+            "storageClass": {
+              "type": "string"
+            }
           }
         }
       }
@@ -103,48 +153,80 @@
         "url": {
           "type": "string",
           "pattern": "^$|^postgres(ql)?://",
-          "description": "Must be a postgres:// or postgresql:// URL, and must point at PostGIS rather than stock Postgres — every meaningful query here is spatial."
+          "description": "Must be a postgres:// or postgresql:// URL, and must point at PostGIS rather than stock Postgres \u2014 every meaningful query here is spatial."
         }
       }
     },
     "auth": {
       "type": "object",
       "properties": {
-        "jwtSecret": { "type": "string" },
-        "existingSecret": { "type": "string" }
+        "jwtSecret": {
+          "type": "string",
+          "description": "Empty generates a 48-character secret and preserves it across upgrades. If set explicitly it must be at least 32 characters, which is what the API enforces at boot.",
+          "pattern": "^$|^.{32,}$"
+        },
+        "existingSecret": {
+          "type": "string"
+        }
       }
     },
     "ingress": {
       "type": "object",
       "properties": {
-        "enabled": { "type": "boolean" },
-        "className": { "type": "string" },
-        "host": { "type": "string", "minLength": 1 },
-        "annotations": { "type": "object" },
-        "tls": { "type": "array" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "tls": {
+          "type": "array"
+        }
       }
     },
     "networkPolicy": {
       "type": "object",
-      "properties": { "enabled": { "type": "boolean" } }
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     },
     "serviceAccount": {
       "type": "object",
       "properties": {
-        "create": { "type": "boolean" },
-        "name": { "type": "string" }
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        }
       }
     },
     "redis": {
       "type": "object",
-      "properties": { "enabled": { "type": "boolean" } }
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     }
   },
   "definitions": {
     "image": {
       "type": "object",
       "properties": {
-        "repository": { "type": "string", "minLength": 1 },
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
         "tag": {
           "type": "string",
           "description": "Empty means the chart's appVersion, which is what keeps the chart and the images it pulls from drifting apart."
@@ -152,13 +234,23 @@
       },
       "required": ["repository"]
     },
-    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
     "pdb": {
       "type": "object",
       "properties": {
-        "enabled": { "type": "boolean" },
-        "minAvailable": { "type": ["string", "integer"] },
-        "maxUnavailable": { "type": ["string", "integer"] }
+        "enabled": {
+          "type": "boolean"
+        },
+        "minAvailable": {
+          "type": ["string", "integer"]
+        },
+        "maxUnavailable": {
+          "type": ["string", "integer"]
+        }
       }
     }
   }

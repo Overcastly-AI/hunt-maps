@@ -266,6 +266,7 @@ jobs:
           fails --set api.logLevel=verbose
           fails --set externalDatabase.url=mysql://nope
           fails --set api.service.port=99999
+          fails --set auth.jwtSecret=too-short
           echo "values.schema.json rejects invalid input ✓"
 
       - name: Package
