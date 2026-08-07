@@ -5,8 +5,10 @@ import { color } from '@hunt-maps/design';
 import { LAYERS, layerById } from '../lib/layers';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
 import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
-import { syncCoverageOverlay } from '../lib/map/coverageOverlay';
-import type { ViewportCoverage } from '../lib/offline/coverage';
+import { exposeDevHook } from '../lib/devHook';
+import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
+import { CoverageOverlay, coverageExtentToDraw } from '../lib/map/coverageOverlay';
+import type { CoverageState } from '../lib/offline/coverage';
 
 export interface MapViewProps {
   activeLayers: Set<string>;
@@ -22,13 +24,12 @@ export interface MapViewProps {
   onMove?: (center: { lng: number; lat: number }) => void;
   protocol: TerrainProtocol;
   /**
-   * Current offline coverage for this view. Rendered as the hatch/extent
-   * overlay — see `lib/map/coverageOverlay.ts`. `null` (or an indeterminate
-   * answer) draws nothing, never a guess.
+   * Current offline coverage for this view, drawn as the hatched stored-extent
+   * overlay. An indeterminate or unmeasured answer draws nothing — the decision
+   * of *when* there is an extent worth drawing belongs to
+   * `coverageExtentToDraw`, not to this component.
    */
-  coverage?: ViewportCoverage | null;
-  /** Whether the coverage overlay is shown at all. */
-  showCoverage?: boolean;
+  coverage?: CoverageState | null;
 }
 
 const BASE_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom: number }> = {
@@ -68,10 +69,10 @@ export function MapView({
   onMove,
   protocol,
   coverage,
-  showCoverage = false,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
+  const overlay = useRef<CoverageOverlay | null>(null);
 
   useEffect(() => {
     if (!container.current || map.current) return;

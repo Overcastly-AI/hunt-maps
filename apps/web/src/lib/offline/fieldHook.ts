@@ -18,7 +18,11 @@
 import type { TileCoord } from '@hunt-maps/terrain';
 import { boundsToBBox, demSourceZoom, demTilesForBounds } from '../map/demTiles';
 import { openTileStore, type TileStoreStats } from './tileStore';
-import { queryViewportCoverage, type CoverageResult } from './coverage';
+import {
+  invalidateCoverageCache,
+  queryViewportCoverage,
+  type CoverageResult,
+} from './coverage';
 
 export interface OfflineFieldHook {
   /** DEM tiles the current view needs, derived exactly as the fetch path does. */
@@ -29,8 +33,15 @@ export interface OfflineFieldHook {
   probe(): Promise<CoverageResult>;
   /** Backend, tile count and quota, straight from the store. */
   stats(): Promise<TileStoreStats | null>;
-  /** Ask the app to recompute and re-render its badge and overlay. */
-  refresh(): void;
+  /**
+   * Drop the memoised per-tile probe results.
+   *
+   * Necessary after anything writes to the store underneath the UI — a finished
+   * region download, or a QA run seeding tiles — because otherwise the sheet
+   * keeps reporting the pre-write answer for the cache's TTL, which makes a
+   * completed download look like it did nothing.
+   */
+  invalidate(): void;
 }
 
 interface HookHost {
@@ -43,7 +54,7 @@ export interface MapLike {
   getBounds(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number };
 }
 
-export function installOfflineFieldHook(map: MapLike, refresh: () => void): () => void {
+export function installOfflineFieldHook(map: MapLike): () => void {
   const host = window as unknown as HookHost;
 
   const tileZoom = () => demSourceZoom(map.getZoom());
@@ -58,7 +69,7 @@ export function installOfflineFieldHook(map: MapLike, refresh: () => void): () =
       const store = await openTileStore().catch(() => null);
       return store ? store.stats() : null;
     },
-    refresh,
+    invalidate: invalidateCoverageCache,
   };
 
   // Merge rather than replace: `MapView` owns the `map` key on the same object.

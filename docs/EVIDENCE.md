@@ -1181,34 +1181,140 @@ state, different genetics" hand-wave:
 > other counties peaking in **December**, inside one state.
 
 No function of latitude can produce that. Florida settles it: a single state
-spans **six months** of zone mean-conception dates, from 22 July to 31 January.
-The `319 + (40 − lat)·1.2` form is not merely mis-parameterised; it is the wrong
-functional class, and no coefficient rescues it.
+spans **six months** of zone mean-conception dates, from 22 July to 31 January —
+and the peer-reviewed herd data show the span is **inverted** with respect to
+latitude. The `319 + (40 − lat)·1.2` form is not merely mis-parameterised; it is
+the wrong functional class, and no coefficient rescues it.
 
-**Implementable shape.**
+**Implementable shape — pass-4 revision, resolution-tiered and honest at each tier.**
 ```
-peakBreedingDay(lat, lon):
-  if lat >= 38:              return 314 ± 4        // 🟢 photoperiod, fetal-aged
-  if region lookup hits:     return regionPeak ± regionSD   // 🟢/🔵 table above
-  else:                      return UNKNOWN        // never a latitude formula
+peakBreedingDay(lat, lon, userCalibration) -> { doy, ci95Days, tier } | UNKNOWN
+
+  T0  userCalibration present (>= 3 seasons of the user's own logged
+      chasing/breeding observations)
+        -> calibrated peak,          ci95 = +-4 d    conf 0.90   // Dye 2012
+  T1  region polygon hit at county / unit / ecoregion / zone resolution
+        -> agency mean conception,   ci95 = +-10 d   conf 0.55
+  T2  region polygon hit at STATE resolution only, inside a state whose
+      published within-state spread exceeds 30 d (AL, MS, LA, FL, TX, NC, GA)
+        -> return the state's RANGE, never its midpoint,
+           and mark the reading "regionally variable"   conf 0.25
+  T3  lat >= 37 deg N and NOT inside any South/Coastal-Plain region polygon
+        -> 314 (10 Nov),             ci95 = +-8 d    conf 0.70   // photoperiod
+  T4  35 <= lat < 37 deg N, interior/upland only (TN, AR, E OK, KY plateau)
+        -> 321 (17 Nov),             ci95 = +-12 d   conf 0.40
+  T5  anything else below 37 deg N with no region match
+        -> UNKNOWN. Do not return a date.
+  T6  |lat| < 18 deg N
+        -> UNKNOWN, permanently. Breeding is effectively aseasonal (see below).
 ```
-Resolution matters and should be honest about itself: Georgia and Florida
-publish at **county / zone** resolution, Texas at **ecoregion**, Mississippi and
-South Carolina at **state** resolution. A state-level answer in Alabama is worth
-little given ≥ 60 days of variation inside a single county — which is exactly
-what `offsetDays` user calibration is for, and why it should be promoted to the
-primary mechanism in the South rather than a refinement.
+Units: `doy` is day-of-year 1–365 with no leap adjustment (the model's existing
+convention); `ci95Days` is a half-width in days; `conf` is the redefined
+`rutConfidence` below. `southernHemisphere` continues to shift by 182 d and is
+applied *after* tier selection.
 
-**Scope warning that must reach the UI.** All eight rows are agency estimates of
-a *population mean*. The dispersion is the story: 46 days mean range in
-Mississippi, 9–110 days within a Florida area, ≥ 60 days within one Alabama
-county. "Peak rut is Tuesday" is not a claim any of these sources supports.
+**Why T2 exists and matters.** A state-level answer is not a weaker answer, it is
+usually a *wrong* answer. Alabama's statewide "peak" is meaningless when
+conception varies ≥ 60 days inside a single county and the state spans 13 Nov to
+8 Feb. In those states the correct output is a **range with a label**, not a
+midpoint. Returning "1 January" for all of Mississippi is precisely the
+confidently-wrong failure `CLAUDE.md` forbids: it is right in the Delta and
+seven weeks early on the coast.
 
-*(All rows abstract/index-level. Before implementing, the GA county table and
-the FL zone table should be read from their PDFs directly — they are the two
-rows carrying real spatial resolution and the two most likely to be
-mis-transcribed from search snippets. The four county examples above are the
-only Georgia rows actually seen; the remaining 155 must be read from source.)*
+Resolution the sources actually publish, so the polygon layer can be built to
+match: **county** — GA (159), NC, AL, MS; **management unit / area** — NC (5
+units), LA (10 areas); **ecoregion** — TX (7, with N/S/E/W splits inside
+several); **zone** — FL; **state or region** — SC (3 physiographic regions), VA,
+KY, TN (3 regions), AR, WV.
+
+**Scope warning that must reach the UI.** Every row in both tables is an agency
+or study estimate of a *population mean*, not a date deer breed on. The
+dispersion is the story: SD **13.4 days** and mean range **46 days** among
+individuals in Mississippi; **9–110 days** within a single Florida area; **≥ 60
+days** within one Alabama county; **6 months** among four Florida herds. "Peak
+rut is Tuesday" is not a claim any of these sources supports, and the interval
+belongs next to the date, not in a tooltip.
+
+#### Unread at source — the honest ledger for the next pass
+`WebFetch` is blocked for every host and **`curl` to these hosts fails at CONNECT
+with a proxy 403** (retested this pass against `georgiawildlife.com` and
+`myfwc.com`; both returned `curl (56) CONNECT tunnel failed, response 403`). The
+following are therefore **found but unread** — leads, not grades:
+
+| Source | What is still needed | Why it matters |
+|---|---|---|
+| [GA DNR rut map PDF](https://georgiawildlife.com/sites/default/files/wrd/pdf/research/Georgia-Rut-Map.pdf) | 155 of 159 county rows | Only **Appling 11/03–11/09, Atkinson 10/20–10/26, Bacon 10/27–11/02** are confirmed — they appear in the PDF's own indexed title text. Clarke 11/10–11/16 came from a pass-3 snippet. **Secondary summaries of this map actively contradict each other**: one says coastal counties peak 10–20 Oct (earliest in the state), another says southern and coastal areas peak "late November or December". Do not code either. |
+| [FWC statewide rut map PDF](https://myfwc.com/media/18766/statewide-rut-map.pdf) | the zone table and zone geometry | Florida is the widest-spread state in the register and the only one where the inversion is peer-reviewed. The FWC zones are the implementation surface; Richter & Labisky gives the four anchor points. |
+| [NCWRC peak conception dates PDF](https://www.ncwildlife.gov/media/4373/download?attachment=) | per-county dates and per-county sample sizes | The agency itself warns precision varies with n. The 5 unit dates are confirmed in text; the county table is not. |
+| KDFWR, TWRA, AGFC deer-program reports | primary fetal data behind the KY / TN / AR rows | Those three rows are 🟡 in the table above purely because they were seen only in secondary summary. |
+| [Sumners et al. 2015](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.954) full text | which population pairs, and the mtDNA effect size | The mechanism row's 🔵 grade rests on an abstract. |
+
+**A caveat on the Georgia rows specifically that must survive into
+implementation.** The GA map's cells are the **peak week of deer–vehicle
+collisions**, not conception dates. UGA and GA DNR validated DVC peak against
+conception dates **in three counties** and found them "almost identical", and
+against GPS hourly movement rates. That validation is real but it is n = 3
+counties, so the GA rows are **🔵 inferred (DVC as a rut index)**, not 🟢
+measured conception — and this is also the one dataset in the register where
+"observable rut" and "mean conception" were found to coincide, which conflicts
+with MDWFP's guidance below.
+[SEAFWA method paper — using DVCs to map breeding activity in Georgia](https://seafwa.org/journal/2015/using-deer-vehicle-collisions-map-white-tailed-deer-breeding-activity-georgia) ·
+[UGA Today — DVCs increase during breeding season](https://news.uga.edu/deer-vehicle-collisions-breeding-season-0915/)
+
+### 🔵 Agency maps report **mean conception**, which is not the huntable peak — and the offset is disputed
+The model treats `peakBreedingDayOfYear` as both *the conception mean* and *the
+centre of the `PeakBreeding` phase*, and `calibrateOffset` hard-codes
+`CHASING_CENTER = -6` days. Three sources measure the gap between mean
+conception and peak observable rutting activity, and **they disagree by two
+weeks**:
+
+| Source | Offset of observable rut vs mean conception | Basis |
+|---|---|---|
+| MDWFP, on its own breeding-date map | **−14 d** ("subtract about two weeks from the mean conception date to obtain the simulated peak rut period") | agency guidance over 20 yr of health-check data |
+| Hunsaker et al. 2025, SW Wisconsin | **−4 to −6 d** (movement rate topped out 4–8 Nov; conception-derived peak window 23 Oct – 12 Nov, 16 d long) | 188 GPS-collared males, 2017–2020 |
+| GA DNR / UGA | **≈ 0 d** (DVC peak and conception peak "almost identical" in 3 counties) | DVC vs fetal aging |
+
+[MDWFP breeding date map](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) ·
+[Hunsaker et al. 2025, *Ecology and Evolution*](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589) ·
+[SEAFWA — DVCs to map breeding activity](https://seafwa.org/journal/2015/using-deer-vehicle-collisions-map-white-tailed-deer-breeding-activity-georgia)
+
+**Assessment.** Our `-6` sits inside the best-instrumented estimate (Wisconsin
+GPS), so it is not wrong — but it is *not* settled, and the range **−14 … 0 d**
+should be recorded rather than collapsed. Graded 🔵: the offset is measured
+three times, by three methods, with no reconciliation. **Do not** silently
+subtract 14 days from agency map values when seeding the region table — store
+the agency figure as *mean conception* and apply the offset once, explicitly,
+at the phase layer, so the two can be re-tuned independently.
+
+### 🟢 The model has a southern edge: below ~14–18°N there is no rut to predict
+The reproductive season of white-tailed deer is hypothesised to be **aseasonal
+south of about 14–18°N**, where annual variation in day length is small. A test
+in a seasonally dry tropical forest in **Costa Rica** found year-round
+reproduction, with the relative frequency of reproductive indicators driven by
+**rainfall** rather than photoperiod — most births in the dry season, a second
+peak late in the wet season.
+[Reproduction of white-tailed deer in a seasonally dry tropical forest of Costa Rica: a test of aseasonality, *J. Mammalogy* 2020, 101(1):241](https://academic.oup.com/jmammal/article-abstract/101/1/241/5655750)
+
+`Odocoileus virginianus` ranges to Bolivia and Peru, so this is a real boundary
+for a product that takes an arbitrary latitude. **Prescription:** `|lat| < 18°N`
+returns UNKNOWN unconditionally with the note *"breeding is effectively
+aseasonal at this latitude; rut phase is not defined"*. Currently the model
+happily returns `326 + (34 − lat)·3.5`, which at 10°N yields DOY 410 — i.e. it
+wraps to mid-February and reports a phase with confidence 0.2.
+
+### 🔵 The `southernHemisphere` 182-day shift is roughly right
+Introduced whitetail on **Stewart Island / Rees Valley, New Zealand** (~45–47°S,
+liberated 1905) rut **mid-April to early June**, with most fawns born
+December–January. Shifting DOY 314 by 182 days gives DOY 131 = **11 May**, which
+sits mid-window. Finland's introduced herd (~61°N) is reported to breed
+October–November, consistent with the northern constant.
+[NZ DOC — white-tailed deer hunting](https://www.doc.govt.nz/parks-and-recreation/things-to-do/hunting/what-to-hunt/deer/white-tail-deer/) ·
+[NDA — the strange story behind Finland's white-tailed deer](https://deerassociation.com/the-strange-story-behind-finlands-white-tailed-deer/)
+
+**Assessment:** 🔵 — the shift is a defensible inference from the short-day
+breeder mechanism plus two introduced-range observations, neither of which is a
+conception-date study. The southern-hemisphere branch should carry
+`conf ≤ 0.40` and the note *"introduced range, no conception-date data"*.
 
 ### 🔴 `rutConfidence` thresholds — too generous by a wide margin
 Returns **0.65 for 32–38°N**. Mississippi and Alabama are 32–33°N and the model
