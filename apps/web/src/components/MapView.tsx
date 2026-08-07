@@ -40,21 +40,6 @@ export interface MapViewProps {
   showCoverage?: boolean;
 }
 
-const BASE_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom: number }> = {
-  satellite: {
-    tiles: [
-      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    ],
-    attribution: 'Imagery: Esri, Maxar, Earthstar Geographics',
-    maxzoom: 19,
-  },
-  topo: {
-    tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'],
-    attribution: '© OpenTopoMap, © OpenStreetMap contributors',
-    maxzoom: 17,
-  },
-};
-
 /**
  * The map.
  *
@@ -196,11 +181,6 @@ const GROUP_ANCHOR: Record<string, string> = {
   hunting: 'anchor-saved',
   saved: 'anchor-features',
 };
-
-/** True for the ids `syncLayers` owns: a real layer, a basemap, or the filter stack. */
-export function isSyncedLayer(id: string): boolean {
-  return id === '__filters' || Boolean(BASE_SOURCES[id]) || Boolean(layerById(id));
-}
 
 function syncLayers(
   map: maplibregl.Map,
