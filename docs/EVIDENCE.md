@@ -982,38 +982,151 @@ Carolina, below). 35–37°N is a reduced-confidence band: the interior holds
 Coastal Plain at the same latitude does not.
 [Oklahoma Academy of Science — breeding season of whitetail in eastern Oklahoma](https://ojs.library.okstate.edu/osu/index.php/OAS/article/view/5012/4682)
 
-### 🔴 Latitude interpolation below 40°N — **downgraded from 🔵; the functional form is wrong**
+### 🔴 Latitude interpolation below 40°N — **the functional form is wrong, and pass 4 measured how wrong**
 Current: `319 + (40 − lat)·1.2` down to 34°N, then `326 + (34 − lat)·3.5`.
-The previous register graded this 🔵 on the grounds that "southern herds breed
-later" is widely reported and only the coefficients were ours. **The direction
-is right; latitude is not the predictor.** At comparable latitudes:
+Pass 2 graded this 🔵 on the grounds that "southern herds breed later" is widely
+reported and only the coefficients were ours. Pass 3 downgraded it to 🔴 on the
+functional class. **Pass 4 scored it.**
 
-| Region | ~Lat | Measured peak / mean conception | Our model |
-|---|---|---|---|
-| Midwest | 40°N | **8–10 Nov** | 15 Nov (DOY 319) |
-| Mississippi, statewide | 33°N | **mean 1 January**, SD 13.4 d, mean range 46 d | 26 Nov (DOY 330) |
-| Alabama | 32°N | peak for most populations in **January**; conception dates vary **≥ 60 days between populations within a single county** | 29 Nov (DOY 333) |
-| Texas — Edwards Plateau | 30°N | **7 Nov** (east), **24 Nov** (central), **5 Dec** (west) | 6 Dec (DOY 340) |
-| Texas — Gulf Prairies | 28°N | peaks **30 Sep** (north) and **31 Oct** (south) | 13 Dec (DOY 347) |
+Every published population mean or agency peak found in this pass, with the
+shipped function's error at that location. Positive = model predicts breeding
+**later** than reality. Errors ≤ 7 days are marked ✅.
 
-[MDWFP deer breeding date map](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) ·
+| Region | Lat | Published peak / mean conception | Model | Error (d) |
+|---|---|---|---|---|
+| Midwest (IL/OH/IN) | 40.0 | 10 Nov | 15 Nov | +5 ✅ |
+| Missouri | 38.5 | 16 Nov | 17 Nov | +1 ✅ |
+| West Virginia | 38.8 | 11 Nov | 16 Nov | +5 ✅ |
+| Kentucky | 37.5 | 11 Nov | 18 Nov | +7 ✅ |
+| Virginia | 37.5 | 16 Nov | 18 Nov | +2 ✅ |
+| Tennessee, central | 35.8 | 17 Nov | 20 Nov | +3 ✅ |
+| Tennessee, east | 36.0 | 25 Nov | 20 Nov | −5 ✅ |
+| E Oklahoma (Cookson Hills) | 35.7 | 17 Nov | 20 Nov | +3 ✅ |
+| Arkansas, statewide | 34.8 | 18 Nov | 21 Nov | +3 ✅ |
+| **NC Unit I (west mountains)** | 35.7 | **5 Dec** | 20 Nov | **−15** |
+| NC Unit III | 35.5 | 8 Nov | 20 Nov | **+12** |
+| **NC Unit V (SE coastal)** | 34.5 | **11 Oct** | 22 Nov | **+42** |
+| SC, statewide mean | 33.8 | 30 Oct | 23 Nov | **+24** |
+| SC, Lower Coastal Plain | 33.0 | 25 Oct | 26 Nov | **+32** |
+| GA — Clarke Co | 33.95 | 13 Nov (DVC wk 11/10–11/16) | 22 Nov | +9 |
+| GA — Appling Co | 31.75 | 6 Nov (11/03–11/09) | 30 Nov | **+24** |
+| GA — Bacon Co | 31.55 | 30 Oct (10/27–11/02) | 1 Dec | **+32** |
+| **GA — Atkinson Co** | 31.30 | **23 Oct (10/20–10/26)** | 1 Dec | **+39** |
+| Alabama, north | 34.7 | 19 Nov | 21 Nov | +2 ✅ |
+| **Alabama, southwest** | 31.4 | **1 Feb** | 1 Dec | **−62** |
+| Mississippi, statewide mean | 32.8 | 1 Jan | 26 Nov | **−36** |
+| Mississippi Delta (median) | 33.5 | 27 Dec | 24 Nov | **−33** |
+| **Mississippi, SE coastal** | 31.0 | **mid-Feb** | 3 Dec | **−74** |
+| Louisiana, areas 4/9 (SE) | 30.7 | early–mid Dec | 4 Dec | −6 ✅ |
+| Louisiana, areas 1/5/6 | 31.5 | mid-Jan | 1 Dec | **−45** |
+| TX Pineywoods, north | 32.5 | 22 Nov | 27 Nov | +5 ✅ |
+| TX Pineywoods, south | 31.0 | 12 Nov | 3 Dec | **+21** |
+| TX Cross Timbers, north | 33.5 | 15 Nov | 24 Nov | +9 |
+| TX Post Oak Savannah, central | 31.0 | 10 Nov | 3 Dec | **+23** |
+| TX Edwards Plateau, east | 30.5 | 7 Nov | 4 Dec | **+27** |
+| TX Edwards Plateau, west | 30.0 | 5 Dec | 6 Dec | +1 ✅ |
+| TX Trans-Pecos | 30.5 | 8 Dec | 4 Dec | −4 ✅ |
+| **TX Gulf Prairies, north** | 29.5 | **30 Sep** | 8 Dec | **+69** |
+| TX Gulf Prairies, south | 27.5 | 31 Oct | 15 Dec | **+45** |
+| TX South Texas Brush, east | 27.5 | 16 Dec | 15 Dec | −1 ✅ |
+| TX South Texas Brush, west | 27.5 | 24 Dec | 15 Dec | −9 |
+| FL — Camp Blanding (N) | 29.9 | 2 Nov | 6 Dec | **+34** |
+| **FL — Eglin AFB (NW)** | 30.5 | **22 Feb** | 4 Dec | **−80** |
+| FL — Tosohatchee (central) | 28.5 | 7 Oct | 11 Dec | **+65** |
+| **FL — Rotenberger (S)** | 26.4 | **10 Aug** | 19 Dec | **+131** |
+
+Sources for the rows above, in addition to those already cited:
+[NCWRC peak conception dates (PDF)](https://www.ncwildlife.gov/media/4373/download?attachment=) ·
+[SCDNR peak breeding dates](https://www.dnr.sc.gov/wildlife/deer/reproductionmap.html) ·
+[GA DNR rut map (PDF)](https://georgiawildlife.com/sites/default/files/wrd/pdf/research/Georgia-Rut-Map.pdf) ·
+[MDWFP breeding date map](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) ·
+[MSU Deer Lab — ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php) ·
 [Turner et al. 2019, *Wildl. Soc. Bull.* — Alabama breeding chronology](https://wildlife.onlinelibrary.wiley.com/doi/abs/10.1002/wsb.1031) ·
-[TPWD — the rut in white-tailed deer](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/)
+[Outdoor Alabama / WFF county rut map](https://www.outdooralabama.com/node/3171) ·
+[LDWF estimated deer breeding periods](https://www.wlf.louisiana.gov/page/deer-breeding-periods) ·
+[TPWD — the rut in white-tailed deer](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/) ·
+[Richter & Labisky 1985, *J. Wildl. Manage.* 49:964–971 — reproductive dynamics among disjunct Florida herds](https://journals.flvc.org/edis/article/view/114365)
 
-Two populations at nearly the **same latitude** (Texas Gulf Prairies, 30 Sep;
-Mississippi, 1 Jan) breed **three months apart**. Our model is **36 days early
-in Mississippi and 74 days late on the north Texas coast** — and it cannot be
-both, at any coefficient, because it is monotone in latitude. A monotone function
-of latitude cannot represent this — southern rut timing is driven by herd
-genetics, restocking history and local conditions, not day length, because the
-photoperiod signal itself weakens toward the equator.
+**Three separate ways the function fails, each fatal on its own.**
 
-**Recommendation:** north of ~38°N keep the photoperiod model (DOY 314 ± 4).
-South of it, **stop predicting from latitude**. Ship a region lookup seeded from
-state agency breeding-date data, and make `offsetDays` calibration the primary
-mechanism rather than a refinement. Absent a region match, return the phase as
-*unknown* rather than a wrong date — that is the "say when you do not know" rule
-in `CLAUDE.md`.
+1. **Same latitude, months apart.** At **30.5°N** the published peaks are 7 Nov
+   (TX Edwards Plateau east), 8 Dec (TX Trans-Pecos), ~10 Dec (SE Louisiana) and
+   **22 Feb** (Eglin AFB, Florida panhandle) — a **107-day spread at one
+   latitude**. At **~31°N**: 30 Oct (GA Bacon Co) to **mid-Feb** (SE
+   Mississippi) — **108 days**. At **~33°N**: 25 Oct (SC Lower Coastal Plain) to
+   1 Jan (Mississippi) — **68 days**. At **27.5°N**, three Texas populations at
+   *identical* latitude peak 31 Oct, 16 Dec and 24 Dec — **54 days**. Any
+   function of latitude returns one number for all of these.
+
+2. **The sign of the gradient is wrong in the Atlantic South.** The model
+   assumes southern ⇒ later. In **Georgia** the four county peaks readable from
+   the agency PDF run Atkinson (31.30°N) 23 Oct → Bacon (31.55°N) 30 Oct →
+   Appling (31.75°N) 6 Nov → Clarke (33.95°N) 13 Nov: **+7.9 days per degree
+   *north***, where the model applies **−3.5 days per degree north**. Wrong sign
+   and 11.4 d/° off in magnitude. **North Carolina** is the same: Unit V (SE
+   coastal) 11 Oct → Unit I (west mountains) 5 Dec, i.e. the *lowest*-latitude
+   unit is **55 days earlier** than the highest, inside a state spanning 2.5° of
+   latitude. **South Carolina** likewise runs Lower Coastal Plain 25 Oct → Upper
+   Coastal Plain ~1 Nov → Piedmont mid-Nov. **Florida is the extreme case:** the
+   *northernmost* site sampled (Eglin AFB, 30.5°N) has the **latest** mean
+   breeding date in the state (22 Feb) and the *southernmost* (Rotenberger,
+   26.4°N) the earliest (10 Aug) — **196 days apart, inverted**.
+
+3. **Where the sign is right, the magnitude is 6× too small.** Alabama runs
+   19 Nov in the north (34.7°N) to 1 Feb in the southwest (31.4°N): a real
+   gradient of **−22.4 days per degree north**, against the model's −3.5.
+
+> **The single sentence for the UI, if only one fits:** *South Carolina peaks
+> 30 October and Mississippi peaks 1 January — both at ~33°N, 63 days apart —
+> and inside Florida alone the range is 10 August to 22 February with the
+> northernmost herd the latest of all.*
+
+**Recommendation:** north of **37°N** keep the photoperiod constant (DOY 314,
+±8 d uncalibrated / ±4 d calibrated). South of it, **stop predicting from
+latitude entirely.** Region lookup, or *unknown*. See the prescription block
+below.
+
+### 🔵 Why the South is heterogeneous — **the mechanism, and a correction to this register**
+Pass 3 wrote that southern rut timing "is driven by herd genetics, restocking
+history and local conditions". **That is stronger than the evidence supports and
+is corrected here.** The one study that tested it directly reached a split
+result:
+
+Sumners et al. compared mtDNA and microsatellite differentiation between **6
+pairs of adjacent populations whose breeding dates differ by a mean of 35 days**
+and **4 pairs differing by ≤ 2 days**.
+
+- **Biparental nuclear markers did *not* separate them**: F<sub>ST</sub> = 0.028
+  (SD 0.021) for the similar-date pairs vs 0.047 (SD 0.024) for the
+  different-date pairs, **P = 0.200**. The straightforward "different stock ⇒
+  different rut" story is *not* supported at nuclear loci.
+- **mtDNA lineages did differ more** between geographically proximate
+  populations with differing breeding dates, implying a **maternal** genetic
+  effect maintained by **female philopatry**. The authors advance the restocking
+  legacy as a hypothesis — the paper's title ends in a question mark, and so
+  should ours.
+
+[Sumners et al. 2015, *J. Wildl. Manage.* 79:1213–1225 — Variable breeding dates among populations of white-tailed deer in the southern United States: the legacy of restocking?](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.954)
+
+**Assessment.** The defensible statement is: *the photoperiod cue is universal,
+but the **threshold** at which a given maternal lineage responds to it is
+heritable and locally fixed by doe site-fidelity, so adjacent herds can differ by
+weeks under identical day length.* Graded 🔵 — the differentiation is measured,
+the causal attribution to twentieth-century restocking is inference, and the
+study's own nuclear-marker test came back negative.
+
+Two corroborating, non-genetic contributors are reported by the agencies and
+should be carried as 🟡 rather than dropped: **spring flooding** in the
+Mississippi/Atchafalaya bottomlands selecting for late fawning, and
+**restocking-source folklore** in Alabama. Neither is quantified.
+[MSU Deer Lab — 2011 flood impacts on Delta deer (PDF)](https://www.msudeer.msstate.edu/docs/articles/Potential%20Flood%20Impacts%20on%20Deer%202011%20Flood%20Delta%20Wildlife%20Magazine.pdf) ·
+[MDWFP — what triggers the whitetail rut](https://www.mdwfp.com/wildlife-hunting/private-lands-program/habitat-and-wildlife-information/what-triggers-whitetail-rut)
+
+**What this rules out as a modelling shortcut.** Because the effect is carried in
+maternal lineage rather than in the environment, it is **not recoverable from any
+covariate the engine has** — not latitude, not elevation, not NLCD cover, not
+temperature. There is no clever feature that substitutes for the region table.
+That is worth stating plainly so a future pass does not try.
 
 ### 🟢 Region → peak-breeding lookup — **the seed table, assembled from agency sources**
 Pass 2 established that the latitude-monotone form is wrong but left no

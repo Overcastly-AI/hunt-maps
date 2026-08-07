@@ -22,7 +22,13 @@
  * until someone edits one of them.
  */
 
-import { lngLatToTile, tilesForBBox, type BBox, type TileCoord } from '@hunt-maps/terrain';
+import {
+  lngLatToTile,
+  tileBBox,
+  tilesForBBox,
+  type BBox,
+  type TileCoord,
+} from '@hunt-maps/terrain';
 import type { TileKey } from '../offline/tileStore';
 
 /** Store namespace for elevation tiles. Rendered layers are never cached. */
