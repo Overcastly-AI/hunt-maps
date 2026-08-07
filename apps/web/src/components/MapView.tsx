@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
-import type { AnalysisLayer } from '@hunt-maps/terrain';
+import type { AnalysisLayer, BBox } from '@hunt-maps/terrain';
 import { color } from '@hunt-maps/design';
 import { LAYERS, layerById } from '../lib/layers';
 import { BASE_SOURCES, isSyncedLayer } from '../lib/map/baseSources';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
-import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
+import { boundsToBBox, DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
 import { exposeDevHook } from '../lib/devHook';
 import { CoverageOverlay, coverageExtentToDraw } from '../lib/map/coverageOverlay';
+import { RegionOutline } from '../lib/map/regionOutline';
 import type { CoverageState } from '../lib/offline/coverage';
 
 export interface MapViewProps {
@@ -22,6 +23,15 @@ export interface MapViewProps {
   onReady?: (map: maplibregl.Map) => void;
   /** Map centre, so solar and thermal readouts follow the ground being viewed. */
   onMove?: (center: { lng: number; lat: number }) => void;
+  /**
+   * Viewport extent and zoom, for the offline region picker.
+   *
+   * Separate from `onMove` because it answers a different question and has a
+   * different cost: the picker re-plans a tile list from this, and folding it
+   * into the centre callback would re-run the solar model every time the
+   * picker wanted a bounding box.
+   */
+  onViewChange?: (view: { bounds: BBox; zoom: number }) => void;
   protocol: TerrainProtocol;
   /**
    * Current offline coverage for this view, drawn as the hatched stored-extent
@@ -30,6 +40,14 @@ export interface MapViewProps {
    * `coverageExtentToDraw`, not to this component.
    */
   coverage?: CoverageState | null;
+  /**
+   * The area the region picker is about to download, drawn as a dashed box.
+   *
+   * Deliberately a different mark from the coverage hatch: one says what you
+   * are *about* to have, the other what you *do* have, and a hunter who
+   * confuses the two walks in on a region that was never downloaded.
+   */
+  regionBox?: BBox | null;
   /**
    * Whether the user wants the coverage extent drawn at all.
    *
@@ -64,10 +82,18 @@ export function MapView({
   protocol,
   coverage,
   showCoverage = false,
+  onViewChange,
+  regionBox = null,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const overlay = useRef<CoverageOverlay | null>(null);
+  const regionOutline = useRef<RegionOutline | null>(null);
+  // Held in a ref and read from the listener, so the mount-only effect below
+  // never has to be re-run to pick up a new callback identity — re-running it
+  // would tear down and rebuild the map.
+  const viewChangeRef = useRef(onViewChange);
+  viewChangeRef.current = onViewChange;
   // Set once the style has loaded for the first time. `isStyleLoaded()`
   // answers a different question than its name suggests: MapLibre also folds
   // in-flight tile activity for *already-added* sources into it, so it can
@@ -130,10 +156,20 @@ export function MapView({
     instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-right');
 
     instance.on('contextmenu', (e) => onPointInspect?.(e.lngLat));
-    instance.on('moveend', () => {
+    const publishView = (): void => {
       const c = instance.getCenter();
       onMove?.({ lng: c.lng, lat: c.lat });
-    });
+      viewChangeRef.current?.({
+        bounds: boundsToBBox(instance.getBounds()),
+        zoom: instance.getZoom(),
+      });
+    };
+    instance.on('moveend', publishView);
+    // The first publish, so the picker has a box before the user touches
+    // anything. `idle` as well as `load` for the same reason the coverage hook
+    // needs both: offline, `load` may already have fired or may never settle.
+    instance.once('load', publishView);
+    instance.once('idle', publishView);
     map.current = instance;
 
     // E2E / debugging hook. Screenshot and QA runs need a reliable "tiles have
@@ -147,6 +183,8 @@ export function MapView({
     return () => {
       overlay.current?.destroy();
       overlay.current = null;
+      regionOutline.current?.destroy();
+      regionOutline.current = null;
       instance.remove();
       map.current = null;
     };
@@ -191,6 +229,16 @@ export function MapView({
     overlay.current ??= new CoverageOverlay(instance);
     overlay.current.setTiles(showCoverage ? coverageExtentToDraw(coverage ?? null) : []);
   }, [coverage, showCoverage]);
+
+  // The region picker's pending box. Its own overlay and its own effect: it
+  // changes as the user pans with the picker open, which is a different cadence
+  // again from either the layer stack or the coverage hatch.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    regionOutline.current ??= new RegionOutline(instance);
+    regionOutline.current.setBoxes(regionBox ? [regionBox] : []);
+  }, [regionBox]);
 
   return <div ref={container} className="map-canvas" data-testid="map-canvas" />;
 }

@@ -109,14 +109,32 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
         Not `navigator.onLine`, and not a warm context.
       Still open: neighbour tiles outside the view are not counted, so a hunter
       standing exactly on a download boundary can see a seam the badge did not
-      warn about (`BACKLOG R34`); and **`R4`, the region picker, is still the
-      missing front door** — all of this tells a hunter they are not covered,
-      and nothing in the UI yet lets them fix it.
+      warn about (`BACKLOG R34`). `R4`, the region picker that lets a hunter act
+      on any of this, shipped in the same phase — see below.
 - [ ] Property boundary drawing and editing on the map *(🔴 scorecard gap)*
 - [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
 - [ ] Observation capture optimised for gloved, one-handed, in-the-field use
 - [ ] Saved-filter editor: build a predicate visually, see match share live
-- [ ] Offline region picker with the estimate and warnings surfaced
+- [x] **Offline region picker — `BACKLOG R4`, the front door `R8` was missing.**
+      `R8` shipped honest coverage reporting and the button to act on it was
+      `onClick={() => undefined}`. Pick an area, see the estimate, download
+      resumably, watch the badge go `Covered`.
+      - The picker, `R8`'s coverage probe and the analysis fetch path all
+        enumerate tiles through **one** function, so what you download and what
+        the badge counts cannot diverge.
+      - Sends `layers: ['elevation']` — the truth — and therefore exposes that
+        our own API has no elevation byte cost and reports 10× low. Size comes
+        from a figure **measured off 114 real tiles**; a 361-tile region
+        estimated 36.1 MB and stored 36,835,835 bytes.
+      - Resume re-probes every planned tile rather than trusting a cursor: a
+        dead battery and a browser eviction look identical from outside and
+        both must be repaired.
+      - Cold-started **offline**, from nothing, over downloaded ground —
+        hillshade rendered from cached elevation. Persistent storage was
+        refused here and the chip says so rather than assuming.
+      Web tests 63 → 115, invariants 34 → 49. Its own invariants caught three
+      real defects, including a download button that hit-tested to `null`
+      below the fold and an action bar that was visible and unclickable.
 - [ ] Corridor UI: pick two areas, solve, see band + pinch points
 - [ ] Terrain readout on long-press (API exists; UI pending — rebuild as a
       peek-detent sheet with a map marker, not the current floating dialog)

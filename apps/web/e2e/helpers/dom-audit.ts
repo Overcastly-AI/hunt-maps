@@ -313,22 +313,58 @@ export async function collectChromeTextNodes(
           }
           const rect = el.getBoundingClientRect();
           if (rect.width <= 0 || rect.height <= 0) continue;
-          if (
-            rect.bottom < 0 ||
-            rect.right < 0 ||
-            rect.top > window.innerHeight ||
-            rect.left > window.innerWidth
-          ) {
-            continue;
+
+          // Intersect with every clipping ancestor, then with the viewport —
+          // the same derivation `auditInteractiveElements` uses, and for the
+          // same reason.
+          //
+          // This helper used to check the viewport alone, and that produced
+          // *confidently wrong contrast failures*. A paragraph scrolled past
+          // the bottom of `.rl-sheet__body`'s own clip is not painted at all,
+          // but its `getBoundingClientRect()` still lands inside the window —
+          // so the sampler read the pixels at that location, which are the
+          // live map, and compared the panel's text colour against a hillshade.
+          // The tell was that the identical assertion passed with the DEM relay
+          // switched off (dark map, accidentally high contrast) and failed with
+          // it on: "One at a time — ramps do not stack" measured 3.45:1 against
+          // terrain it was nowhere near. It also fails the other way round — a
+          // genuinely low-contrast string below the fold was never assessed at
+          // all. Both directions are exactly what this suite exists to prevent.
+          let box = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+          let ancestor = el.parentElement;
+          while (ancestor && ancestor !== document.documentElement) {
+            const cs = window.getComputedStyle(ancestor);
+            const clipsX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
+            const clipsY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
+            if (clipsX || clipsY) {
+              const ar = ancestor.getBoundingClientRect();
+              box = {
+                left: clipsX ? Math.max(box.left, ar.left) : box.left,
+                right: clipsX ? Math.min(box.right, ar.right) : box.right,
+                top: clipsY ? Math.max(box.top, ar.top) : box.top,
+                bottom: clipsY ? Math.min(box.bottom, ar.bottom) : box.bottom,
+              };
+            }
+            ancestor = ancestor.parentElement;
           }
+          box = {
+            left: Math.max(box.left, 0),
+            top: Math.max(box.top, 0),
+            right: Math.min(box.right, window.innerWidth),
+            bottom: Math.min(box.bottom, window.innerHeight),
+          };
+          // Nothing of it is on screen — there are no pixels to judge.
+          if (box.right <= box.left || box.bottom <= box.top) continue;
 
           out.push({
             selectorHint: el.className ? `.${String(el.className).trim().split(/\s+/).join('.')}` : el.tagName,
             text: (el.textContent ?? '').trim().slice(0, 40),
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
+            // The *visible* box, so the sampling grid can only ever land on
+            // pixels this element actually painted.
+            x: box.left,
+            y: box.top,
+            width: box.right - box.left,
+            height: box.bottom - box.top,
             colorCss: style.color,
             fontSizePx: parseFloat(style.fontSize),
             fontWeight: parseInt(style.fontWeight, 10) || 400,

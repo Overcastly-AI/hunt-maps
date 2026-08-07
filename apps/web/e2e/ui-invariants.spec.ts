@@ -20,12 +20,18 @@ import {
 import {
   chipColor,
   chipText,
+  clearRegions,
   clearTiles,
+  failTileWritesAfter,
+  hitTestInPlace,
   jumpTo,
   observeChipLabels,
+  openRegionPicker,
   remeasure,
+  renderedText,
   renderedFeatureCount,
   seedTilesForView,
+  storedTileCount,
   tokenColor,
 } from './helpers/offline';
 
@@ -167,6 +173,16 @@ test.describe('1. Hit-testability', () => {
         await closeLayersSheet(page);
         await page.getByRole('button', { name: /Wind from/ }).click();
         await waitForRectStable(page.locator('.rl-popover'));
+      },
+    },
+    {
+      // The offline region picker (R4). It shares the drawer slot with the
+      // Layers sheet and carries the app's only sticky-positioned element, so
+      // it is the panel most likely to reintroduce the clipping bug.
+      name: 'region picker open',
+      setup: async (page) => {
+        await openRegionPicker(page);
+        await waitForRectStable(page.locator('.rl-sheet'));
       },
     },
   ];
@@ -324,11 +340,21 @@ test.describe('2. Trigger stability', () => {
 // *effective* box — the wrapping `<label>`, which is the box a browser
 // actually honours a tap against — not the ~18px glyph alone.
 test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
+  const panels: Array<{ name: string; setup: (page: Page) => Promise<void> }> = [
+    // The layers sheet's toggles are the largest population of controls in
+    // the app, and it is open by default.
+    { name: 'layers sheet', setup: async () => {} },
+    // The region picker's segmented area/detail rows are the app's densest row
+    // of buttons — four across a 360px drawer — which is exactly where a
+    // sub-44px control appears without anyone noticing.
+    { name: 'region picker', setup: openRegionPicker },
+  ];
+
   for (const viewport of [DESKTOP, MOBILE]) {
-    test(`${viewport.width}px`, async ({ page }) => {
+    for (const panel of panels) {
+      test(`${viewport.width}px — ${panel.name}`, async ({ page }) => {
       await gotoAndSettle(page, viewport);
-      // The layers sheet's toggles are the largest population of controls in
-      // the app, so check with it open.
+      await panel.setup(page);
       const elements = await auditInteractiveElements(page, ['.map-chrome', '.rl-sheet']);
       expect(elements.length).toBeGreaterThan(0);
 
@@ -354,7 +380,8 @@ test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
           )
           .join('\n'),
       ).toEqual([]);
-    });
+      });
+    }
   }
 });
 
@@ -394,6 +421,42 @@ test.describe('4. No chrome collisions (desktop)', () => {
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
     await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'wind/time popover'] });
+  });
+
+  test('region picker open', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await openRegionPicker(page);
+    await waitForRectStable(page.locator('.rl-sheet'));
+    await assertNoCollisions(page, { expectPresent: [...PERSISTENT, 'layers sheet'] });
+  });
+
+  /**
+   * Only one panel may occupy the drawer slot.
+   *
+   * The Layers sheet and the region picker are both `.rl-sheet--drawer` and
+   * are absolutely positioned at identical coordinates. Two of them open at
+   * once would overlap *exactly*, and the one underneath becomes an
+   * `elementFromPoint` trap for every control in the one on top — the same
+   * failure the popover/sheet stacking bug produced, reached from a new
+   * direction. Asserted on the rendered DOM rather than on App's state,
+   * because the state being right is not what a user experiences.
+   */
+  test('opening the region picker closes the Layers sheet, and vice versa', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP); // Layers open by default
+    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+
+    // Clicked directly rather than through `openRegionPicker`, which closes the
+    // Layers sheet first for the benefit of narrow viewports — that would
+    // defang the very thing this asserts.
+    await page.getByRole('button', { name: 'Save this area for offline use' }).click();
+    await waitForRectStable(page.locator('.rl-sheet'));
+    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+    await expect(page.getByTestId('region-elevation-story')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await waitForRectStable(page.locator('.rl-sheet'));
+    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+    await expect(page.getByTestId('region-elevation-story')).toHaveCount(0);
   });
 
   // Layers and a popover are now independent state (App.tsx) and can both be
@@ -682,6 +745,17 @@ test.describe('7. Chrome text contrast (WCAG AA)', () => {
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
     await assertChromeContrast(page, ['.map-chrome']);
+  });
+
+  test('region picker', async ({ page }) => {
+    // The picker carries the app's longest body copy — the elevation-only
+    // sentence and the server's download warnings — over glass on a live map.
+    // Both are sentences a hunter has to actually read at 22:00 to make a
+    // decision, and both sit on the one surface in the app with a `sticky`
+    // element and a second background colour behind it.
+    await gotoAndSettle(page, DESKTOP);
+    await openRegionPicker(page);
+    await assertChromeContrast(page, ['.map-chrome', '.rl-sheet']);
   });
 });
 
@@ -978,4 +1052,280 @@ test.describe('10. Layer paint coverage — a layer that paints nothing must fai
       ).toBeGreaterThan(1);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// 11. The offline region picker actually saves ground (BACKLOG R4)
+// ---------------------------------------------------------------------------
+//
+// `R8` shipped honest coverage reporting: the app now tells a hunter, truthfully,
+// that the ground under their view is not downloaded. For one release it then
+// offered them nothing to do about it — the rail button was
+// `onClick={() => undefined}`, a literal no-op. Honest bad news with no remedy
+// is a worse product than the lie it replaced, for anyone who reads that chip
+// at the trailhead.
+//
+// Every test below fails against that build, because there is no panel to open.
+// More usefully, they are written to fail against the *plausible wrong
+// versions* of this feature as well:
+//
+//  - a Download button that renders but sits below the fold of a scrolling
+//    panel (this happened; it was found by hand-hit-testing, not by a unit
+//    test, and `hitTestInPlace` is the assertion that would have caught it);
+//  - a tile count and a byte figure sourced from different moments, so the
+//    button reads "12 tiles · about 11 MB" (this happened too);
+//  - a download that completes without the coverage badge noticing, because
+//    R8's probe memo was never invalidated;
+//  - a region that reads "Saved" and is not there after a reload;
+//  - a storage failure that stops the download silently.
+test.describe('11. Offline region picker (R4)', () => {
+  // Real tiles over the network into a real OPFS store, plus a full reload.
+  test.setTimeout(900_000);
+
+  test.beforeEach(async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await clearTiles(page);
+    await clearRegions(page);
+  });
+
+  /**
+   * The failure class this repo keeps paying for, aimed at the one control
+   * that matters most.
+   *
+   * `auditInteractiveElements` scrolls a candidate into view before hit-testing
+   * it, which is right for auditing a long panel and wrong for a primary
+   * action: "reachable if you scroll" is not "tappable". This hit-tests where
+   * the button actually sits, on the frame the panel opens, at both viewports.
+   */
+  for (const viewport of [DESKTOP, MOBILE]) {
+    test(`${viewport.width}px — the download button is tappable one-handed with no scrolling`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport);
+      await clearRegions(page);
+      await openRegionPicker(page);
+
+      const hit = await hitTestInPlace(page, 'region-download');
+      expect(hit.found, 'the picker rendered no download button at all').toBe(true);
+      expect(
+        hit.ok,
+        `the Download button paints at ${Math.round(hit.width)}x${Math.round(hit.height)}px but a ` +
+          `tap at its centre lands on ${hit.hit}. A hunter should not have to scroll a panel ` +
+          `one-handed in the dark to find the only button that matters.`,
+      ).toBe(true);
+      expect(hit.height, 'gloved minimum').toBeGreaterThanOrEqual(44);
+      expect(hit.width).toBeGreaterThanOrEqual(44);
+    });
+  }
+
+  /**
+   * The estimate has to be shown before committing, and it has to be coherent.
+   *
+   * Tile count grows 4× per zoom level and nobody's intuition handles that, so
+   * both figures are asserted to move together and to actually quadruple. The
+   * specific defect pinned here was found by hand: the tile count updated the
+   * instant the detail level changed while the byte figure lagged a step
+   * behind, producing "Download 12 tiles · about 11 MB" — two numbers from
+   * different moments, one of them ten times wrong, on the control about to be
+   * pressed.
+   */
+  test('the estimate is on the button, and the two figures never disagree', async ({ page }) => {
+    await openRegionPicker(page);
+
+    const readButton = async (): Promise<{ tiles: number; mb: number }> => {
+      const text = await page.getByTestId('region-download').innerText();
+      const m = text.match(/Download ([\d,]+) tiles · about ([\d.]+) (kB|MB|GB)/);
+      if (!m) throw new Error(`Download button does not quote an estimate: "${text}"`);
+      const scale = m[3] === 'GB' ? 1000 : m[3] === 'kB' ? 1 / 1000 : 1;
+      return { tiles: Number(m[1].replace(/,/g, '')), mb: Number(m[2]) * scale };
+    };
+
+    const seen: Array<{ z: number; tiles: number; mb: number }> = [];
+    for (const z of [13, 14, 15]) {
+      await page.getByRole('button', { name: `Detail to zoom ${z}` }).click();
+      // Deliberately short. The point is that the two figures are derived from
+      // one synchronous computation and cannot be caught mid-drift; a generous settle
+      // would hide exactly the defect this pins.
+      await page.waitForTimeout(150);
+      const button = await readButton();
+      const detail = await page.getByTestId('region-estimate').innerText();
+      // The panel's own figures and the button's must be the same numbers.
+      expect(
+        detail.replace(/[\s\n]+/g, ' '),
+        `the estimate panel and the Download button disagree at z${z}`,
+      ).toContain(button.tiles.toLocaleString());
+      seen.push({ z, ...button });
+    }
+
+    // Roughly 4× per level, in both figures. "Roughly" because a viewport's
+    // tile ranges round outward differently at each zoom.
+    for (let i = 1; i < seen.length; i++) {
+      expect(
+        seen[i].tiles,
+        `z${seen[i].z} planned ${seen[i].tiles} tiles against z${seen[i - 1].z}'s ` +
+          `${seen[i - 1].tiles} — a detail level that does not multiply the download is not ` +
+          `telling the user what it costs.`,
+      ).toBeGreaterThan(seen[i - 1].tiles * 2);
+      expect(seen[i].mb).toBeGreaterThan(seen[i - 1].mb * 2);
+    }
+  });
+
+  /** The one sentence that explains why these megabytes are worth more than a competitor's. */
+  test('the picker states the elevation-only story in plain language', async ({ page }) => {
+    await openRegionPicker(page);
+    const story = page.getByTestId('region-elevation-story');
+    await expect(story).toBeVisible();
+    const text = await story.innerText();
+    expect(text.toLowerCase()).toContain('elevation');
+    // The claim that distinguishes this from every competitor's cache of
+    // rendered layer tiles: one download, any wind, any date.
+    expect(text.toLowerCase()).toMatch(/any wind/);
+    expect(text.toLowerCase()).toMatch(/any date/);
+  });
+
+  /**
+   * The whole point of the ticket: a download makes R8's badge honestly say
+   * Covered, and it is still true after the app has been closed and reopened
+   * with no signal.
+   *
+   * This is the cold start that matters — not "works after I used it online",
+   * but "boots from nothing, no signal, app closed since yesterday". The reload
+   * happens with the browser context genuinely offline, so nothing can sneak in
+   * over the network to rescue it.
+   */
+  test('a completed download makes the badge say Covered, and it survives an offline reload', async ({
+    page,
+    context,
+  }) => {
+    await openRegionPicker(page);
+    await expect(page.getByTestId('region-download')).toBeEnabled();
+    await page.getByTestId('region-download').click();
+
+    // Wait for the run to finish: the progress panel disappears and the region
+    // lands in the list.
+    await expect
+      .poll(async () => (await page.getByTestId('region-progress').count()) === 0, {
+        timeout: 300_000,
+      })
+      .toBe(true);
+    await expect.poll(() => renderedText(page, 'region-list')).toContain('SAVED');
+    expect(await storedTileCount(page)).toBeGreaterThan(0);
+
+    // R8's badge must now agree. If `invalidateCoverageCache()` were not
+    // called on completion, this would sit on the pre-download verdict for up
+    // to twenty seconds and a hunter would be told the download did nothing.
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await expect.poll(() => chipText(page), { timeout: 60_000 }).toBe('COVERED');
+    expect(await chipColor(page)).toBe(await tokenColor(page, '--color-ok'));
+
+    // --- the cold start ---------------------------------------------------
+    await context.setOffline(true);
+    await page.reload();
+    await page.waitForSelector('.rl-sheet', { timeout: 120_000 });
+
+    await expect
+      .poll(() => chipText(page), { timeout: 120_000 })
+      .toBe('COVERED');
+    await expect(page.getByTestId('coverage-detail')).toContainText('no signal');
+
+    // And the saved-areas list is readable with no signal, because it is a
+    // device record rather than a server one. A hunter checking "did that
+    // finish?" at the trailhead has no bars.
+    await openRegionPicker(page);
+    await expect.poll(() => renderedText(page, 'region-list')).toContain('SAVED');
+    await expect(page.getByTestId('region-estimate-source')).toContainText('on this device');
+
+    await context.setOffline(false);
+  });
+
+  /**
+   * Stopping must keep what was downloaded.
+   *
+   * A cancel that threw away 4 GB of progress would be a worse failure than
+   * offering no cancel at all — a hunter on hotel wifi will background the tab,
+   * lose the connection, and come back. The region is left `Unfinished` with a
+   * real partial count, and resuming finishes it.
+   */
+  test('stopping keeps what has downloaded, and resuming finishes it', async ({ page }) => {
+    await openRegionPicker(page);
+    // The doubled box, so there is a run long enough to interrupt.
+    await page.getByRole('button', { name: 'Double' }).click();
+    await page.waitForTimeout(300);
+    await page.getByTestId('region-download').click();
+
+    await expect(page.getByTestId('region-cancel')).toBeVisible({ timeout: 60_000 });
+    // Let some tiles actually land before pulling the plug.
+    await expect.poll(() => storedTileCount(page), { timeout: 120_000 }).toBeGreaterThan(0);
+    await page.getByTestId('region-cancel').click();
+
+    await expect
+      .poll(() => renderedText(page, 'region-list'), { timeout: 60_000 })
+      .toContain('UNFINISHED');
+    const kept = await storedTileCount(page);
+    expect(kept, 'a cancel that discards progress is worse than no cancel').toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: 'Resume' }).click();
+    await expect
+      .poll(async () => (await page.getByTestId('region-progress').count()) === 0, {
+        timeout: 600_000,
+      })
+      .toBe(true);
+    await expect.poll(() => renderedText(page, 'region-list')).toContain('SAVED');
+    expect(await storedTileCount(page)).toBeGreaterThan(kept);
+  });
+
+  /**
+   * Degrade loudly.
+   *
+   * A device that fills up mid-download must say so, in words the user can act
+   * on, and the app must stay usable. Silently stopping at 60% and reporting
+   * "Saved" is the single worst outcome this product has: it is discovered in
+   * the field, in the dark, with no way to fix it.
+   *
+   * The disk write is the only thing stubbed — everything from the download
+   * loop through to the rendered alert is the production path.
+   */
+  test('running out of storage produces a visible, actionable failure', async ({ page }) => {
+    await openRegionPicker(page);
+    await failTileWritesAfter(page, 5);
+    await page.getByTestId('region-download').click();
+
+    const alert = page.getByRole('alert').filter({ hasText: /ran out of storage/ });
+    await expect(alert, 'a quota failure must not be swallowed').toBeVisible({ timeout: 120_000 });
+    // Actionable, not just alarming: it has to tell them what survived and
+    // what to do next.
+    await expect(alert).toContainText(/kept/);
+    await expect.poll(() => renderedText(page, 'region-list')).toContain('FAILED');
+
+    // …and the app is still usable. A storage failure that wedges the UI would
+    // strand a hunter with neither the region nor the map.
+    const layers = await hitTestInPlace(page, 'map-canvas');
+    expect(layers.found).toBe(true);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await expect(page.locator('.rl-sheet')).toBeVisible();
+  });
+
+  /**
+   * The panel must never claim persistent storage it did not get.
+   *
+   * Chromium in this suite refuses `navigator.storage.persist()`, so the chip
+   * reads "Evictable" and the warning is shown — which is the correct, honest
+   * answer and the one the assertion pins. Assuming a grant is how a region a
+   * hunter waited twenty minutes for silently disappears overnight.
+   */
+  test('the storage chip reports what the browser actually granted', async ({ page }) => {
+    await openRegionPicker(page);
+    const chip = page.getByTestId('region-storage-chip');
+    await expect(chip).toBeVisible();
+    const granted = await page.evaluate(() => navigator.storage?.persisted?.() ?? false);
+    await expect
+      .poll(() => renderedText(page, 'region-storage-chip'), { timeout: 30_000 })
+      .toBe(granted ? 'PERSISTENT' : 'EVICTABLE');
+    if (!granted) {
+      await expect(
+        page.getByText(/did not grant persistent storage/),
+        'an ungranted request must be stated, not assumed away',
+      ).toBeVisible();
+    }
+  });
 });

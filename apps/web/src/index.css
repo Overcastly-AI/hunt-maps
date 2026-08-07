@@ -185,6 +185,158 @@
   min-width: 0;
 }
 
+/* --------------------------------------------------------------------------
+ * Offline region picker
+ *
+ * Layout only, as with everything else in this file — every colour, radius and
+ * spacing value here reads a token from `@hunt-maps/design`.
+ * -------------------------------------------------------------------------- */
+
+/*
+ * The elevation-only sentence. Given a little more weight than a plain hint
+ * because it is the one line that explains why this download is worth the
+ * megabytes, and it has to survive being skimmed at 22:00 in a hotel.
+ */
+.region-story {
+  border-left: 2px solid var(--color-accent-dim);
+  padding-left: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/*
+ * Segmented choices (area size, detail level).
+ *
+ * `auto-fit`/`minmax` rather than a fixed column count so a four-up row of
+ * detail levels and a three-up row of area sizes share one rule, and so a
+ * narrow phone wraps instead of forcing the sheet wider than the screen —
+ * which the "no horizontal page scroll" invariant would (rightly) fail.
+ * The minimum is the glove-sized touch target, so a wrapped button is still
+ * tappable rather than merely present.
+ */
+.region-segments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--space-touch), 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* Figure rows: label left, monospace number right, so sizes line up. */
+.region-figures {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.region-figures dt {
+  color: var(--color-text-dim);
+}
+
+.region-figures dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+}
+
+/*
+ * Progress bar.
+ *
+ * A plain div rather than `<progress>`: `<progress>` is styled entirely
+ * differently per engine and cannot take a token-driven fill without
+ * vendor-prefixed pseudo-elements. The ARIA role and value attributes carry
+ * the semantics a screen reader needs, which is what `<progress>` was for.
+ */
+.region-bar {
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-raised);
+  border: 1px solid var(--color-line);
+  overflow: hidden;
+  margin-bottom: var(--space-3);
+}
+
+.region-bar__fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width var(--motion-base) linear;
+}
+
+.region-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/*
+ * The estimate line under the Download button.
+ *
+ * Deliberately *below* the action, not above it. The panel's whole job is to
+ * get a hunter to a considered press, and the two numbers that decide that
+ * press are on the button itself; everything else here is provenance and
+ * caveats, which must never push the action further down the panel.
+ *
+ * There was a `position: sticky` action bar here for one iteration. It solved
+ * the "button below the fold" problem and created a worse one: on a 390px
+ * phone it painted over the Detail buttons, which then hit-tested to the bar —
+ * visible and unclickable, caught by `ui-invariants` section 1 at the mobile
+ * viewport. Nothing in this panel overlaps anything now; the ordering above
+ * does the work instead.
+ */
+.region-summary {
+  margin-top: var(--space-2);
+}
+
+.region-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.region-item {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.region-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+/*
+ * A region name is user-supplied and can be long. `min-width: 0` plus
+ * `overflow-wrap` keeps it inside the sheet rather than pushing the page wide
+ * enough to gain a horizontal scrollbar that fights the map's pan gesture.
+ */
+.region-item__name {
+  min-width: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.region-item__meta {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.region-backend {
+  display: inline-flex;
+  min-width: 0;
+}
+
 /* Terrain readout, anchored above the conditions bar. */
 .inspect-card {
   position: absolute;

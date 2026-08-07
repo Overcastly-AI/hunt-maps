@@ -42,6 +42,9 @@ class FakeStore implements TileStore {
     return null;
   }
   async put(): Promise<void> {}
+  async delete(key: TileKey): Promise<boolean> {
+    return this.keys.delete(this.id(key));
+  }
   async deleteRegion(): Promise<number> {
     return 0;
   }

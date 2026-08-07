@@ -180,6 +180,126 @@ export async function tokenColor(page: Page, name: string): Promise<string> {
   }, name);
 }
 
+// ---------------------------------------------------------------------------
+// Region picker (R4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Open "Save for offline" and wait for the panel to be usable.
+ *
+ * The Layers sheet is closed first. Not defensive tidying: below 861px it is a
+ * full-width bottom sheet that deliberately covers the bottom-left rail
+ * (documented in `apps/web/src/index.css`), so the rail button this clicks is
+ * genuinely unreachable while it is open — the same intentional occlusion the
+ * wind trigger has, and the reason `closeLayersSheet` exists in the spec.
+ */
+export async function openRegionPicker(page: Page): Promise<void> {
+  const close = page.getByRole('button', { name: 'Close panel' });
+  if (await close.isVisible().catch(() => false)) {
+    await close.click();
+    await page.waitForTimeout(300);
+  }
+  await page
+    .getByRole('button', { name: 'Save this area for offline use' })
+    .click({ timeout: 15_000 });
+  await page.waitForSelector('[data-testid="region-download"], [data-testid="region-progress"]');
+  // The estimate is debounced; without this the first read can catch the
+  // placeholder rather than a number.
+  await page.waitForTimeout(700);
+}
+
+/**
+ * An element's **rendered** text, with decorative status glyphs removed.
+ *
+ * `toContainText` compares against `textContent`, which reports the source
+ * string — so a `text-transform: uppercase` chip that a hunter reads as
+ * "UNFINISHED" comes back as "Unfinished" and an assertion written against
+ * what is on screen fails for the wrong reason. Same rule as `chipText`: assert
+ * what was painted, not what was passed in.
+ */
+export async function renderedText(page: Page, testId: string): Promise<string> {
+  if ((await page.getByTestId(testId).count()) === 0) return '';
+  return (await page.getByTestId(testId).innerText()).replace(/[●○◐◌!]/g, '').trim();
+}
+
+/** Forget every saved region record, so a case starts from a cold device. */
+export async function clearRegions(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.removeItem('ridgeline.offline.regions.v1');
+  });
+}
+
+export interface HitResult {
+  found: boolean;
+  ok: boolean;
+  width: number;
+  height: number;
+  /** What `elementFromPoint` resolved to, for a readable failure message. */
+  hit: string;
+}
+
+/**
+ * Hit-test a control **exactly where it currently sits**, with no scrolling.
+ *
+ * Deliberately different from `auditInteractiveElements`, which scrolls a
+ * candidate into view first — the right behaviour for auditing every control in
+ * a long panel, and the wrong question for a *primary* action. "Reachable if
+ * you scroll a panel one-handed in the dark" is not the same promise as
+ * "tappable". This helper asks the second question, and it is the one that
+ * caught the download button sitting below the fold of the sheet's scrolling
+ * body with `elementFromPoint` returning null at its centre.
+ */
+export async function hitTestInPlace(page: Page, testId: string): Promise<HitResult> {
+  return page.evaluate((id: string) => {
+    const el = document.querySelector(`[data-testid="${id}"]`);
+    if (!el) return { found: false, ok: false, width: 0, height: 0, hit: 'absent' };
+    const r = el.getBoundingClientRect();
+    const target = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return {
+      found: true,
+      ok: target === el || el.contains(target),
+      width: r.width,
+      height: r.height,
+      hit: target ? `${target.tagName}.${String(target.className).slice(0, 40)}` : 'null (off-screen or clipped)',
+    };
+  }, testId);
+}
+
+/**
+ * Make the real tile store start refusing writes with a quota error.
+ *
+ * Patches `put` on the actual store instance the app holds, so everything from
+ * the download loop through to the rendered alert is the production path — only
+ * the disk write is replaced. Filling a real 1 GB OPFS quota would take longer
+ * than the whole suite and would not exercise anything different.
+ */
+export async function failTileWritesAfter(page: Page, n: number): Promise<void> {
+  await page.evaluate(async (limit: number) => {
+    const hook = (window as unknown as { __ridgeline?: Record<string, any> }).__ridgeline;
+    const store = await hook?.offline?.store();
+    if (!store) throw new Error('__ridgeline.offline.store not exposed');
+    const original = store.put.bind(store);
+    let written = 0;
+    store.put = async (key: unknown, data: ArrayBuffer) => {
+      if (written++ >= limit) {
+        const err = new Error('The quota has been exceeded.');
+        err.name = 'QuotaExceededError';
+        throw err;
+      }
+      return original(key, data);
+    };
+  }, n);
+}
+
+/** Tiles currently in the real store, straight from its own stats. */
+export async function storedTileCount(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const hook = (window as unknown as { __ridgeline?: Record<string, any> }).__ridgeline;
+    const stats = await (await hook?.offline?.store()).stats();
+    return stats.tileCount as number;
+  });
+}
+
 /**
  * Features the GL renderer is actually drawing for a layer.
  *

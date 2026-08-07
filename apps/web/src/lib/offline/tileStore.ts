@@ -46,6 +46,16 @@ export interface TileStore {
   get(key: TileKey): Promise<ArrayBuffer | null>;
   put(key: TileKey, data: ArrayBuffer): Promise<void>;
   has(key: TileKey): Promise<boolean>;
+  /**
+   * Remove one tile. Resolves `true` if it was there, `false` if it was not.
+   *
+   * Exists because deleting a *saved region* must not delete a whole layer:
+   * two regions over neighbouring ground share tiles along their seam, and
+   * `deleteRegion('dem')` would take out every region on the device. The
+   * region manager works out which tiles are exclusively its own and removes
+   * exactly those.
+   */
+  delete(key: TileKey): Promise<boolean>;
   deleteRegion(layer: string): Promise<number>;
   stats(): Promise<TileStoreStats>;
   clear(): Promise<void>;
@@ -130,6 +140,17 @@ class OpfsTileStore implements TileStore {
     }
   }
 
+  async delete(key: TileKey): Promise<boolean> {
+    const dir = await this.dirFor(key, false);
+    if (!dir) return false;
+    try {
+      await dir.removeEntry(`${key.x}_${key.y}.bin`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async deleteRegion(layer: string): Promise<number> {
     try {
       await this.root.removeEntry(layer, { recursive: true });
@@ -139,19 +160,34 @@ class OpfsTileStore implements TileStore {
     }
   }
 
+  /**
+   * Walk the tree and total it up.
+   *
+   * Tolerant of entries vanishing mid-walk, and that is not defensive
+   * decoration: this is read by the storage screen *while a region download is
+   * writing*, and it is also how a hunter checks "did that finish?". An
+   * iterator that hands back a handle a concurrent `removeEntry` has just
+   * invalidated throws `NotFoundError` from `getFile()`, which used to reject
+   * the whole call — so asking how much you have saved, during the one moment
+   * you most want to know, returned an error instead of a number.
+   */
   async stats(): Promise<TileStoreStats> {
     let tileCount = 0;
     let bytes = 0;
-    // Walk the tree. Only ever called from the storage-management screen, never
-    // on a hot path.
     for await (const [, layerHandle] of entriesOf(this.root)) {
       if (layerHandle.kind !== 'directory') continue;
       for await (const [, zHandle] of entriesOf(layerHandle as FileSystemDirectoryHandle)) {
         if (zHandle.kind !== 'directory') continue;
         for await (const [, fileHandle] of entriesOf(zHandle as FileSystemDirectoryHandle)) {
           if (fileHandle.kind !== 'file') continue;
-          tileCount++;
-          bytes += (await (fileHandle as FileSystemFileHandle).getFile()).size;
+          try {
+            const size = (await (fileHandle as FileSystemFileHandle).getFile()).size;
+            tileCount++;
+            bytes += size;
+          } catch {
+            // Deleted between being listed and being read. It is genuinely not
+            // there any more, so not counting it is the right answer.
+          }
         }
       }
     }
@@ -165,7 +201,14 @@ class OpfsTileStore implements TileStore {
   }
 }
 
-/** `FileSystemDirectoryHandle.entries()` is not in every lib.dom yet. */
+/**
+ * `FileSystemDirectoryHandle.entries()` is not in every lib.dom yet.
+ *
+ * Iteration itself can also throw when a directory is removed underneath it —
+ * a region delete running while the storage screen is open — so the walk stops
+ * rather than propagating. A short count is a better answer than an exception
+ * for a figure that is, by nature, a snapshot of something moving.
+ */
 async function* entriesOf(
   dir: FileSystemDirectoryHandle,
 ): AsyncGenerator<[string, FileSystemHandle]> {
@@ -173,7 +216,17 @@ async function* entriesOf(
     entries?: () => AsyncIterableIterator<[string, FileSystemHandle]>;
   }).entries;
   if (!iterable) return;
-  yield* iterable.call(dir);
+  const iterator = iterable.call(dir);
+  for (;;) {
+    let next: IteratorResult<[string, FileSystemHandle]>;
+    try {
+      next = await iterator.next();
+    } catch {
+      return;
+    }
+    if (next.done) return;
+    yield next.value;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +281,24 @@ class IdbTileStore implements TileStore {
 
   async has(key: TileKey): Promise<boolean> {
     return (await this.get(key)) !== null;
+  }
+
+  delete(key: TileKey): Promise<boolean> {
+    return new Promise((resolve) => {
+      const id = keyString(key);
+      const store = this.tx('readwrite');
+      const existing = store.get(id);
+      existing.onsuccess = () => {
+        if (existing.result === undefined) {
+          resolve(false);
+          return;
+        }
+        const req = store.delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => resolve(false);
+      };
+      existing.onerror = () => resolve(false);
+    });
   }
 
   deleteRegion(layer: string): Promise<number> {
@@ -300,6 +371,9 @@ class MemoryTileStore implements TileStore {
   }
   async has(key: TileKey): Promise<boolean> {
     return this.map.has(keyString(key));
+  }
+  async delete(key: TileKey): Promise<boolean> {
+    return this.map.delete(keyString(key));
   }
   async deleteRegion(layer: string): Promise<number> {
     let n = 0;

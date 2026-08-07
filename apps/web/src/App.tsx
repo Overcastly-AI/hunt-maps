@@ -21,17 +21,17 @@ import {
 import { MapView } from './components/MapView';
 import { LayersSheet, type SavedFilterSummary } from './components/LayersSheet';
 import { ConditionsEditor } from './components/ConditionsEditors';
+import { RegionPicker } from './components/RegionPicker';
 import { toggleLayer } from './lib/layers';
 import { TerrainProtocol } from './lib/map/terrainProtocol';
-import { openTileStore, requestPersistentStorage } from './lib/offline/tileStore';
+import { openTileStore } from './lib/offline/tileStore';
 import { invalidateCoverageCache, type CoverageState } from './lib/offline/coverage';
 import { useViewportCoverage } from './lib/offline/useViewportCoverage';
+import { useOfflineRegions } from './lib/offline/useOfflineRegions';
+import { DEM_TEMPLATE } from './lib/map/demSource';
 import { demSourceZoom, demTileKey, demTilesForBounds } from './lib/map/demTiles';
 import { exposeDevHook } from './lib/devHook';
-
-const DEM_TEMPLATE =
-  import.meta.env.VITE_DEM_TEMPLATE ??
-  'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+import type { BBox } from '@hunt-maps/terrain';
 
 interface FilterEntry extends SavedFilterSummary {
   predicate: TerrainPredicate;
@@ -62,8 +62,11 @@ export default function App() {
   const [atUtc, setAtUtc] = useState(() => new Date());
   const [inspect, setInspect] = useState<{ lng: number; lat: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(true);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [popover, setPopover] = useState<Popover>(null);
   const [center, setCenter] = useState({ lng: -82.54, lat: 39.43 });
+  const [view, setView] = useState<{ bounds: BBox; zoom: number } | null>(null);
+  const [regionBox, setRegionBox] = useState<BBox | null>(null);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
   // State, not just a ref: the coverage hook has to re-subscribe when the map
@@ -79,7 +82,19 @@ export default function App() {
    * this area is stored on this device" for every view, forever. That sentence
    * is the one a hunter believes at the trailhead at 04:30.
    */
-  const { coverage } = useViewportCoverage(map);
+  const { coverage, refresh: refreshCoverage } = useViewportCoverage(map);
+
+  /**
+   * Saved offline regions, and the download running right now.
+   *
+   * `onStoreChanged` is the wire that closes R8's loop: a finished download
+   * changes what is on the device, and without an explicit re-measure the
+   * coverage badge would keep answering from its memo for up to twenty seconds
+   * — so a hunter who just watched a download finish would still be told the
+   * ground is not saved. The chip going to "Covered" is the confirmation that
+   * the download did what it said.
+   */
+  const regions = useOfflineRegions({ onStoreChanged: refreshCoverage });
 
   const [filters, setFilters] = useState<FilterEntry[]>(() =>
     PRESET_FILTERS.map((p, i) => ({
@@ -107,10 +122,10 @@ export default function App() {
 
   useEffect(() => {
     protocol.register();
-    // Ask for persistent storage up front. Without it a large offline region is
-    // evictable under storage pressure with no warning, and discovering that in
-    // the field is the worst failure this app has.
-    void requestPersistentStorage();
+    // Persistent storage is requested by `useOfflineRegions`, which also keeps
+    // the answer and shows it. Asking here as well and throwing the result away
+    // was the old shape — it satisfied "ask" while failing "report what you
+    // actually got", which is the half that matters.
     // The QA seam. `field-qa` and the offline invariants need to set up real
     // store state — "seed this view, then pan five hundred miles" — against the
     // actual OPFS/IndexedDB backend rather than a mock, because the mock is not
@@ -220,6 +235,8 @@ export default function App() {
           setMap(instance);
         }}
         onMove={setCenter}
+        onViewChange={setView}
+        regionBox={pickerOpen ? regionBox : null}
         coverage={coverage}
         /*
          * Shown whenever the Layers sheet is open — that is the surface making
@@ -227,7 +244,7 @@ export default function App() {
          * time — and always while coverage is partial, which is the one state
          * where the text alone is actively misleading about *where* the gap is.
          */
-        showCoverage={sheetOpen || isPartialCoverage(coverage)}
+        showCoverage={sheetOpen || pickerOpen || isPartialCoverage(coverage)}
       />
 
       <div className="map-chrome">
@@ -250,14 +267,28 @@ export default function App() {
             <RailButton
               label="Layers"
               active={sheetOpen}
-              onClick={() => setSheetOpen((open) => !open)}
+              onClick={() => {
+                setSheetOpen((open) => !open);
+                // One panel at a time in the drawer slot. Two `.rl-sheet`s
+                // stacked there would overlap exactly, and the one underneath
+                // becomes an `elementFromPoint` trap for the one on top — the
+                // failure class this repo keeps paying for.
+                setPickerOpen(false);
+              }}
             >
               <LayersIcon />
             </RailButton>
             <RailButton label="Add waypoint" onClick={() => undefined}>
               <PinIcon />
             </RailButton>
-            <RailButton label="Save this area for offline use" onClick={() => undefined}>
+            <RailButton
+              label="Save this area for offline use"
+              active={pickerOpen}
+              onClick={() => {
+                setPickerOpen((open) => !open);
+                setSheetOpen(false);
+              }}
+            >
               <DownloadIcon />
             </RailButton>
           </Rail>
@@ -286,6 +317,23 @@ export default function App() {
           onOpacity={handleOpacity}
           onToggleFilter={handleToggleFilter}
           onClose={() => setSheetOpen(false)}
+        />
+      )}
+
+      {pickerOpen && (
+        <RegionPicker
+          viewBounds={view?.bounds ?? null}
+          viewTileZoom={demSourceZoom(view?.zoom ?? 13)}
+          regions={regions.regions}
+          active={regions.active}
+          persisted={regions.persisted}
+          backend={regions.backend}
+          onBoxChange={setRegionBox}
+          onStart={(input) => void regions.start(input)}
+          onResume={(id) => void regions.resume(id)}
+          onCancel={regions.cancel}
+          onRemove={(id) => void regions.remove(id)}
+          onClose={() => setPickerOpen(false)}
         />
       )}
 
