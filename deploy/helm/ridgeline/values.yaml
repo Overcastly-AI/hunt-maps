@@ -3,8 +3,8 @@
 # chosen so that `helm install` followed by one port-forward gives you a
 # working map. Production overrides are called out inline.
 
-nameOverride: ""
-fullnameOverride: ""
+nameOverride: ''
+fullnameOverride: ''
 
 # -----------------------------------------------------------------------------
 # Images
@@ -51,7 +51,7 @@ containerSecurityContext:
 api:
   image:
     repository: ghcr.io/overcastly-ai/hunt-maps-api
-    tag: ""   # empty → Chart.appVersion
+    tag: '' # empty → Chart.appVersion
   replicaCount: 1
   service:
     port: 3001
@@ -69,11 +69,11 @@ api:
   # Optional 3DEP (USGS 1m LiDAR) source. Left empty, the API serves the
   # public Terrarium tiles and rejects 3dep requests with a clear message
   # rather than silently falling back — see apps/api/src/terrain/dem.service.ts.
-  dem3depTemplate: ""
+  dem3depTemplate: ''
 
   # Browsers that may call the API. The API reads this as a comma-separated
   # list. The default matches the port-forward in NOTES.txt.
-  corsOrigins: "http://localhost:8080"
+  corsOrigins: 'http://localhost:8080'
 
   logLevel: info
 
@@ -81,7 +81,7 @@ api:
   # which on a laptop cluster reads as a stuck kubectl rather than as policy.
   pdb:
     enabled: false
-    minAvailable: ""
+    minAvailable: ''
     maxUnavailable: 1
 
   # Off by default so it cannot fight `replicaCount`. Enable it and
@@ -95,7 +95,7 @@ api:
 web:
   image:
     repository: ghcr.io/overcastly-ai/hunt-maps-web
-    tag: ""   # empty → Chart.appVersion
+    tag: '' # empty → Chart.appVersion
   replicaCount: 1
   service:
     port: 80
@@ -113,7 +113,7 @@ web:
 
   pdb:
     enabled: false
-    minAvailable: ""
+    minAvailable: ''
     maxUnavailable: 1
 
   # nginx-unprivileged needs to write its own runtime state — pid file, client
@@ -136,19 +136,19 @@ postgis:
   enabled: true
   image:
     repository: postgis/postgis
-    tag: "16-3.4"
+    tag: '16-3.4'
   auth:
     database: ridgeline
     username: ridgeline
     # Leave empty to have the chart generate one and keep it in a Secret
     # across upgrades. Set explicitly for anything you care about.
-    password: ""
+    password: ''
   persistence:
     enabled: true
     size: 8Gi
     # Empty means "use the cluster default StorageClass", which is what every
     # local distribution ships. Set it if yours does not have a default.
-    storageClass: ""
+    storageClass: ''
   resources:
     requests:
       cpu: 100m
@@ -180,7 +180,7 @@ postgis:
 # Point at an existing database instead of running one in-cluster.
 # When set, this wins and `postgis.enabled` is ignored.
 externalDatabase:
-  url: ""
+  url: ''
 
 # -----------------------------------------------------------------------------
 # Redis — off, and it should stay off until something uses it
@@ -205,10 +205,10 @@ redis:
 # one on first install and reuses it on every later upgrade via `lookup`, so
 # upgrading does not silently invalidate every session.
 auth:
-  jwtSecret: ""
+  jwtSecret: ''
   # Use a Secret you manage yourself. Must contain keys `jwt-secret` and,
   # if postgis is enabled, `postgres-password`.
-  existingSecret: ""
+  existingSecret: ''
 
 # -----------------------------------------------------------------------------
 # Ingress
@@ -218,9 +218,23 @@ auth:
 # way that looks like the app is broken.
 ingress:
   enabled: false
-  className: ""
+
+  # `*.localtest.me` resolves to 127.0.0.1 from public DNS, so this works on a
+  # local cluster with nothing added to /etc/hosts. It is also why the default
+  # is this rather than something like `ridgeline.local`, which resolves
+  # nowhere until you edit a file as root.
+  #
+  # CORS picks this host up automatically — see the `ridgeline.corsOrigins`
+  # helper. Overriding `host` is enough; there is no second place to update.
+  host: ridgeline.localtest.me
+
+  # ingress-nginx is what most local clusters install. A class that matches no
+  # controller is silently ignored by all of them, which looks exactly like
+  # having no controller at all — so this defaults to the common case rather
+  # than to empty.
+  className: nginx
+
   annotations: {}
-  host: ridgeline.local
   tls: []
 
 # Default-deny ingress to the database, allowing only the API. This is the
@@ -236,7 +250,7 @@ networkPolicy:
 
 serviceAccount:
   create: true
-  name: ""
+  name: ''
 
 podAnnotations: {}
 nodeSelector: {}

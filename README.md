@@ -3,8 +3,8 @@
 **A self-hosted hunting map and terrain-analytics platform.** Real LiDAR terrain
 analysis, saved terrain queries, movement corridors — offline first.
 
-> Every hunting app ships terrain *visualisation*. Ridgeline ships terrain
-> *analysis* you can define, name, save, and reason with.
+> Every hunting app ships terrain _visualisation_. Ridgeline ships terrain
+> _analysis_ you can define, name, save, and reason with.
 
 ---
 
@@ -14,20 +14,20 @@ analysis, saved terrain queries, movement corridors — offline first.
 
 A real DEM/LiDAR engine, validated against analytically-known surfaces:
 
-| Layer | What it tells you |
-|-------|-------------------|
-| **Slope angle** | Banded at the breaks that matter — the 8–20° sidehill deer contour along, the 20–30° bedding grade, the 45°+ ground nothing crosses |
-| **Saddles** | Low points on a ridge where deer cross instead of climbing over. Computed, not eyeballed |
-| **Benches** | Level shelves cut into steep ground. Where bucks bed in hill country |
-| **Landform** | Canyon / midslope drainage / bench / midslope ridge / summit — landscape *position*, not just steepness |
-| **Sun exposure** | Direct insolation for a specific date and time. Late-season bedding follows the sun, and which face wins shifts through the season |
-| **Bedding likelihood** | Leeward aspect × real upwind shelter × beddable grade × broken cover, for the wind you set |
-| **Movement corridors** | Anisotropic least-cost routing between bedding and food, with **pinch points** extracted — the stand-placement output |
+| Layer                  | What it tells you                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Slope angle**        | Banded at the breaks that matter — the 8–20° sidehill deer contour along, the 20–30° bedding grade, the 45°+ ground nothing crosses |
+| **Saddles**            | Low points on a ridge where deer cross instead of climbing over. Computed, not eyeballed                                            |
+| **Benches**            | Level shelves cut into steep ground. Where bucks bed in hill country                                                                |
+| **Landform**           | Canyon / midslope drainage / bench / midslope ridge / summit — landscape _position_, not just steepness                             |
+| **Sun exposure**       | Direct insolation for a specific date and time. Late-season bedding follows the sun, and which face wins shifts through the season  |
+| **Bedding likelihood** | Leeward aspect × real upwind shelter × beddable grade × broken cover, for the wind you set                                          |
+| **Movement corridors** | Anisotropic least-cost routing between bedding and food, with **pinch points** extracted — the stand-placement output               |
 
 ### Saved terrain filters
 
-*"12–25°, facing north-through-east, on a midslope bench, leeward on today's
-wind"* — named, saved, shareable, and available offline. Feed it to the corridor
+_"12–25°, facing north-through-east, on a midslope bench, leeward on today's
+wind"_ — named, saved, shareable, and available offline. Feed it to the corridor
 solver and generated routes prefer exactly the ground you identified.
 
 Seven presets ship with the app, each encoding a piece of published whitetail
@@ -36,7 +36,7 @@ doctrine as a machine-checkable predicate.
 ### Offline as the operating assumption
 
 The cache holds **elevation tiles, not rendered layers**. One region download
-unlocks *every* layer, *any* wind direction, *any* date — computed on-device, no
+unlocks _every_ layer, _any_ wind direction, _any_ date — computed on-device, no
 signal required. Pre-baking rendered tiles would need a variant per
 layer × wind × date, which is combinatorially impossible.
 
@@ -44,7 +44,7 @@ layer × wind × date, which is combinatorially impossible.
 
 Habitat-selection charts divide by the property's availability distribution and
 report Manly selection ratios — because a raw histogram of sightings by slope
-band measures your *property*, not your *deer*. Sightings are normalised by sits.
+band measures your _property_, not your _deer_. Sightings are normalised by sits.
 Activity is bucketed against sunrise, not the clock. Significance is not claimed
 on thin data, and the app will tell you plainly when you have too few
 observations to read a pattern.
@@ -78,48 +78,93 @@ exist on the machine running the cluster.
 
 ### Kubernetes (Helm)
 
-```bash
-helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
-  --version 1.0.0 --namespace ridgeline --create-namespace
-
-kubectl -n ridgeline rollout status deploy/ridgeline-api
-kubectl -n ridgeline port-forward svc/ridgeline-web 8080:80
-```
-
-Then http://localhost:8080. The API is proxied at `/api` through the same
-origin, so one forward is all you need.
-
-Verify the release actually works — this asserts things a green rollout does
-not prove, namely that the API reports PostGIS *reachable* and that the web
-tier really proxies `/api`:
+One command:
 
 ```bash
-helm test ridgeline -n ridgeline
+helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline --set ingress.enabled=true
 ```
 
-**Both GHCR packages must be public**, or the pull fails with `unauthorized` —
-which reads like a missing tag rather than a permissions problem. Package
-visibility is separate from repository visibility and does not follow it. Make
-them public under *your profile → Packages → package settings*, or supply a
-pull secret (see `deploy/helm/README.md`).
+Then open **http://ridgeline.localtest.me**
 
-Useful values:
+That is the whole thing. No repository checkout, no `--version` (Helm takes the
+latest), no host file to edit — `*.localtest.me` resolves to 127.0.0.1 from
+public DNS. The chart defaults to that hostname and to the `nginx` ingress
+class, and the API's allowed CORS origins are derived from the ingress host
+automatically, so there is no second value to remember.
 
-| Value | Default | Why you would change it |
-|---|---|---|
-| `api.image.tag` / `web.image.tag` | `""` → chart `appVersion` | Pin an older version, or test a development image |
-| `api.corsOrigins` | `http://localhost:8080` | Must match the address you actually load the app from, or the browser blocks every API call |
-| `postgis.persistence.size` | `8Gi` | Observations plus denormalised terrain; DEM tiles are **not** stored server-side |
-| `externalDatabase.url` | `""` | Use managed PostGIS instead of the in-chart StatefulSet |
-| `ingress.enabled` | `false` | A port-forward behaves the same on every cluster; ingress does not |
-| `networkPolicy.enabled` | `false` | Default-deny to the database. Only meaningful where the CNI enforces it — kind's default does not |
-| `api.autoscaling.enabled` | `false` | Enabling it makes the HPA own the replica count; `replicaCount` is then ignored |
+**No ingress controller?** Drop the flag and forward the port instead. Works on
+any cluster:
+
+```bash
+helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline
+kubectl port-forward svc/ridgeline-web 8080:80
+```
+
+Then http://localhost:8080.
+
+Check it actually works — this asserts things a green rollout does not, namely
+that the API reports PostGIS _reachable_ and that the web tier really proxies
+`/api`:
+
+```bash
+helm test ridgeline
+```
+
+Remove it entirely with `helm uninstall ridgeline`.
+
+<details>
+<summary>If the pods will not pull</summary>
+
+GHCR package visibility is separate from repository visibility and does not
+follow it. A private package fails with `unauthorized`, which reads like a
+missing tag rather than a permissions problem. Make `hunt-maps-api` and
+`hunt-maps-web` public under _your profile → Packages → package settings_, or
+supply a pull secret:
+
+```bash
+kubectl create secret docker-registry ghcr \
+  --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+  --set image.pullSecrets[0].name=ghcr
+```
+
+</details>
+
+<details>
+<summary>If the hostname does not resolve to anything</summary>
+
+The Ingress object exists but nothing routes unless an ingress controller is
+installed _and_ its class matches. kind and k3d ship none by default, and a
+mismatched class is silently ignored by every controller in the cluster —
+which looks identical to having no controller at all.
+
+```bash
+kubectl get ingressclass          # what is actually installed
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+  --set ingress.enabled=true --set ingress.className=<the class above>
+```
+
+On kind the cluster also needs `extraPortMappings` for 80/443 at creation
+time, or the controller is reachable only from inside the node. Docker
+Desktop publishes one on localhost:80 directly.
+
+</details>
+
+Values worth knowing:
+
+| Value                             | Default                   | Why you would change it                                                          |
+| --------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
+| `ingress.host`                    | `ridgeline.localtest.me`  | Any hostname; CORS follows it automatically                                      |
+| `ingress.className`               | `nginx`                   | Must match `kubectl get ingressclass`                                            |
+| `api.image.tag` / `web.image.tag` | `""` → chart `appVersion` | Pin an older version                                                             |
+| `postgis.persistence.size`        | `8Gi`                     | Observations plus denormalised terrain; DEM tiles are **not** stored server-side |
+| `externalDatabase.url`            | `""`                      | Use managed PostGIS instead of the in-chart StatefulSet                          |
+| `api.autoscaling.enabled`         | `false`                   | Enabling it makes the HPA own the replica count                                  |
 
 Values are validated against `values.schema.json`, so a misspelled key is an
 install-time error naming the field rather than a silently applied default.
 
-Full guide, including the production posture table and supply-chain
-verification: **[`deploy/helm/README.md`](deploy/helm/README.md)**.
+Full guide: **[`deploy/helm/README.md`](deploy/helm/README.md)**.
 
 ### Single Docker host (VPS)
 
@@ -177,12 +222,12 @@ bottom of a hollow, and one implementation is the only way to guarantee that.
 
 ## Data sources
 
-| Data | Source | Notes |
-|------|--------|-------|
-| Elevation (global) | [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) | Free, no key, not requester-pays. Default |
+| Data                      | Source                                                                              | Notes                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Elevation (global)        | [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)                   | Free, no key, not requester-pays. Default              |
 | Elevation (US bare earth) | [USGS 3DEP](https://www.usgs.gov/3d-elevation-program/about-3dep-products-services) | 1 m LiDAR over much of the US. Set `DEM_3DEP_TEMPLATE` |
-| Land cover | [NLCD / MRLC](https://www.mrlc.gov/data) | Drives corridor resistance |
-| Imagery | Esri World Imagery | Leaf-off is what you want for scouting |
+| Land cover                | [NLCD / MRLC](https://www.mrlc.gov/data)                                            | Drives corridor resistance                             |
+| Imagery                   | Esri World Imagery                                                                  | Leaf-off is what you want for scouting                 |
 
 **Bare earth matters.** A surface model includes the tree canopy — under timber
 it describes the top of the woods, not the ground deer walk on. Benches and old
