@@ -1,15 +1,14 @@
 name: Publish images
 
-# Builds the API and web images and pushes them to GitHub Container Registry.
+# Development images, for testing a branch before it is released.
 #
-# Triggers are deliberately broad on branches. Deploying to a VPS by hand means
-# wanting an image for the branch you are actually working on, not only for a
-# tagged release — so every branch produces a pullable tag, and only `main` and
-# version tags produce the stable ones a production compose file should pin.
+# Release images are NOT built here — `release.yml` owns anything a deployment
+# should pin, because the version has to come from semantic-release rather than
+# from a branch name. This workflow deliberately never produces `latest` or a
+# semver tag, so a branch build can never be mistaken for a release.
 on:
   push:
-    branches: ['main', 'claude/**']
-    tags: ['v*']
+    branches: ['claude/**']
   workflow_dispatch:
     inputs:
       dem_template:
@@ -69,11 +68,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/hunt-maps-${{ matrix.name }}
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
           flags: |
             --label=org.opencontainers.image.source=https://github.com/${{ github.repository }}
 

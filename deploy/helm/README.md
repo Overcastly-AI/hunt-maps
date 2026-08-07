@@ -1,30 +1,16 @@
 # Running Ridgeline on a local cluster
 
-A Helm chart for kind / minikube / k3d / Docker Desktop. `docker compose up`
-is still the shortest path to a running app; use this when you want to work
-against the same shape the thing will actually deploy in.
+A Helm chart for kind / minikube / k3d / Docker Desktop. It pulls published
+images, so nothing needs building and the repository does not need to exist on
+the machine running the cluster.
 
 ## Quick start
 
-The chart builds nothing itself — build the two images, put them on the
-cluster's nodes, then install. These are the chart's default image names, so
-no `--set` is needed.
+Nothing to build and nothing to clone onto the cluster host — the chart
+installs published images.
 
 ```bash
-# 1. Build (from the repo root)
-docker build -t ridgeline/api:dev -f apps/api/Dockerfile .
-docker build -t ridgeline/web:dev -f apps/web/Dockerfile .
-
-# 2. Put them on the nodes — pick your cluster
-kind load docker-image ridgeline/api:dev ridgeline/web:dev
-# minikube: minikube image load ridgeline/api:dev && minikube image load ridgeline/web:dev
-# k3d:      k3d image import ridgeline/api:dev ridgeline/web:dev
-# Docker Desktop: nothing to do, it shares the daemon
-
-# 3. Install
 helm install ridgeline ./deploy/helm/ridgeline -n ridgeline --create-namespace
-
-# 4. Open it
 kubectl -n ridgeline port-forward svc/ridgeline-web 8080:80
 ```
 
@@ -33,38 +19,48 @@ origin, so that one forward is all you need — and it means you exercise the
 same-origin path the app really uses, rather than a CORS setup that only
 exists on your laptop.
 
-**Step 2 is not optional** on kind/minikube/k3d. Those run their own container
-runtime, so an image in your local Docker daemon is invisible to them; skipping
-it gives `ErrImagePull` for an image you can see in `docker images`.
+Or install straight from a checkout-free URL once a release exists:
 
-## Why not the published images?
+```bash
+helm install ridgeline \
+  https://github.com/Overcastly-AI/hunt-maps/releases/download/v<version>/ridgeline-<version>.tgz \
+  -n ridgeline --create-namespace
+```
 
-Because they do not exist. `hunt-maps-web` has never built successfully;
-`hunt-maps-api` built only on a feature branch, so it has `claude-…` and
-`sha-…` tags but **no `latest`** — the workflow gates that tag on
-`is_default_branch` and no run has completed on main. Both packages are private
-regardless. GitHub Actions stopped scheduling runs partway through development
-and did not resume, including after the repository was made public.
+## Versions
 
-Once a run genuinely publishes them, switch back:
+`api.image.tag` and `web.image.tag` are **empty by default**, and the templates
+fall back to the chart's `appVersion`. `.github/workflows/release.yml` bumps
+`Chart.yaml` in the same commit that tags the release and builds the images, so
+a given chart revision always installs the images built from its own source.
+There is no way for the chart and the images it pulls to drift apart.
+
+Override only to pin something older, or to test a development image from
+`publish-images.yml`:
 
 ```bash
 helm upgrade ridgeline ./deploy/helm/ridgeline -n ridgeline \
-  --set api.image.repository=ghcr.io/overcastly-ai/hunt-maps-api --set api.image.tag=<tag> \
-  --set web.image.repository=ghcr.io/overcastly-ai/hunt-maps-web --set web.image.tag=<tag>
+  --set api.image.tag=1.2.3 --set web.image.tag=1.2.3
 ```
 
-and add a pull secret if the packages are still private:
+Released images carry `X.Y.Z`, `X.Y`, `X` and `latest`. **Pin `X.Y.Z` in
+production** — the moving aliases exist so a patch can be adopted deliberately,
+not picked up by surprise on a pod reschedule.
+
+## If the pull fails
+
+GHCR package visibility is separate from repository visibility and does not
+follow it. If a pull fails with `unauthorized` — which reads like a missing tag
+rather than a permissions problem — make each package public under
+**your profile → Packages → package settings**, or give the chart a pull
+secret:
 
 ```bash
 kubectl -n ridgeline create secret docker-registry ghcr \
   --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT with read:packages>
-helm upgrade ... --set image.pullSecrets[0].name=ghcr
+helm upgrade ridgeline ./deploy/helm/ridgeline -n ridgeline \
+  --set image.pullSecrets[0].name=ghcr
 ```
-
-**Pin an immutable tag in production** — a `v*` release or `sha-<commit>`.
-`latest` moving under a running cluster is how two replicas end up on two
-different builds.
 
 ## Two things that look like bugs and are not
 
