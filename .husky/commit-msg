@@ -1,0 +1,5 @@
+# Conventional Commits are load-bearing here, not a style preference:
+# semantic-release derives the version, the changelog and the published image
+# tags from these messages. A malformed subject does not fail loudly — it
+# silently produces no release, or the wrong bump.
+pnpm exec commitlint --edit "$1"

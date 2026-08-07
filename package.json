@@ -2,7 +2,7 @@
   "name": "hunt-maps",
   "version": "1.0.0",
   "private": true,
-  "description": "Ridgeline — a self-hosted hunting map & terrain-analytics platform. Deep LiDAR/topo analysis, offline-first PWA.",
+  "description": "Ridgeline \u2014 a self-hosted hunting map & terrain-analytics platform. Deep LiDAR/topo analysis, offline-first PWA.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -23,9 +23,14 @@
     "db:seed": "pnpm --filter @hunt-maps/api db:seed",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
     "prettier": "^3.3.3",
     "typescript": "^5.6.3"
   }

@@ -1,0 +1,4 @@
+# Format and lint only what is staged. Whole-repo formatting on every commit is
+# slow enough that people start passing --no-verify, at which point the hook
+# has made things worse than having no hook.
+pnpm exec lint-staged
