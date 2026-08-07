@@ -116,7 +116,7 @@ hostname once at startup and *exits* if it does not resolve — and Helm gives n
 ordering guarantee between the web Deployment and the api Service, so a cold
 install can CrashLoopBackOff on a cluster where nothing is wrong.
 
-**Redis is off.** `docker-compose.dev.yml` starts Redis and passes `REDIS_URL`, but
+**Redis is off.** The repo-root `docker-compose.yml` starts Redis and passes `REDIS_URL`, but
 nothing consumes it: no redis/ioredis/bull dependency in `apps/api/package.json`
 and no import anywhere in `apps/api/src`. Turning it on gives you a cache with
 no reader. Enable it in the same change that adds a consumer.

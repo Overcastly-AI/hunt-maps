@@ -70,6 +70,17 @@ docker compose up -d --build   # then http://localhost:8080
 # api  → http://localhost:3001/api/docs
 ```
 
+### Deploying
+
+| Target | Where | Notes |
+|---|---|---|
+| Single Docker host (VPS) | `deploy/compose/` | Publishes only the web port; Postgres and the API stay on the internal network |
+| Kubernetes | `deploy/helm/` | Migrations run in an initContainer, secrets generate once and survive upgrades |
+
+Both build images from source. The GHCR images referenced in the publish
+workflow are **not currently published** — see `deploy/helm/README.md` for why
+and how to switch over once they are.
+
 ### Local development
 
 ```bash

@@ -1,11 +1,12 @@
 # Overlay that builds the images on the host instead of pulling them.
 #
-#   docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 #
-# Use this when the registry has no image for the tag you want — which right
-# now is the normal case, because Actions minutes on a private personal-account
-# repo are metered and the publish workflow stops running when they are gone.
-# Building on the VPS has no such dependency.
+# Use this when the registry has no image for the tag you want — which is
+# currently every tag. The publish workflow stopped running partway through
+# development and did not resume, so `hunt-maps-web` has never been published
+# and `hunt-maps-api` exists only under feature-branch tags. Building here has
+# no such dependency.
 #
 # `image:` is kept from the base file, so a build here tags the result with the
 # same name a pull would have produced. Switching back to registry images later

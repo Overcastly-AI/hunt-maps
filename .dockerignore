@@ -1,0 +1,61 @@
+# Keep the build context small and, more importantly, correct.
+#
+# Without this file every `docker build` uploads the whole working tree —
+# including local node_modules and every package's dist/. That is slow, and it
+# is also a correctness problem: the Dockerfiles run `pnpm install` themselves,
+# and a host node_modules copied in first can shadow it with binaries built for
+# the wrong platform. The resulting failure is a native module crashing at
+# runtime, which points nowhere near the real cause.
+
+# Dependencies — installed inside the image, never copied in.
+node_modules
+**/node_modules
+.pnpm-store
+
+# Build output — produced inside the image.
+dist
+**/dist
+build
+**/build
+*.tsbuildinfo
+.vite
+**/.vite
+
+# Version control and CI.
+.git
+.gitignore
+.github
+
+# Secrets. Belt and braces: .env is gitignored, but a build context is taken
+# from the working tree, not from git, so an untracked .env would otherwise be
+# copied straight into an image layer.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# Test and tooling artefacts that no image needs.
+coverage
+**/coverage
+playwright-report
+**/playwright-report
+test-results
+**/test-results
+**/screenshots
+e2e
+**/e2e
+
+# Agent tooling and docs — not part of any runtime.
+.claude
+docs
+deploy
+*.md
+!README.md
+
+# Editor and OS noise.
+.vscode
+.idea
+.DS_Store
+*.swp
+*.log

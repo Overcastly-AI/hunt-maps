@@ -22,6 +22,14 @@ RUN pnpm --filter @hunt-maps/terrain build \
  && pnpm --filter @hunt-maps/api build
 
 FROM base AS runtime
+# OCI metadata. `org.opencontainers.image.source` is what makes GitHub link a
+# published package back to this repository — without it the package page has
+# no repo, no README and no visible provenance, which is the difference between
+# a registry entry someone can trust and an anonymous blob.
+LABEL org.opencontainers.image.source="https://github.com/Overcastly-AI/hunt-maps" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="Ridgeline API" \
+      org.opencontainers.image.description="NestJS + Prisma + PostGIS backend for the Ridgeline hunting map"
 ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/api
