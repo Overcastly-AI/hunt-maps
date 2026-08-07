@@ -98,3 +98,37 @@ unencoded one produces a connection error that looks like bad credentials.
 {{- printf "postgresql://%s:%s@%s:5432/%s" .Values.postgis.auth.username (urlquery $pw) (include "ridgeline.postgis.fullname" .) .Values.postgis.auth.database -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+The CORS origins the API is given.
+
+Always the configured value, PLUS the ingress host whenever ingress is enabled
+— because forgetting that is the single most common way this chart produces a
+broken-looking install. The app loads perfectly, the map chrome renders, and
+every request for data is blocked by the browser with a CORS error that names
+an origin the operator never typed. Deriving it removes the failure mode
+instead of documenting it.
+
+The scheme follows the TLS config: if any `ingress.tls` entry lists this host,
+it is https, otherwise http. Getting that wrong is just as fatal as omitting
+the host, and it is not something anyone should have to remember.
+*/}}
+{{- define "ridgeline.corsOrigins" -}}
+{{- $origins := list -}}
+{{- if .Values.api.corsOrigins -}}
+{{- range (splitList "," .Values.api.corsOrigins) -}}
+{{- $t := trim . -}}
+{{- if $t -}}{{- $origins = append $origins $t -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Values.ingress.enabled .Values.ingress.host -}}
+{{- $scheme := "http" -}}
+{{- range .Values.ingress.tls -}}
+{{- if has $.Values.ingress.host (.hosts | default list) -}}
+{{- $scheme = "https" -}}
+{{- end -}}
+{{- end -}}
+{{- $origins = append $origins (printf "%s://%s" $scheme $.Values.ingress.host) -}}
+{{- end -}}
+{{- join "," (uniq $origins) -}}
+{{- end -}}

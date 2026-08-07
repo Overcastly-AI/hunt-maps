@@ -136,7 +136,10 @@ spec:
                   name: {{ include "ridgeline.secretName" . }}
                   key: jwt-secret
             - name: CORS_ORIGINS
-              value: {{ .Values.api.corsOrigins | quote }}
+              # Includes the ingress host automatically — see the
+              # `ridgeline.corsOrigins` helper for why that is derived rather
+              # than left to the operator.
+              value: {{ include "ridgeline.corsOrigins" . | quote }}
             - name: LOG_LEVEL
               value: {{ .Values.api.logLevel | quote }}
             {{- if .Values.api.dem3depTemplate }}

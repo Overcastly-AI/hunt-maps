@@ -62,6 +62,40 @@ helm upgrade ridgeline ./deploy/helm/ridgeline -n ridgeline \
   --set image.pullSecrets[0].name=ghcr
 ```
 
+## Giving it a hostname
+
+```bash
+helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+  --version 1.0.0 -n ridgeline --create-namespace \
+  --set ingress.enabled=true \
+  --set ingress.host=ridgeline.localtest.me \
+  --set ingress.className=nginx
+```
+
+`*.localtest.me` resolves to 127.0.0.1 from public DNS, so there is nothing to
+add to `/etc/hosts`.
+
+**`CORS_ORIGINS` picks the host up automatically.** Forgetting it is the most
+common way this chart produces a broken-looking install — the app loads, the
+map chrome renders, and every request for data is blocked by the browser citing
+an origin nobody typed. The chart appends `scheme://host` to whatever
+`api.corsOrigins` holds, and takes the scheme from your `ingress.tls` config,
+so an https host does not silently get an http origin.
+
+Two things that are on you:
+
+- **An ingress controller has to exist.** kind and k3d ship none by default, so
+  the Ingress object is created, `kubectl get ingress` looks right, and nothing
+  routes. On kind, install ingress-nginx and create the cluster with
+  `extraPortMappings` for 80/443 — without those the controller is reachable
+  only from inside the node.
+- **`ingress.className` must match the controller.** A wrong or missing class
+  is silently ignored by every controller in the cluster, which presents
+  identically to having no controller at all.
+
+Docker Desktop's Kubernetes publishes an ingress controller on localhost:80
+directly, so `http://ridgeline.localtest.me` works with no port.
+
 ## Production posture
 
 | Control | Default | Notes |
