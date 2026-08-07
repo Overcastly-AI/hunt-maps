@@ -8,7 +8,15 @@ name: Publish images
 # semver tag, so a branch build can never be mistaken for a release.
 on:
   push:
-    branches: ['claude/**']
+    # Matches the branch convention in CONTRIBUTING.md. `main` is excluded on
+    # purpose — release images come from release.yml, which gets its version
+    # from semantic-release rather than from a branch name.
+    branches:
+      - 'feat/**'
+      - 'fix/**'
+      - 'refactor/**'
+      - 'perf/**'
+      - 'hotfix/**'
   workflow_dispatch:
     inputs:
       dem_template:
