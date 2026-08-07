@@ -7,7 +7,7 @@ the machine running the cluster.
 ## Quick start
 
 ```bash
-helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline --set ingress.enabled=true
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline --set ingress.enabled=true
 ```
 
 Then http://ridgeline.localtest.me — `*.localtest.me` resolves to 127.0.0.1
@@ -18,7 +18,7 @@ origins from the ingress host, so one flag is the whole configuration.
 Without an ingress controller, forward the port instead — works on any cluster:
 
 ```bash
-helm install ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline
 kubectl port-forward svc/ridgeline-web 8080:80
 ```
 
@@ -48,7 +48,7 @@ Override only to pin something older, or to test a development image from
 `publish-images.yml`:
 
 ```bash
-helm upgrade ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
   --set api.image.tag=1.2.3 --set web.image.tag=1.2.3
 ```
 
@@ -67,7 +67,7 @@ secret:
 ```bash
 kubectl create secret docker-registry ghcr \
   --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT with read:packages>
-helm upgrade ridgeline oci://ghcr.io/overcastly-ai/charts/ridgeline \
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
   --set image.pullSecrets[0].name=ghcr
 ```
 
