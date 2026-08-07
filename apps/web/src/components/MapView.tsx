@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import type { AnalysisLayer } from '@hunt-maps/terrain';
 import { color } from '@hunt-maps/design';
 import { LAYERS, layerById } from '../lib/layers';
+import { BASE_SOURCES, isSyncedLayer } from '../lib/map/baseSources';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
 import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
 import { exposeDevHook } from '../lib/devHook';

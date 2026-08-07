@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { coverageExtentToDraw } from './coverageOverlay';
-import { isSyncedLayer } from '../../components/MapView';
+import { isSyncedLayer } from './baseSources';
 import type { CoverageResult, CoverageState } from '../offline/coverage';
 
 function state(over: Partial<CoverageResult>): CoverageState {
