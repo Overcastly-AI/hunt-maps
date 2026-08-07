@@ -50,9 +50,18 @@ register itself had made** about restocking genetics, and added seven rows
 > - `WebSearch` **works and is the instrument that matters.** It returns
 >   substantive abstract- and body-level content, not just links, including from
 >   open agency PDFs it has indexed.
+> - **`curl` to non-GitHub hosts fails at CONNECT with a proxy 403**, retested in
+>   pass 4 against `georgiawildlife.com` and `myfwc.com`
+>   (`curl (56) CONNECT tunnel failed, response 403`). Open agency PDFs are
+>   therefore reachable **only** through whatever `WebSearch` has indexed of
+>   their text — which for the GA rut map is the first three county rows of the
+>   table, embedded in the result title. Mine the snippets; do not fabricate the
+>   rest.
 > - **No full text was read in any pass so far.** Rows that would change
 >   behaviour are marked *(abstract/index only — verify against full text before
->   implementing)*.
+>   implementing)*. Pass 4 keeps an explicit **"unread at source" ledger** in the
+>   rut section so the next pass knows exactly which five documents to attack
+>   first if the egress situation changes.
 >
 > **Correction to pass 2, recorded because it cost a parameter.** Pass 2 closed
 > `idealSlopeDeg` with the words *"no literature exists … recording that
@@ -1706,7 +1715,7 @@ is the whole point of this register.
 |---|--------|--------------|---------|
 | 1 | Replace `toblerSpeed` with the cervid energetics curve above (`C₀ 2.6`, `k_up 26`, `k_dn 8`, floor 0.55), switching the currency from time to energy | 🔴 → 🔵/🟢 | `N8` |
 | 2 | **Close `N9` as not-supported.** The escape-terrain citation is a human Fitbit study and the concept is mountain-sheep-specific | 🟢 → 🔴 | `N9` |
-| 3 | Fix the rut model south of 38°N: DOY 319 → 314 in the north, region lookup or *unknown* in the south, `rutConfidence` < 36°N down to ~0.15 | 🔵 → 🔴 + 🟢 fix | new |
+| 3 | **Fix the rut model south of 37°N — superseded by pass 4 and now fully specified.** DOY 319 → **314 ±8** at ≥ 37°N; six-tier resolution ladder (T0–T6) in the rut section; **refuse** rather than return 0.15 below 37°N with no region match; refuse permanently below 18°N | 🔴 → 🟢 (north) + refusal (south) | `R9` |
 | 4 | Resolve the bedding contradiction: bench geometry (gentle pad, steep ring) instead of a 22° single-cell Gaussian. **Pass 3 resolved the direction — the pad side wins, so this is a re-centring, not a rewrite.** Interim if unimplemented: `idealSlopeDeg 22 → 12`, `slopeToleranceDeg 14 → 10` | 🔴 → 🟡 | new |
 | 5 | Surface `Confidence` chips on bedding, thermal, scent and rut outputs — four of the five headline layers are 🔴-driven | — | `N10` |
 | 6 | Make the scent cone stability-dependent, and fix the inversion (the night/thermal cone is currently the *widest*) | 🔴 → 🔵 | `N11` |
@@ -1717,7 +1726,12 @@ is the whole point of this register.
 | 11 | Obtain NLCD resistance values from Lilly et al. 2025 rather than inventing them | 🔴 → 🔵 | `I4` |
 | 12 | Label every layer with the region its evidence comes from; nothing is validated in the Appalachians | — | new |
 | 13 | Obtain GPS-collar data to settle bedding geometry, corridor use and shelter | 🔴 → 🟢 | `I3` |
-| 14 | **Ship the region → peak-breeding lookup** from the eight-row agency table above; read the GA county and FL zone PDFs at source before implementing | 🔴 → 🟢 | new, blocks 3 |
+| 14 | **Ship the region → peak-breeding lookup.** Seed table is now **20 rows** covering IL/Midwest, VA, WV, KY, TN, AR, E OK, NC (5 units), SC, GA, AL, MS, LA (10 areas), TX (7 ecoregions), FL (4 peer-reviewed herds + zones). Ship the confirmed rows; **do not code the 155 unread GA counties or the FL zone table from snippets** | 🔴 → 🟢 | `R9`, blocks 3 |
+| 21 | **Define `rutConfidence` before changing its values.** It is currently the probability of nothing. Define as *P(true population mean conception within ±7 d of the returned date)*, then apply the tier table — confidence keys on **which tier answered**, never on latitude | 🔴 → 🔵 | `R9` |
+| 22 | **Return a range, not a midpoint, wherever only a state-resolution match exists** in AL, MS, LA, FL, TX, NC, GA. A state midpoint in Alabama is right in the north and 11 weeks early in the southwest | — | `R9` |
+| 23 | **Refuse below 18°N** (aseasonal breeding, Costa Rica) and **cap southern-hemisphere confidence at 0.40**. The model currently returns DOY 410 at 10°N and reports a phase | 🔴 → 🟢 / 🔵 | `R9` |
+| 24 | **Store agency figures as *mean conception* and apply the observable-rut offset once, explicitly, at the phase layer.** The offset is disputed: −14 d (MDWFP) / −4…−6 d (Hunsaker 2025 GPS) / ≈0 d (GA DVC). Our `CHASING_CENTER = −6` is inside the best-instrumented estimate; keep it, record the range | 🔴 → 🔵 | `R9` |
+| 25 | Mark the **±10 d band around peak** as the measured high-odds window (16–21 d, Hunsaker 2025; 21 d, MSU) inside the existing 45-day envelope, and widen or refuse it in Florida where an area's own spread is 9–110 d | 🔴 → 🔵 | `R9` |
 | 15 | **`transitionMinutes` → `{ morning: 110, evening: 35 }`, forward-offset not centred.** Cheapest measured correction in the register | 🔴 → 🟢 | new |
 | 16 | **Fix the slope double-count in `beddingLikelihood`.** `slopeTerm × coverTerm(TRI)` counts slope twice because TRI is slope-correlated; swap TRI for Sappington VRM at a coarser window | 🔴 → 🔵 | new |
 | 17 | Set the terrain-shelter upwind search radius to **500 m** (measured optimum for distance-limited TOPEX) | 🔴 → 🔵 | new |

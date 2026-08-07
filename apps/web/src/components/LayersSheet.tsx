@@ -8,7 +8,8 @@ import {
   ToggleRow,
 } from '@hunt-maps/design';
 import { LAYER_GROUPS, LAYERS, missingInputs } from '../lib/layers';
-import { describeCoverage, type ViewportCoverage } from '../lib/offline/coverage';
+import type { CoverageState } from '../lib/offline/coverage';
+import { describeCoverage } from '../lib/offline/coverageLabel';
 
 export interface SavedFilterSummary {
   id: string;
@@ -28,7 +29,7 @@ export interface LayersSheetProps {
    * map moves. `null` means "not measured yet" and renders as an explicit
    * indeterminate state — never as ready.
    */
-  coverage: ViewportCoverage | null;
+  coverage: CoverageState | null;
   onToggle: (id: string) => void;
   onOpacity: (id: string, value: number) => void;
   onToggleFilter: (id: string) => void;
@@ -84,12 +85,15 @@ export function LayersSheet({
         {offline.detail}
       </p>
 
-      {coverage?.backend === 'memory' && (
+      {/* Degrade loudly. The in-memory store is a real store for this session
+          and will happily report "Covered" — and then lose the lot on reload.
+          A hunter who saw green last night and finds a blank map at 05:00 has
+          been failed completely, so this is an alert, not a hint. */}
+      {coverage?.kind === 'result' && coverage.result.volatile && (
         <Callout tone="danger" role="alert">
           <p>
-            This device would not give us persistent storage, so saved elevation is being held in
-            memory only and will be gone when the app reloads. Do not rely on this at the
-            trailhead.
+            This device would not give us persistent storage, so elevation is being held in memory
+            only and will be gone when the app reloads. Do not rely on this at the trailhead.
           </p>
         </Callout>
       )}

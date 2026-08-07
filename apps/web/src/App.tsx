@@ -23,8 +23,11 @@ import { LayersSheet, type SavedFilterSummary } from './components/LayersSheet';
 import { ConditionsEditor } from './components/ConditionsEditors';
 import { toggleLayer } from './lib/layers';
 import { TerrainProtocol } from './lib/map/terrainProtocol';
-import { requestPersistentStorage } from './lib/offline/tileStore';
+import { openTileStore, requestPersistentStorage } from './lib/offline/tileStore';
+import { invalidateCoverageCache, type CoverageState } from './lib/offline/coverage';
 import { useViewportCoverage } from './lib/offline/useViewportCoverage';
+import { demSourceZoom, demTileKey, demTilesForBounds } from './lib/map/demTiles';
+import { exposeDevHook } from './lib/devHook';
 
 const DEM_TEMPLATE =
   import.meta.env.VITE_DEM_TEMPLATE ??
@@ -108,6 +111,18 @@ export default function App() {
     // evictable under storage pressure with no warning, and discovering that in
     // the field is the worst failure this app has.
     void requestPersistentStorage();
+    // The QA seam. `field-qa` and the offline invariants need to set up real
+    // store state — "seed this view, then pan five hundred miles" — against the
+    // actual OPFS/IndexedDB backend rather than a mock, because the mock is not
+    // the thing that fails in the field.
+    exposeDevHook({
+      offline: {
+        store: openTileStore,
+        tilesForView: (bounds, mapZoom) => demTilesForBounds(bounds, demSourceZoom(mapZoom)),
+        tileKey: demTileKey,
+        invalidate: invalidateCoverageCache,
+      },
+    });
     return () => protocol.unregister();
   }, [protocol]);
 
