@@ -27,6 +27,15 @@ ENV VITE_DEM_TEMPLATE=$VITE_DEM_TEMPLATE
 RUN pnpm --filter @hunt-maps/web build
 
 FROM nginx:alpine AS runtime
+# OCI metadata. `org.opencontainers.image.source` is what makes GitHub link a
+# published package back to this repository — without it the package page has
+# no repo, no README and no visible provenance, which is the difference between
+# a registry entry someone can trust and an anonymous blob.
+LABEL org.opencontainers.image.source="https://github.com/Overcastly-AI/hunt-maps" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="Ridgeline web" \
+      org.opencontainers.image.description="MapLibre PWA and on-device terrain analysis worker"
+
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

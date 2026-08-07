@@ -1,113 +1,97 @@
-# Ridgeline — deploy this. One command, nothing else required.
+# Ridgeline — local development stack.
 #
-#   git clone https://github.com/Overcastly-AI/hunt-maps.git
-#   cd hunt-maps
+#   cp .env.example .env      # JWT_SECRET is required
 #   docker compose up -d --build
 #
-# Self-contained on purpose: no .env, no --env-file, no interpolation. A host
-# that clones this repo and runs `docker compose up -d --build` gets a working
-# stack, which is the only thing most deploy tooling knows how to do.
+# This is the *development* file: it builds from source, publishes the API on
+# its own port so you can hit Swagger and curl endpoints directly, and takes
+# its configuration from the environment.
 #
-# Images are BUILT here rather than pulled. The GHCR images are not reliably
-# published — see .github/workflows/publish-images.yml — and an image that
-# does not exist fails at pull with an error that reads like a bad tag.
-# Building needs only this repository, which is public.
+# For deploying to a server see `deploy/compose/`, and for Kubernetes see
+# `deploy/helm/`. Those deliberately publish less and assume nothing about
+# your shell.
 #
-# For local development with hot reload use `pnpm dev`, or the previous
-# environment-driven compose file, now docker-compose.dev.yml.
-#
-# ---------------------------------------------------------------------------
-# THE CREDENTIALS BELOW ARE PUBLIC, because this repository is. That is fine
-# for a disposable demo and unacceptable for anything else. Postgres is not
-# published to the host, so the database password is only reachable from
-# inside the compose network — but the JWT secret would let anyone mint valid
-# tokens against an instance running this file. Generate your own before this
-# holds data you care about, and keep them out of git.
-# ---------------------------------------------------------------------------
+# `security_opt: no-new-privileges` on every service blocks setuid binaries
+# inside a container from gaining privileges the container was not started
+# with. It costs nothing and closes the most common escalation path from a
+# remote-code-execution bug in an application dependency.
 
-name: ridgeline
+name: ridgeline-dev
 
 services:
   db:
-    # PostGIS, not plain Postgres. Every meaningful query here is spatial; a
-    # stock postgres image comes up healthy and then fails on the first
-    # geometry column.
+    # PostGIS, not plain Postgres. Every meaningful query in this app is
+    # spatial; the extension is a hard requirement, not an add-on. A stock
+    # postgres image comes up healthy and then fails on the first geometry
+    # column.
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_USER: ridgeline
-      POSTGRES_PASSWORD: "sVK9hY5Sk9chx1PVQhIKOSLcOlHJH6W6"
-      POSTGRES_DB: ridgeline
-      # Initialise into a subdirectory of the mount. On ext4 the mount root
-      # holds lost+found, which makes the directory look non-empty and aborts
-      # initdb with an error that never mentions lost+found.
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: ${POSTGRES_USER:-ridgeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ridgeline}
+      POSTGRES_DB: ${POSTGRES_DB:-ridgeline}
     volumes:
       - db-data:/var/lib/postgresql/data
+    ports:
+      # Published in development only, so you can point psql, TablePlus or a
+      # migration tool at it. The deployment files do not do this — see
+      # deploy/compose/README.md.
+      - '${DB_PORT:-5432}:5432'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ridgeline -d ridgeline']
-      interval: 10s
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ridgeline}']
+      interval: 5s
       timeout: 5s
       retries: 12
-      start_period: 30s
     restart: unless-stopped
-    # No `ports:` on purpose. Publishing 5432 would put Postgres on the public
-    # internet, which is the most common way a small deployment is compromised.
-    # Use `docker compose exec db psql -U ridgeline ridgeline`.
+    security_opt: ['no-new-privileges:true']
 
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      # The password is alphanumeric by construction. A base64 password would
-      # contain / and +, which are structural in a URI, and the resulting
-      # connection failure looks exactly like wrong credentials.
-      DATABASE_URL: "postgresql://ridgeline:sVK9hY5Sk9chx1PVQhIKOSLcOlHJH6W6@db:5432/ridgeline"
-      JWT_SECRET: "XiGxxnReAJFs7pGrIyJ0rsYPAo/mJ/u+t9591WTLyutPlx7F2RR7dnpd5lF7LUX9"
-      # Must match the address you load the app from — scheme, host and port —
-      # or the browser blocks every API call. Localhost entries cover an SSH
-      # tunnel; add your server's own URL when reaching it directly.
-      CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080,http://167.88.46.225:8080"
-      DEM_3DEP_TEMPLATE: ""
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ridgeline}:${POSTGRES_PASSWORD:-ridgeline}@db:5432/${POSTGRES_DB:-ridgeline}
+      # No default. The app refuses to boot without a real secret rather than
+      # shipping a weak one that could reach production.
+      #
+      # Quoted, and the hint deliberately carries no ": " — a colon-space in an
+      # unquoted YAML scalar ends the scalar, and an earlier version of this
+      # hint ("generate with: openssl rand -base64 48") made the whole file
+      # unparseable. It failed with a YAML error pointing at a column, which
+      # reads as a stray character rather than as the help text eating itself.
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET first — run 'openssl rand -base64 48'}"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      DEM_3DEP_TEMPLATE: ${DEM_3DEP_TEMPLATE:-}
       NODE_ENV: production
       PORT: 3001
     depends_on:
       db:
         condition: service_healthy
-    healthcheck:
-      # /api/health reports PostGIS reachability, so this is green only when
-      # spatial queries can actually run. A TCP check would call a container
-      # healthy that cannot serve a map.
-      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3001/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 90s
+    ports:
+      # Development convenience: Swagger at http://localhost:3001/api/docs.
+      - '${API_PORT:-3001}:3001'
     restart: unless-stopped
-    # Unpublished as well. The browser reaches the API through the web
-    # container's nginx at /api, same-origin, so CORS never has to be widened.
+    security_opt: ['no-new-privileges:true']
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        # Compiled into the JS bundle by Vite at build time — there is no
-        # runtime override. Empty falls back to public AWS Terrarium tiles,
-        # which the browser fetches directly.
-        VITE_DEM_TEMPLATE: ""
+        # Vite inlines this at build time, so it is a build arg and not an
+        # environment variable — there is no runtime override. Empty falls back
+        # to the public AWS Terrarium tiles.
+        VITE_DEM_TEMPLATE: ${VITE_DEM_TEMPLATE:-}
     depends_on:
-      api:
-        condition: service_started
+      - api
     ports:
-      - '8080:80'
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/index.html >/dev/null || exit 1']
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - '${WEB_PORT:-8080}:80'
     restart: unless-stopped
+    security_opt: ['no-new-privileges:true']
 
 volumes:
   db-data:
+
+# Redis was removed rather than left running. It was started here and passed to
+# the API as REDIS_URL, but nothing consumes it: there is no redis, ioredis or
+# bull dependency in apps/api/package.json and no import anywhere in
+# apps/api/src. Bring it back in the same change that adds a consumer.

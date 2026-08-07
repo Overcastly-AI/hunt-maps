@@ -10,7 +10,7 @@ cd hunt-maps/deploy/compose
 cp .env.example .env && ${EDITOR:-nano} .env      # JWT_SECRET and POSTGRES_PASSWORD are required
 
 # Build on the host (works today, no registry needed)
-docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Then http://your-server:8080. Put TLS in front of it before using it for real —
@@ -18,20 +18,26 @@ see below.
 
 ## Build on the host, or pull published images?
 
-**Build on the host** is the reliable path right now. `hunt-maps` is a private
-repo on a personal account, so GitHub Actions runs on metered included minutes;
-when they run out, jobs stay queued, get cancelled without ever starting, and
-new runs stop being created entirely. That looks like a broken workflow and is
-not one. Building on the VPS has no such dependency.
+**Build on the host** is the only path that works today, because the published
+images do not exist. `hunt-maps-web` has never built successfully, and
+`hunt-maps-api` built only on a feature branch — so it carries `claude-…` and
+`sha-…` tags but no `latest`, which the workflow gates on `is_default_branch`.
 
-**Pull published images** once that is sorted — add a payment method or spending
-limit, or wait for the monthly reset:
+GitHub Actions stopped scheduling runs partway through development and did not
+resume, including after the repository was made public. Until that is fixed
+(check **Settings → Actions → General**, then billing — going public only helps
+if Actions is enabled), nothing new will be published. Building on the host has
+no such dependency.
+
+**Pull published images** once a run genuinely publishes some:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
-GHCR packages from a private repo are private, so log in first:
+GHCR package visibility is separate from repository visibility and does not
+follow it, so the packages are still private. Either make them public under
+**your profile → Packages → package settings**, or log in first:
 
 ```bash
 echo "$GITHUB_PAT" | docker login ghcr.io -u <username> --password-stdin   # PAT needs read:packages
@@ -63,7 +69,7 @@ most common way a small deployment gets compromised. There is deliberately no
 
 ```bash
 ssh -L 5432:localhost:5432 user@server -N   # with a temporary published port, or use docker exec
-docker compose -f docker-compose.prod.yml exec db psql -U ridgeline ridgeline
+docker compose exec db psql -U ridgeline ridgeline
 ```
 
 ## TLS
@@ -98,7 +104,7 @@ resolved by Vite at build time, so setting it in `.env` only does anything with
 
 ```bash
 git pull
-docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Migrations run automatically on API start (`prisma migrate deploy` in the
@@ -106,15 +112,15 @@ image's command). **Back up first** — that command applies schema changes to a
 live database:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db \
+docker compose exec -T db \
   pg_dump -U ridgeline ridgeline | gzip > ridgeline-$(date +%F).sql.gz
 ```
 
 ## If it does not come up
 
 ```bash
-docker compose -f docker-compose.prod.yml ps          # health status per service
-docker compose -f docker-compose.prod.yml logs api    # most failures surface here
+docker compose ps          # health status per service
+docker compose logs api    # most failures surface here
 ```
 
 - **api restarting** — usually `JWT_SECRET` unset, or `POSTGRES_PASSWORD`

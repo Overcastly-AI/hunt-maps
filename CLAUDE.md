@@ -129,6 +129,8 @@ packages/design    Design system — tokens, primitives, styles. ALL visual
 packages/shared    Contracts + selection analytics + rut model
 apps/api           NestJS + PostGIS backend
 apps/web           MapLibre PWA with on-device analysis worker
+deploy/compose     Production single-host deploy (see its README)
+deploy/helm        Kubernetes chart (see its README)
 docs/              VISION, ROADMAP, BACKLOG, RESEARCH, ARCHITECTURE
 .claude/           agents, skills, workflows
 ```
@@ -141,9 +143,9 @@ pnpm dev                        # api + web with hot reload
 pnpm build                      # topological build (terrain → shared → api/web)
 pnpm lint && pnpm test
 pnpm db:migrate                 # prisma migrate dev
-docker compose up -d --build    # full stack incl. PostGIS — self-contained,
-                                # no .env. Builds images from source; the
-                                # GHCR images are not reliably published.
+docker compose up -d --build    # full dev stack incl. PostGIS. Needs .env
+                                # (cp .env.example .env) — JWT_SECRET is
+                                # required and has no default, deliberately.
 ```
 
 ## Conventions (important)

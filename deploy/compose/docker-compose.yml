@@ -5,7 +5,7 @@
 # metered Actions minutes and stops building when they are gone — layer the
 # build override on top and build on the VPS instead:
 #
-#   docker compose -f docker-compose.prod.yml -f docker-compose.build.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 #
 # Differences from the repo-root docker-compose.yml, which is a dev file:
 #   - no source bind mounts, no exposed database port
@@ -13,6 +13,9 @@
 #   - the API is not published either; only the web container takes traffic,
 #     and it proxies /api internally. One port open instead of three.
 #   - restart: always, and real healthchecks with dependency ordering
+#   - security_opt: no-new-privileges on every service, which blocks setuid
+#     binaries inside a container from gaining privileges the container was
+#     not started with
 
 name: ridgeline
 
@@ -39,6 +42,7 @@ services:
       retries: 12
       start_period: 30s
     restart: always
+    security_opt: ['no-new-privileges:true']
     # Deliberately no `ports:`. The database is reachable only on the compose
     # network. Publishing 5432 on a VPS puts Postgres on the public internet,
     # which is the single most common way a small deployment gets owned.
@@ -69,6 +73,7 @@ services:
       retries: 6
       start_period: 60s
     restart: always
+    security_opt: ['no-new-privileges:true']
     # Also no `ports:`. Traffic reaches the API through the web container's
     # nginx at /api, which keeps it same-origin and means CORS never has to be
     # loosened for the browser to talk to it.
@@ -87,6 +92,7 @@ services:
       retries: 3
       start_period: 10s
     restart: always
+    security_opt: ['no-new-privileges:true']
 
 volumes:
   db-data:
