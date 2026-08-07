@@ -31,7 +31,7 @@
 
 import type { CurvatureField, SurfaceField } from './surface.js';
 import { azimuthDelta } from './surface.js';
-import { DEFAULT_RING_RADIUS_CELLS, ringSlopeStats } from './landform.js';
+import { DEFAULT_RING_RADIUS_CELLS, ringSlopeStats, type RingSlopeStats } from './landform.js';
 
 const RAD = Math.PI / 180;
 
@@ -401,7 +401,9 @@ export function beddingLikelihood(
   surface: SurfaceField,
   options: BeddingOptions,
 ): Float32Array {
-  const padHalfMax = options.padHalfMaxSlopeDeg ?? BEDDING_PAD_HALF_MAX_SLOPE_DEG;
+  // Degenerate parameters are clamped rather than trusted: a half-max of 0 would
+  // divide by zero and paint the entire tile as unbeddable without erroring.
+  const padHalfMax = Math.max(0.1, options.padHalfMaxSlopeDeg ?? BEDDING_PAD_HALF_MAX_SLOPE_DEG);
   const ringMin = options.ringMinSlopeDeg ?? BEDDING_RING_MIN_SLOPE_DEG;
   const ringSoft = Math.max(1e-6, options.ringSoftnessDeg ?? BEDDING_RING_SOFTNESS_DEG);
   const ringRadius = Math.max(2, Math.round(options.ringRadiusCells ?? DEFAULT_RING_RADIUS_CELLS));
@@ -414,7 +416,9 @@ export function beddingLikelihood(
   // weight to exactly 0 here means the warm path is the *same arithmetic* as the
   // no-season path, not an approximation of it, so a caller that always passes a
   // temperature gets bit-identical output in October.
-  const solarWeight = options.season ? coldBlendWeight(options.season.temperatureC, options.season) : 0;
+  const solarWeight = options.season
+    ? coldBlendWeight(options.season.temperatureC, options.season)
+    : 0;
   const insolation = solarWeight > 0 ? options.season?.insolation : undefined;
   if (insolation && insolation.length !== n) {
     throw new Error(
@@ -424,6 +428,9 @@ export function beddingLikelihood(
   const leeWeight = 1 - solarWeight;
 
   const out = new Float32Array(n);
+  // Reused across cells — 65k short-lived objects per tile is real GC pressure
+  // in a render loop.
+  const ring: RingSlopeStats = { samples: 0, steepCount: 0, meanSlopeDeg: NaN };
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
@@ -447,7 +454,7 @@ export function beddingLikelihood(
       // Falls back to the cell's own slope when the ring is entirely outside the
       // tile, which keeps a uniform hillside self-consistent at the border
       // instead of collapsing the term to "no surround".
-      const ring = ringSlopeStats(surface, x, y, ringRadius, ringMin);
+      ringSlopeStats(surface, x, y, ringRadius, ringMin, 16, ring);
       const ringSlope = ring.samples > 0 ? ring.meanSlopeDeg : slope;
       const ringTerm = 1 / (1 + Math.exp(-(ringSlope - ringMin) / ringSoft));
 

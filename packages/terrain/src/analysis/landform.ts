@@ -426,6 +426,8 @@ export function detectBenches(
 
   const { width, height } = grid;
   const flag = new Uint8Array(width * height);
+  // One reused stats object: this is a per-cell inner loop in a render budget.
+  const r: RingSlopeStats = { samples: 0, steepCount: 0, meanSlopeDeg: NaN };
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -433,7 +435,7 @@ export function detectBenches(
       const s = surface.slope[i];
       if (!Number.isFinite(s) || s > maxBench) continue;
 
-      const r = ringSlopeStats(surface, x, y, ring, minSurround);
+      ringSlopeStats(surface, x, y, ring, minSurround, 16, r);
       // At least half the ring must be steep — a shelf is steep above and below
       // but typically open along the contour.
       if (r.samples >= 8 && r.steepCount / r.samples >= 0.5) flag[i] = 1;

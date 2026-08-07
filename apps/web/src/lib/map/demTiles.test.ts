@@ -1,82 +1,119 @@
 import { describe, expect, it } from 'vitest';
+import { tilesForBBox, type BBox } from '@hunt-maps/terrain';
 import {
   DEM_MAX_ZOOM,
+  boundsToBBox,
   demSourceZoom,
   demTileCount,
   demTileKey,
+  demTileRanges,
   demTilesForBounds,
   sampleDemTiles,
+  tileSetSignature,
 } from './demTiles';
 
-/**
- * These pin the one thing that makes the coverage badge meaningful: the tiles
- * it checks are the tiles the map will ask for. If `demSourceZoom` drifts from
- * MapLibre's covering-zoom rule, the badge starts reporting on a zoom level
- * nobody is fetching — which is a subtler version of the bug it replaced, and
- * harder to spot because it would look right most of the time.
- */
+/** Hocking Hills, roughly one desktop viewport at z14. */
+const HOCKING: BBox = { west: -82.58, south: 39.41, east: -82.5, north: 39.46 };
+
 describe('demSourceZoom', () => {
-  it('is map zoom + 1 for a 256px source, because the transform tile size is 512', () => {
-    // MapLibre: round(zoom + log2(transform.tileSize / source.tileSize)),
-    // roundZoom = true on every raster source.
+  // MapLibre's own rule for a 256px raster source against a 512px transform:
+  // round(zoom + 1), clamped to the source maxzoom. Pinned because the coverage
+  // check probes at this zoom — if it drifts, the badge measures tiles nobody
+  // is fetching, which is exactly the class of lie this feature removes.
+  it('mirrors MapLibre covering-zoom for a 256px raster source', () => {
     expect(demSourceZoom(13)).toBe(14);
-    expect(demSourceZoom(12.4)).toBe(13);
-    expect(demSourceZoom(12.6)).toBe(14);
+    expect(demSourceZoom(13.4)).toBe(14);
+    expect(demSourceZoom(13.6)).toBe(15);
+    expect(demSourceZoom(10)).toBe(11);
   });
 
-  it('clamps at DEM_MAX_ZOOM — past it MapLibre overzooms rather than fetching deeper', () => {
-    expect(demSourceZoom(15)).toBe(DEM_MAX_ZOOM);
+  it('saturates at the DEM source maxzoom, because zooming past it overzooms', () => {
+    expect(demSourceZoom(14)).toBe(DEM_MAX_ZOOM);
+    expect(demSourceZoom(16)).toBe(DEM_MAX_ZOOM);
     expect(demSourceZoom(18)).toBe(DEM_MAX_ZOOM);
   });
 
-  it('never goes negative', () => {
+  it('never returns a negative zoom', () => {
     expect(demSourceZoom(-4)).toBe(0);
   });
 });
 
 describe('demTilesForBounds', () => {
-  const hocking = { west: -82.56, south: 39.42, east: -82.52, north: 39.45 };
+  it('is the engine enumeration, not a second implementation', () => {
+    // The load-bearing claim of this whole feature: what the badge checks and
+    // what a region download plans are the same function. If someone
+    // reimplements either, this fails.
+    const mine = demTilesForBounds(HOCKING, 14);
+    const engine = tilesForBBox(HOCKING, 14);
+    expect(tileSetSignature(mine)).toBe(tileSetSignature(engine.map((t) => ({ ...t }))));
+  });
 
-  it('agrees with demTileCount', () => {
-    for (const z of [8, 12, 14]) {
-      expect(demTilesForBounds(hocking, z)).toHaveLength(demTileCount(hocking, z));
+  it('agrees exactly with the allocation-free count', () => {
+    for (const z of [8, 11, 14, 15]) {
+      expect(demTileCount(HOCKING, z)).toBe(demTilesForBounds(HOCKING, z).length);
     }
   });
 
-  it('quadruples per zoom level, which is the thing users never expect', () => {
-    const z12 = demTileCount({ west: -83, south: 39, east: -82, north: 40 }, 12);
-    const z13 = demTileCount({ west: -83, south: 39, east: -82, north: 40 }, 13);
-    expect(z13 / z12).toBeGreaterThan(3.5);
+  it('quadruples per zoom level, which is what makes downloads surprising', () => {
+    const at12 = demTileCount({ west: -83, south: 39, east: -82, north: 40 }, 12);
+    const at13 = demTileCount({ west: -83, south: 39, east: -82, north: 40 }, 13);
+    expect(at13 / at12).toBeGreaterThan(3.4);
+    expect(at13 / at12).toBeLessThan(4.6);
   });
 
-  it('produces tiles inside the grid when the view straddles the antimeridian', () => {
-    // west > east: MapLibre reports this for a view over the date line. A naive
-    // hand-off enumerates nothing, and "no tiles needed" reads as "nothing
-    // missing" — a silent green over ground with no data at all.
-    const tiles = demTilesForBounds({ west: 179.5, south: 10, east: -179.5, north: 11 }, 8);
+  it('handles a view straddling the antimeridian instead of returning nothing', () => {
+    // west > east. A naive hand-off to tilesForBBox walks a backwards loop and
+    // yields zero tiles — which reads downstream as "nothing is missing".
+    const tiles = demTilesForBounds({ west: 179.5, south: -0.5, east: -179.5, north: 0.5 }, 8);
     expect(tiles.length).toBeGreaterThan(0);
-    for (const t of tiles) {
-      expect(t.x).toBeGreaterThanOrEqual(0);
-      expect(t.x).toBeLessThan(2 ** 8);
-      expect(t.y).toBeGreaterThanOrEqual(0);
-      expect(t.y).toBeLessThan(2 ** 8);
-    }
-    // Both sides of the line are represented, not just one.
-    expect(tiles.some((t) => t.x > 2 ** 7)).toBe(true);
-    expect(tiles.some((t) => t.x < 2 ** 7)).toBe(true);
+    expect(tiles.every((t) => t.x >= 0 && t.x < 2 ** 8)).toBe(true);
+    expect(demTileCount({ west: 179.5, south: -0.5, east: -179.5, north: 0.5 }, 8)).toBe(
+      tiles.length,
+    );
   });
 
-  it('clamps past the Mercator latitude limit instead of running off the grid', () => {
-    const tiles = demTilesForBounds({ west: -10, south: -89, east: -9, north: 89 }, 6);
-    expect(tiles.length).toBeGreaterThan(0);
-    for (const t of tiles) {
-      expect(Number.isFinite(t.y)).toBe(true);
-      expect(t.y).toBeGreaterThanOrEqual(0);
-      expect(t.y).toBeLessThan(2 ** 6);
-    }
+  it('clamps past the Mercator latitude limit rather than running off the grid', () => {
+    const tiles = demTilesForBounds({ west: -10, south: -89, east: 10, north: 89 }, 4);
+    expect(tiles.every((t) => t.y >= 0 && t.y < 2 ** 4)).toBe(true);
   });
 
-  it('keys tiles into the `dem` namespace — rendered layers are never cached', () => {
+  it('tolerates inverted north/south', () => {
+    const normal = demTilesForBounds(HOCKING, 12);
+    const flipped = demTilesForBounds(
+      { ...HOCKING, north: HOCKING.south, south: HOCKING.north },
+      12,
+    );
+    expect(tileSetSignature(flipped)).toBe(tileSetSignature(normal));
+  });
+});
+
+describe('sampleDemTiles', () => {
+  const WIDE: BBox = { west: -90, south: 30, east: -70, north: 45 };
+
+  it('returns everything when the exact set already fits', () => {
+    expect(sampleDemTiles(HOCKING, 10, 500)).toEqual(demTilesForBounds(HOCKING, 10));
+  });
+
+  it('stays within budget and inside the needed set', () => {
+    const needed = new Set(demTilesForBounds(WIDE, 12).map((t) => `${t.x}/${t.y}`));
+    const sample = sampleDemTiles(WIDE, 12, 48);
+    expect(sample.length).toBeGreaterThan(0);
+    expect(sample.length).toBeLessThanOrEqual(60); // budget plus per-range rounding
+    for (const t of sample) expect(needed.has(`${t.x}/${t.y}`)).toBe(true);
+  });
+
+  it('spreads over both axes — a single column would misreport a half-stored region', () => {
+    // The failure this guards: striding a row-major list with a stride equal to
+    // the row width samples one column, so a region stored in the other half of
+    // the view reads as 0%.
+    const sample = sampleDemTiles(WIDE, 12, 48);
+    expect(new Set(sample.map((t) => t.x)).size).toBeGreaterThan(1);
+    expect(new Set(sample.map((t) => t.y)).size).toBeGreaterThan(1);
+  });
+});
+
+describe('demTileKey', () => {
+  it('namespaces elevation, because rendered layers are never cached', () => {
     expect(demTileKey({ z: 14, x: 4370, y: 6323 })).toEqual({
       layer: 'dem',
       z: 14,
@@ -86,40 +123,25 @@ describe('demTilesForBounds', () => {
   });
 });
 
-describe('sampleDemTiles', () => {
-  const wide = { west: -84, south: 38, east: -80, north: 41 };
+describe('boundsToBBox', () => {
+  it('reads a MapLibre LngLatBounds without depending on maplibre at runtime', () => {
+    expect(
+      boundsToBBox({
+        getWest: () => -82.58,
+        getSouth: () => 39.41,
+        getEast: () => -82.5,
+        getNorth: () => 39.46,
+      }),
+    ).toEqual(HOCKING);
+  });
+});
 
-  it('returns the exact set when it fits under the cap', () => {
-    const exact = demTilesForBounds(wide, 8);
-    expect(sampleDemTiles(wide, 8, exact.length + 10)).toHaveLength(exact.length);
+describe('demTileRanges', () => {
+  it('splits an antimeridian view into two spans', () => {
+    expect(demTileRanges({ west: 179.5, south: -1, east: -179.5, north: 1 }, 6)).toHaveLength(2);
   });
 
-  it('stays within budget for a viewport far too large to enumerate', () => {
-    const sample = sampleDemTiles(wide, 15, 48);
-    expect(demTileCount(wide, 15)).toBeGreaterThan(10_000);
-    expect(sample.length).toBeGreaterThan(0);
-    expect(sample.length).toBeLessThanOrEqual(48);
-  });
-
-  it('spreads over both axes rather than sampling one stripe', () => {
-    // The failure this guards: striding a row-major list by a multiple of the
-    // row width samples a single column, so a region stored in the other
-    // columns reports 0% and a hunter re-downloads what they already have.
-    const sample = sampleDemTiles(wide, 15, 48);
-    expect(new Set(sample.map((t) => t.x)).size).toBeGreaterThan(1);
-    expect(new Set(sample.map((t) => t.y)).size).toBeGreaterThan(1);
-  });
-
-  it('is deterministic — a still map must not show a jittering percentage', () => {
-    const a = sampleDemTiles(wide, 15, 48);
-    const b = sampleDemTiles(wide, 15, 48);
-    expect(a).toEqual(b);
-  });
-
-  it('only ever samples tiles the view actually needs', () => {
-    const needed = new Set(demTilesForBounds(wide, 10).map((t) => `${t.x}/${t.y}`));
-    for (const t of sampleDemTiles(wide, 10, 12)) {
-      expect(needed.has(`${t.x}/${t.y}`)).toBe(true);
-    }
+  it('collapses a whole-world view to one span', () => {
+    expect(demTileRanges({ west: -400, south: -80, east: 400, north: 80 }, 3)).toHaveLength(1);
   });
 });

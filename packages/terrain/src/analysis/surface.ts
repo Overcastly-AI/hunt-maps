@@ -323,6 +323,15 @@ export function computeVectorRuggedness(
   const satZ = new Float64Array(sw * (ph + 1));
   const satN = new Float64Array(sw * (ph + 1));
   const w = new Float32Array(9);
+  // Direct-buffer fast path. `grid.get` clamps both axes on every read, and this
+  // loop does nine of them per padded cell — measurably the dominant cost of the
+  // layer at tile scale. Inside the allocated buffer the clamps provably cannot
+  // fire, so the slow path is only taken where the halo genuinely runs out and
+  // edge-replication is the intended behaviour.
+  const data = grid.data;
+  const stride = grid.stride;
+  const bufRows = grid.height + 2 * grid.halo;
+  const halo = grid.halo;
 
   for (let py = 0; py < ph; py++) {
     let rowX = 0;
@@ -332,7 +341,31 @@ export function computeVectorRuggedness(
     for (let px = 0; px < pw; px++) {
       const gx = px - r;
       const gy = py - r;
-      if (gridWindowHasData(grid, gx, gy, w)) {
+      const bx = gx + halo;
+      const by = gy + halo;
+      let ok: boolean;
+      if (bx >= 1 && by >= 1 && bx < stride - 1 && by < bufRows - 1) {
+        const o = by * stride + bx;
+        w[0] = data[o - stride - 1];
+        w[1] = data[o - stride];
+        w[2] = data[o - stride + 1];
+        w[3] = data[o - 1];
+        w[4] = data[o];
+        w[5] = data[o + 1];
+        w[6] = data[o + stride - 1];
+        w[7] = data[o + stride];
+        w[8] = data[o + stride + 1];
+        ok = true;
+        for (let k = 0; k < 9; k++) {
+          if (!(w[k] > NODATA + 1)) {
+            ok = false;
+            break;
+          }
+        }
+      } else {
+        ok = gridWindowHasData(grid, gx, gy, w);
+      }
+      if (ok) {
         const dzdx = (w[2] + 2 * w[5] + w[8] - (w[0] + 2 * w[3] + w[6])) / (8 * cellSize);
         const dzdy = (w[6] + 2 * w[7] + w[8] - (w[0] + 2 * w[1] + w[2])) / (8 * cellSize);
         const inv = 1 / Math.sqrt(dzdx * dzdx + dzdy * dzdy + 1);

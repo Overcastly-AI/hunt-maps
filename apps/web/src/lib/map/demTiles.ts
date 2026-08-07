@@ -232,7 +232,12 @@ export function sampleDemTiles(bounds: BBox, z: number, max: number): TileCoord[
     // columns than rows, so the probes stay spread over the ground rather than
     // bunched in one stripe.
     const nx = clamp(Math.round(Math.sqrt((budget * w) / h)), 1, w);
-    const ny = clamp(Math.ceil(budget / nx), 1, h);
+    // `floor`, not `ceil`: `ceil` lets nx*ny exceed the budget (7 columns of a
+    // 48-tile budget rounds up to 7 rows = 49 probes), and a probe cap that can
+    // be overrun is not a cap. Overshooting by one is harmless on a laptop and
+    // is exactly what stutters a pan on a cheap phone, which is the device this
+    // bound exists for.
+    const ny = clamp(Math.floor(budget / nx), 1, h);
     for (let j = 0; j < ny; j++) {
       const y = r.y0 + Math.floor(((j + 0.5) * h) / ny);
       for (let i = 0; i < nx; i++) {

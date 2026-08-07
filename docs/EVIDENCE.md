@@ -1163,6 +1163,74 @@ covariate the engine has** — not latitude, not elevation, not NLCD cover, not
 temperature. There is no clever feature that substitutes for the region table.
 That is worth stating plainly so a future pass does not try.
 
+### 🔵 *Why* the cue loses discriminating power southward — the daylength geometry, computed
+The register asserts in several places that "the photoperiod signal itself
+weakens toward the equator". That was never quantified, and it is quantifiable
+exactly, from spherical astronomy rather than from biology. Computed here for
+sunrise-to-sunset daylength with the standard −0.833° refraction/semi-diameter
+correction:
+
+| Latitude | Annual daylength amplitude (max − min) | Rate of change at the mid-Nov peak |
+|---|---|---|
+| 50°N | **8.30 h** | −2.88 min/day |
+| 45°N | 6.85 h | −2.36 min/day |
+| 40°N | 5.69 h | −1.95 min/day |
+| 36°N | 4.90 h | −1.67 min/day |
+| 32°N | 4.19 h | −1.43 min/day |
+| 28°N | 3.55 h | −1.21 min/day |
+| 25°N | 3.11 h | −1.05 min/day |
+| 18°N | ~2.2 h | ~−0.74 min/day |
+| 10°N | **1.17 h** | −0.39 min/day |
+
+*(Reproducible: declination `23.44° · sin(2π(doy−81)/365.24)`, hour angle from
+the standard sunrise equation. This is geometry, not a literature value, and it
+is stated so it can be checked rather than believed.)*
+
+**What it does and does not explain.** It explains the **southern edge** two rows
+below: at 10°N the entire annual swing is ~70 minutes, so there is almost no
+signal to entrain to, and the Costa Rica result follows. It explains why
+selection on breeding date relaxes southward: the fitness cost of breeding "late"
+falls as winters soften.
+
+**It does *not* explain the Deep South.** At 31°N the annual swing is still
+~4 hours and the daily rate of change in mid-November is still ~1.4 min/day —
+an ample, unambiguous cue. Deer in south Alabama receive a perfectly good
+photoperiod signal and breed in **February** anyway; deer in coastal Georgia
+receive the same signal and breed in **October**. That is the point: the cue is
+present and adequate everywhere north of ~20°N, so the variation must live in the
+*response threshold*, which is the previous row's finding. 🔵 — the geometry is
+exact, the inference drawn from it is ours.
+
+### 🟡 The rival explanation — adult sex ratio and buck age structure — is tested and *contradicted between regions*
+Before accepting the maternal-lineage account above, the standard competing
+hypothesis has to be dealt with, because if a user's own herd management moved
+their peak, no static region table would ever be right for them. The literature
+splits, cleanly and by region:
+
+| Study | Region | Result |
+|---|---|---|
+| Diefenbach et al. 2019, *JWM* 83(6):1368–1376 | Pennsylvania, 1999–2006 | Harvest regulation shifted the ≥2.5-yr : 1.5-yr male ratio from **1:3.7 (2002) to 1:1.59 (2006)** — and there was **no evidence of any change in the timing or variability of conception date**, productivity, or offspring sex ratio |
+| Clemson-lineage work | Southern herds | Unbalanced sex ratios and young buck age structure reported to **delay and protract** breeding; mature bucks said to biostimulate earlier, more synchronous oestrus |
+| Northern Michigan | Northern herds | **No** biostimulation effect found |
+| MSU Deer Lab summary | Mississippi | Shifts of **up to 30 days** in peak breeding date attributed to improved buck:doe ratio and age structure |
+
+[Diefenbach et al. 2019, *J. Wildl. Manage.*](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.21712) ·
+[USGS record](https://pubs.usgs.gov/publication/70228057) ·
+[MSU Deer Lab — ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php)
+
+**Assessment.** Graded 🟡 and explicitly *not* modelled. The best-designed test —
+a real management manipulation with before/after conception data, Pennsylvania —
+found **nothing**, and the effect is claimed only where it cannot be separated
+from the regional heterogeneity of the previous row. **Do not add a sex-ratio or
+age-structure term to the rut model.** Two consequences that *are* actionable:
+
+1. It reinforces the region table rather than undermining it: the one place a
+   30-day management-driven shift is claimed is Mississippi, which is also where
+   the maternal-lineage effect is largest. The two are confounded.
+2. It is a further argument for `offsetDays` calibration being the primary
+   mechanism in the South. If a herd's peak really can move with management, only
+   the user's own observations will catch it.
+
 ### 🟢 Region → peak-breeding lookup — **the seed table, assembled from agency sources**
 Pass 2 established that the latitude-monotone form is wrong but left no
 implementable alternative. This is that alternative. Every row is a published
@@ -1415,6 +1483,64 @@ The tier *cutpoints* (37°N, 35°N, the 30-day state-spread threshold) remain
 🔴 — they are a policy choice about how loud to be when we do not know, informed
 by but not derived from the table. The **confidence values** attached to them
 are now 🔵, derived from measured dispersions.
+
+### 🔴 `calibrateOffset`'s ±14-day rejection clamp — **falsified by this pass's own evidence, and it fails hardest exactly where calibration is the only mechanism left**
+*New row, pass 4.* `calibrateOffset()` computes a median offset from the user's
+logged chasing observations and then discards it:
+
+```ts
+// Refuse implausible calibrations — more likely mislabelled observations
+// than a herd that breeds three weeks off the regional norm.
+return Math.abs(offset) > 14 ? undefined : offset;
+```
+
+The comment states a biological claim — *a herd does not breed three weeks off
+the regional norm* — and **every southern source in this section contradicts
+it**:
+
+| Evidence | Offset that actually occurs |
+|---|---|
+| Sumners et al. 2015 — 6 pairs of **adjacent** populations | mean **35 days** apart |
+| Turner et al. 2019 — within a **single Alabama county** | **≥ 60 days** |
+| NDA, summarising the same body of work | populations **< 30 miles apart** where the early herd *finishes* breeding before the late herd *starts* |
+| MDWFP — within Mississippi | late Nov → mid-Feb, ~**80 days** |
+| Richter & Labisky 1985 — within Florida | **~6 months** among four herds |
+| FWC — within a single Florida *area* | conception spread **9–110 days** |
+
+**Consequence, and it is the worst kind — a silent one.** A hunter in south
+Alabama or the Mississippi Delta whose herd genuinely peaks 40 days off the
+regional figure logs three seasons of honest chasing observations, and
+`calibrateOffset` returns `undefined`. The model then falls back to the regional
+default that is 40 days wrong, **with no indication that the user's own data was
+computed and thrown away.** `docs/BACKLOG.md` `I2` already promotes `offsetDays`
+to the *primary* mechanism south of ~37°N; a ±14-day clamp makes the primary
+mechanism structurally unable to express the southern range it exists to serve.
+
+**Prescription — concrete, with units and bounds:**
+
+```
+clamp bound:  ±14 d  ->  ±60 d          // covers the ≥60 d within-county
+                                        // variation measured in Alabama
+                                        // (Turner 2019); wider than the 35 d
+                                        // adjacent-population mean (Sumners 2015)
+on |offset| > 60 d:      still reject, and surface the rejection to the user
+                         ("your observations imply a peak N days from the
+                         regional figure; check the observation dates")
+                         — never return `undefined` silently
+minimum observations:    keep >= 3, but widen the plausibility test from a
+                         fixed clamp to dispersion: reject when the
+                         inter-observation spread exceeds ~45 d, which is the
+                         measured within-population conception range
+                         (Dye et al. 2012, mean range 46 d)
+north of 37°N only:      a ±14 d clamp remains defensible — the region-to-region
+                         spread of northern population means is ~±8 d, so a
+                         14-day rejection band is ~1.75 SD there
+```
+
+Graded 🔴 because `14` was chosen by us, not measured; the **replacement 60** is
+🔵, inferred directly from Turner et al.'s measured within-county variation. The
+latitude-dependence of the clamp is the honest form: the same number cannot be
+right in Pennsylvania and in Wilcox County, Alabama.
 
 ### 🟢 Moon phase does not drive the rut — *modelled by exclusion*
 48 GPS-collared bucks in Mississippi, two years, 15-minute fixes: bucks averaged
