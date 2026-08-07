@@ -1,0 +1,173 @@
+name: Release
+
+# Semantic release, then images tagged with the version it decided.
+#
+# The two live in ONE workflow on purpose, in dependent jobs. The obvious
+# alternative — let semantic-release push a `v*` tag and have a separate
+# tag-triggered workflow build the images — silently does nothing here:
+# GitHub does not raise `push` events for commits or tags created with
+# GITHUB_TOKEN, which is its guard against a workflow triggering itself. We
+# hit exactly that when a PR merged through the API produced no run at all.
+# A tag-triggered publish would look correctly configured and never fire.
+#
+# So: the release job decides the version, and the images job consumes it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  # Never cancel a release mid-flight. A cancelled run can leave a tag and a
+  # GitHub Release created with no images published against them, which is
+  # worse than a queued run.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tags, releases, and the changelog commit
+      issues: write
+      pull-requests: write
+    outputs:
+      published: ${{ steps.semantic.outputs.new_release_published }}
+      version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # semantic-release reads the full history to work out what changed
+          # since the last tag. A shallow clone makes every run look like the
+          # first one.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Semantic release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          # Pinned rather than floating: a release pipeline that changes
+          # behaviour on its own is the last thing you want to debug.
+          semantic_version: 24.2.0
+          extra_plugins: |
+            @semantic-release/changelog@6.0.3
+            @semantic-release/exec@6.0.3
+            @semantic-release/git@10.0.1
+            conventional-changelog-conventionalcommits@8.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  images:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      # Don't let one image failing cancel the other — a release with the API
+      # published and the web missing is recoverable; losing both is not.
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: web
+            dockerfile: apps/web/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release job just pushed the changelog and version bump. Check
+          # out the tag it created, not the branch head as it was when this
+          # workflow started, or the image contents and the version label
+          # disagree.
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/hunt-maps-${{ matrix.name }}
+          # Exact version, then the moving major.minor and major aliases, then
+          # latest. Deployments should pin the exact one; the aliases exist so
+          # a patch bump can be picked up deliberately, not by surprise.
+          tags: |
+            type=raw,value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}},value=v${{ needs.release.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.version=${{ needs.release.outputs.version }}
+          # amd64 only. Nothing here deploys to arm, and building it under
+          # QEMU roughly triples the release time for an architecture no one
+          # pulls. Add linux/arm64 when there is a real arm target.
+          platforms: linux/amd64
+          cache-from: type=gha,scope=release-${{ matrix.name }}
+          cache-to: type=gha,scope=release-${{ matrix.name }},mode=max
+
+      - name: Summarise
+        run: |
+          {
+            echo "### \`${{ matrix.name }}\` v${{ needs.release.outputs.version }}"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  chart:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach the packaged chart to the release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Same tag the images are built from, so the chart's appVersion —
+          # which is what its templates resolve image tags to — matches images
+          # that actually exist.
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint and package
+        run: |
+          helm lint ./deploy/helm/ridgeline
+          helm package ./deploy/helm/ridgeline --destination dist
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "v${{ needs.release.outputs.version }}" \
+            dist/ridgeline-${{ needs.release.outputs.version }}.tgz --clobber

@@ -9,22 +9,15 @@ fullnameOverride: ""
 # -----------------------------------------------------------------------------
 # Images
 # -----------------------------------------------------------------------------
-# Built locally by default, NOT pulled. That is not a preference — the
-# registry images do not exist:
+# Published by `.github/workflows/release.yml`. Every merge to main runs
+# semantic-release, which decides the version from the conventional-commit
+# history, tags it, and builds these images from that exact tag.
 #
-#   - hunt-maps-web has never built successfully.
-#   - hunt-maps-api built only on a feature branch, so its tags are
-#     `claude-…` and `sha-…`. There is no `latest`: the workflow gates that
-#     tag on `is_default_branch`, and no run has ever completed on main.
-#   - both packages are private regardless.
-#
-# GitHub Actions stopped scheduling runs entirely partway through
-# development and did not resume, so pointing this chart at ghcr by default
-# would guarantee ImagePullBackOff on both services — a failure that reports
-# "unauthorized" and reads like a permissions problem rather than a missing
-# image. See deploy/helm/README.md for the build-and-side-load step, and
-# switch these back to ghcr.io/overcastly-ai/hunt-maps-{api,web} once a run
-# has genuinely published them.
+# `tag` is empty on purpose. The templates fall back to the chart's
+# `appVersion`, which semantic-release bumps in the same commit as the release
+# — so a given chart revision always installs the images built from its own
+# source. Set a tag explicitly only to pin something older or to test a
+# development build from `publish-images.yml`.
 #
 # `IfNotPresent` rather than `Always`: for local work with a side-loaded image,
 # `Always` makes a kind/minikube node reach for a registry copy of a tag that
@@ -42,8 +35,8 @@ image:
 
 api:
   image:
-    repository: ridgeline/api
-    tag: dev
+    repository: ghcr.io/overcastly-ai/hunt-maps-api
+    tag: ""   # empty → Chart.appVersion
   replicaCount: 1
   service:
     port: 3001
@@ -71,8 +64,8 @@ api:
 
 web:
   image:
-    repository: ridgeline/web
-    tag: dev
+    repository: ghcr.io/overcastly-ai/hunt-maps-web
+    tag: ""   # empty → Chart.appVersion
   replicaCount: 1
   service:
     port: 80

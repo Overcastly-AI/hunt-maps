@@ -63,7 +63,7 @@ spec:
         # loudly if the migration fails, instead of the app starting against a
         # schema it does not match.
         - name: migrate
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           workingDir: /app/apps/api
           command:
@@ -96,7 +96,7 @@ spec:
                   key: database-url
       containers:
         - name: api
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           workingDir: /app/apps/api
           # Migrations are handled above; run only the server here.
