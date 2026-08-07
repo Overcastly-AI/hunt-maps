@@ -33,7 +33,24 @@
 import type maplibregl from 'maplibre-gl';
 import type { TileCoord } from '@hunt-maps/terrain';
 import { color } from '@hunt-maps/design';
+import type { CoverageState } from '../offline/coverage';
 import { tileFootprint, tileSetSignature } from './demTiles';
+
+/**
+ * Minimal GeoJSON shape.
+ *
+ * `@types/geojson` reaches this project only as a UMD global via maplibre-gl,
+ * which a module file cannot reference. Declaring the three fields actually
+ * used is cheaper than pulling a dependency into the app for one type.
+ */
+interface TileFeatureCollection {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    properties: Record<string, never>;
+    geometry: { type: 'Polygon'; coordinates: number[][][] };
+  }>;
+}
 
 const SOURCE_ID = 'rl-offline-coverage';
 const FILL_LAYER_ID = 'rl-offline-coverage-fill';
@@ -77,7 +94,7 @@ function hatchImage(): ImageData | null {
   return ctx.getImageData(0, 0, HATCH_SIZE, HATCH_SIZE);
 }
 
-function toFeatureCollection(tiles: TileCoord[]): GeoJSON.FeatureCollection {
+function toFeatureCollection(tiles: TileCoord[]): TileFeatureCollection {
   return {
     type: 'FeatureCollection',
     features: tiles.map((tile) => {
@@ -211,9 +228,8 @@ export class CoverageOverlay {
  * Exported so it can be asserted directly — the states it excludes are excluded
  * for reasons (see this file's header), not by accident of wiring.
  */
-export function coverageExtentToDraw(
-  state: import('../offline/coverage').CoverageState,
-): TileCoord[] {
+export function coverageExtentToDraw(state: CoverageState | null): TileCoord[] {
+  if (!state) return [];
   if (state.kind !== 'result') return [];
   const { result } = state;
   if (result.status !== 'partial' || result.basis !== 'view' || result.sampled) return [];

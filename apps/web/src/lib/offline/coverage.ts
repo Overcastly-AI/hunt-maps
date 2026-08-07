@@ -75,6 +75,13 @@ export interface CoverageResult {
    * `DEM_MAX_ZOOM` tiles under the same view found gaps.
    */
   basis: 'view' | 'detail';
+  /**
+   * Tile zoom MapLibre is requesting for the view right now. Always the current
+   * view's zoom, even when the figures below describe a deeper spot check —
+   * the label needs both numbers to say "covered *here*, thin *deeper in*"
+   * without contradicting itself.
+   */
+  viewZoom: number;
   /** Tile zoom the figures below refer to. */
   tileZoom: number;
   /** Tiles this view needs at `tileZoom`. */
@@ -200,6 +207,7 @@ export async function queryViewportCoverage(req: CoverageRequest): Promise<Cover
   const base: CoverageResult = {
     status: present.length === 0 ? 'empty' : fraction >= 1 ? 'covered' : 'partial',
     basis: 'view',
+    viewZoom: tileZoom,
     tileZoom,
     neededTiles: needed,
     probedTiles: probes.length,
@@ -228,6 +236,7 @@ export async function queryViewportCoverage(req: CoverageRequest): Promise<Cover
   return {
     status: 'partial',
     basis: 'detail',
+    viewZoom: tileZoom,
     tileZoom: DEM_MAX_ZOOM,
     neededTiles: detailNeeded,
     probedTiles: detailProbes.length,

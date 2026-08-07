@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyze, requiredHalo, type AnalysisRequest } from './pipeline.js';
-import { syntheticGrid, plane, hillsideWithBench } from './testing/synthetic.js';
+import { centerIndex, syntheticGrid, plane, hillsideWithBench } from './testing/synthetic.js';
 import { requiredMetrics } from './filters/terrainFilter.js';
 
 const SIZE = 33;
@@ -90,6 +90,44 @@ describe('analyze', () => {
     expect(r.shelter).toBeUndefined();
   });
 
+  it('leaves bedding purely leeward unless a temperature is supplied (R22)', () => {
+    // The season term must be opt-in end to end. A pipeline that quietly
+    // defaulted to a season would move every user's bedding layer without
+    // telling them which season it picked.
+    const grid = syntheticGrid(plane(0, 0.4), { size: SIZE, halo: 24 });
+    const base = analyze(grid, { layers: ['bedding'], windFromDeg: 0 }).bedding!;
+    const warm = analyze(grid, {
+      layers: ['bedding'],
+      windFromDeg: 0,
+      temperatureC: 14,
+      date: new Date('2026-10-20T17:30:00Z'),
+      latitude: 40,
+      longitude: -84,
+    }).bedding!;
+    for (let i = 0; i < base.length; i++) {
+      expect(Object.is(warm[i], base[i]), `cell ${i}`).toBe(true);
+    }
+  });
+
+  it('moves bedding onto the sun-facing slope in cold weather (R22)', () => {
+    const jan = new Date('2027-01-15T17:30:00Z');
+    const score = (gradeNorth: number, temperatureC?: number): number =>
+      analyze(syntheticGrid(plane(0, gradeNorth), { size: SIZE, halo: 24 }), {
+        layers: ['bedding'],
+        windFromDeg: 180, // south wind: the north face is the lee
+        date: jan,
+        latitude: 40,
+        longitude: -84,
+        temperatureC,
+      }).bedding![centerIndex(SIZE)];
+
+    // Leeward-only: the north face wins, which in January is the deepest snow
+    // and the coldest cell on the property.
+    expect(score(-0.4)).toBeGreaterThan(score(0.4));
+    // Same wind, same terrain, -12 °C: the south face wins.
+    expect(score(0.4, -12)).toBeGreaterThan(score(-0.4, -12));
+  });
+
   it('exposes the sun position used for the insolation layer', () => {
     const grid = syntheticGrid(plane(0, 0.4), { size: SIZE, halo: 4 });
     const r = analyze(grid, {
@@ -119,6 +157,12 @@ describe('requiredHalo', () => {
   it('covers the ray-marched layers', () => {
     expect(requiredHalo({ layers: ['skyView'] })).toBeGreaterThanOrEqual(24);
     expect(requiredHalo({ layers: ['bedding'] })).toBeGreaterThanOrEqual(20);
+  });
+
+  it('covers a widened bedding cover window', () => {
+    // On a 1 m DEM the VRM window has to be far wider than the shelter march,
+    // and an undersized halo there is the seam-grid bug in `grid.ts`.
+    expect(requiredHalo({ layers: ['bedding'], coverRadiusCells: 45 })).toBe(46);
   });
 
   it('takes the maximum across all requested layers', () => {

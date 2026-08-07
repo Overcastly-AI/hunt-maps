@@ -104,9 +104,9 @@ function describeResult(r: CoverageResult): CoverageDescription {
       tone: 'warn',
       glyph: '◐',
       detail:
-        `This view is covered at zoom ${r.tileZoom === DEM_MAX_ZOOM ? r.tileZoom : r.tileZoom}, ` +
-        `but a sample of the deepest zoom (${DEM_MAX_ZOOM}) found only ${approx(r)}% of it ` +
-        'stored. It works as you see it now; zoom in and parts of this ground will be blank.' +
+        `This view is covered at zoom ${r.viewZoom}, but a sample of the deepest zoom ` +
+        `(${DEM_MAX_ZOOM}) found only ${approx(r)}% of it stored. It works as you see it now; ` +
+        'zoom in and parts of this ground will be blank.' +
         volatileNote,
     };
   }
@@ -117,7 +117,7 @@ function describeResult(r: CoverageResult): CoverageDescription {
     glyph: '◐',
     detail:
       `Only ${approx(r)}% of this view’s elevation is on this device. The hatched area on the ` +
-      'map is the part that is missing — it will be blank with no signal. ' +
+      'map is what you have — everything outside it will be blank with no signal. ' +
       `Checked ${countPhrase(r)} at zoom ${r.tileZoom}.` +
       volatileNote,
   };

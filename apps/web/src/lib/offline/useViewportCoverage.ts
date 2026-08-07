@@ -1,109 +1,106 @@
 /**
  * Keep offline coverage in step with the map, honestly.
  *
- * The rules this hook exists to enforce, all of which the old
- * sample-once-at-mount boolean broke:
+ * The four rules here are each a direct answer to how the old
+ * sampled-once-at-mount boolean failed:
  *
- *  1. **Recompute when the view changes.** Bound to `move`, not just `moveend`,
- *     so a `flyTo` that crosses two states does not display the origin's answer
- *     for the whole animation.
- *  2. **Never show a stale answer as current.** The moment the needed tile set
- *     changes, the state becomes `checking`. There is no code path that carries
- *     the previous view's `covered` into a new view.
- *  3. **Do not thrash the store.** The probe is debounced, and a move that does
- *     not change *which tiles* are needed (a few pixels of pan) does not
- *     re-query at all — comparing tile-set signatures rather than centres is
- *     what makes the badge stable while the map is nudged.
- *  4. **Drop stale results.** Each run carries an epoch; a slow probe that
- *     resolves after the user has already panned on is discarded rather than
- *     overwriting a newer answer with an older one.
+ *  1. **Recompute when the view changes.** Bound to `move`, not only `moveend`,
+ *     so a `flyTo` crossing out of a downloaded region does not display the
+ *     origin's answer for the whole animation.
+ *  2. **Never show a stale answer as current.** The instant the needed tile
+ *     range changes, the state becomes `checking`. There is no path that
+ *     carries a previous view's `covered` into a new view.
+ *  3. **Do not thrash storage.** Probing is debounced, and a move that does not
+ *     change *which tiles are needed* does not re-probe at all. The signature is
+ *     computed from tile *ranges* (O(1)) rather than an enumeration, because
+ *     this runs on every frame of a pan.
+ *  4. **Drop stale results.** Each run carries an epoch and an `AbortSignal`; a
+ *     slow probe that resolves after the user has panned on is discarded rather
+ *     than overwriting a newer answer with an older one.
+ *
+ * A store that cannot be opened, or a lookup that throws, becomes `unavailable`
+ * — never `0% covered` and certainly never `covered`. "We could not read your
+ * storage" and "your storage is empty" call for different actions.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type maplibregl from 'maplibre-gl';
-import { demTilesForView, tileSetSignature } from '../map/demTiles';
-import { openTileStore, type TileStore } from './tileStore';
-import { queryViewportCoverage, type ViewportCoverage } from './coverage';
+import { boundsToBBox, demSourceZoom, demTileRanges } from '../map/demTiles';
+import {
+  invalidateCoverageCache,
+  queryViewportCoverage,
+  type CoverageState,
+} from './coverage';
 
 export interface UseViewportCoverageResult {
-  coverage: ViewportCoverage | null;
-  /** Re-probe now, ignoring the signature cache. Call after a region download. */
+  state: CoverageState;
+  /** Re-probe now, ignoring the debounce, the signature cache and the memo. */
   refresh: () => void;
 }
 
 const DEBOUNCE_MS = 180;
+
+const CHECKING: CoverageState = { kind: 'checking' };
 
 export function useViewportCoverage(
   map: maplibregl.Map | null,
   options: { debounceMs?: number } = {},
 ): UseViewportCoverageResult {
   const debounceMs = options.debounceMs ?? DEBOUNCE_MS;
-  const [coverage, setCoverage] = useState<ViewportCoverage | null>(null);
+  const [state, setState] = useState<CoverageState>(CHECKING);
 
   const epoch = useRef(0);
   const signature = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef<AbortController | null>(null);
 
   const probe = useCallback(async () => {
     if (!map) return;
     const runEpoch = ++epoch.current;
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
 
-    const bounds = map.getBounds();
-    const tiles = demTilesForView(
-      {
-        west: bounds.getWest(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        north: bounds.getNorth(),
-      },
-      map.getZoom(),
-    );
+    const bounds = boundsToBBox(map.getBounds());
+    const zoom = map.getZoom();
 
-    // A store that will not open is a first-class answer (`unavailable`), not
-    // an exception and definitely not a reason to fall back to "ready".
-    let store: TileStore | null = null;
     try {
-      store = await openTileStore();
-    } catch {
-      store = null;
+      const result = await queryViewportCoverage({ bounds, zoom, signal: controller.signal });
+      if (epoch.current !== runEpoch) return;
+      setState({ kind: 'result', result });
+    } catch (err) {
+      if (epoch.current !== runEpoch) return;
+      setState({
+        kind: 'unavailable',
+        reason: err instanceof Error ? err.message : 'storage error',
+      });
     }
-    if (epoch.current !== runEpoch) return;
-
-    const result = await queryViewportCoverage(store, tiles);
-    if (epoch.current !== runEpoch) return;
-    setCoverage(result);
   }, [map]);
 
   const schedule = useCallback(
     (force: boolean) => {
       if (!map) return;
 
-      if (!force) {
-        const bounds = map.getBounds();
-        const tiles = demTilesForView(
-          {
-            west: bounds.getWest(),
-            south: bounds.getSouth(),
-            east: bounds.getEast(),
-            north: bounds.getNorth(),
-          },
-          map.getZoom(),
-        );
-        const sig = tileSetSignature(tiles);
-        if (sig === signature.current) return; // same tiles: the last answer still holds
-        signature.current = sig;
-      } else {
-        signature.current = null;
-      }
+      // O(1) fingerprint of the needed tile set: the integer tile ranges at the
+      // zoom MapLibre is actually requesting. Enumerating tiles here would run
+      // on every frame of a pan for no extra information.
+      const sig = demTileRanges(boundsToBBox(map.getBounds()), demSourceZoom(map.getZoom()))
+        .map((r) => `${r.z}:${r.x0}-${r.x1}:${r.y0}-${r.y1}`)
+        .join('|');
 
-      // Invalidate immediately. Everything between here and the probe resolving
-      // is honestly "we do not know yet" — which is the entire point.
+      if (!force && sig === signature.current) return; // same tiles, same answer
+      signature.current = force ? null : sig;
+
+      // Invalidate immediately: everything between here and the probe resolving
+      // is honestly "we do not know yet", which is the entire point.
       epoch.current++;
-      setCoverage((prev) => (prev && prev.state === 'checking' ? prev : emptyChecking(prev)));
+      inFlight.current?.abort();
+      setState((prev) => (prev.kind === 'checking' ? prev : CHECKING));
 
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
         timer.current = null;
+        signature.current = sig;
         void probe();
       }, debounceMs);
     },
@@ -114,45 +111,28 @@ export function useViewportCoverage(
     if (!map) return;
 
     const onMove = () => schedule(false);
-    const onMoveEnd = () => schedule(false);
     map.on('move', onMove);
-    map.on('moveend', onMoveEnd);
+    map.on('moveend', onMove);
 
-    // First answer, immediately — not on the first pan.
-    schedule(true);
+    schedule(true); // first answer immediately, not on the first pan
 
     return () => {
       map.off('move', onMove);
-      map.off('moveend', onMoveEnd);
+      map.off('moveend', onMove);
       if (timer.current) clearTimeout(timer.current);
+      inFlight.current?.abort();
       // Any probe still in flight belongs to a component that no longer exists.
       epoch.current++;
     };
   }, [map, schedule]);
 
-  const refresh = useCallback(() => schedule(true), [schedule]);
+  const refresh = useCallback(() => {
+    // A download (or a delete) just changed what is on disk underneath us, so
+    // the memoised per-tile answers are exactly the thing that must not be
+    // trusted here.
+    invalidateCoverageCache();
+    schedule(true);
+  }, [schedule]);
 
-  return { coverage, refresh };
-}
-
-/**
- * The indeterminate answer.
- *
- * Carries the previous zoom only so the detail line does not flash a bogus
- * zoom 0 mid-pan; every count is zeroed, so nothing about the old view can be
- * mistaken for a measurement of the new one.
- */
-function emptyChecking(previous: ViewportCoverage | null): ViewportCoverage {
-  return {
-    state: 'checking',
-    zoom: previous?.zoom ?? 0,
-    neededCount: 0,
-    probedCount: 0,
-    presentCount: 0,
-    sampled: false,
-    fraction: 0,
-    present: [],
-    missing: [],
-    backend: previous?.backend ?? null,
-  };
+  return { state, refresh };
 }

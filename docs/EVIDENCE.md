@@ -1144,6 +1144,32 @@ agency or peer-reviewed figure; none is interpolated by us.
 | Texas — Gulf Prairies | 28°N | **30 Sep** north, **31 Oct** south | 🟢 agency | TPWD, as above |
 | Florida, by zone | 25–31°N | zone means span **22 Jul – 31 Jan**; within-area conception spread **9–110 days**, mean 45 d, most does within 60 d | 🟢 agency, biological data collected since 2009 | [FWC statewide rut map (PDF)](https://myfwc.com/media/18766/statewide-rut-map.pdf) · [FWC "the truth about Florida's deer rut"](https://content.govdelivery.com/accounts/FLFFWCC/bulletins/22cf0b1) |
 
+**Pass-4 additions to the seed table.** Twelve further rows, at the resolution
+the source publishes. Everything here is fetal-aged conception data unless the
+row says otherwise.
+
+| Region | ~Lat | Peak conception / breeding | Source class | Source |
+|---|---|---|---|---|
+| North Carolina, 5 units | 34–36.5°N | **Unit V 11 Oct · Unit IV 30 Oct · Unit III 8 Nov · Unit II 20 Nov · Unit I 5 Dec**; statewide extremes reported as **4 Oct (east)** to **19 Dec (west)** | 🟢 agency fetal data, county resolution | [NCWRC estimated peak conception dates (PDF)](https://www.ncwildlife.gov/media/4373/download?attachment=) |
+| Virginia, statewide | 37.5°N | peak conception ~**16 Nov**; most does in oestrus **10–25 Nov**; peak fawning 16 Jun (2019 and 2020) | 🟢 agency + VADS telemetry | [VA DWR — fawning dates are key to rut timing](https://dwr.virginia.gov/blog/virginias-deer-with-justin-folks-fawning-dates-are-key-to-rut-timing/) · [Virginia Appalachian Deer Study](https://dwr.virginia.gov/blog/the-virginia-appalachian-deer-study-how-fawns-are-faring-west-of-the-blue-ridge-mountains/) |
+| West Virginia | 38.8°N | most does bred **7–15 Nov** | 🟡 agency summary, no n given | see the state-summary caveat below |
+| Kentucky, statewide | 37.5°N | **8–15 Nov**, tight statewide | 🟡 agency summary of fetal-rate analyses | KDFWR deer-program reports, *seen only in secondary summary — unread* |
+| Tennessee, by region | 35–36.5°N | **west 21 Nov · central 17 Nov · east 25 Nov** | 🟡 agency summary | *unread at source* |
+| Arkansas, statewide | 34.8°N | mean **18 Nov ± ~7 d**; AGFC publishes deer-zone detail | 🟡 agency summary | *unread at source* |
+| E Oklahoma (Cookson Hills, McAlester) | 35.7°N | peak "just prior to **18 Nov**", from testes/epididymal histology, Nov 1972 | 🟢 peer-reviewed | [Oklahoma Acad. Sci.](https://ojs.library.okstate.edu/osu/index.php/OAS/article/view/5012/4682) |
+| Alabama, by county | 30.5–35°N | **north 13–25 Nov**; **Black Belt / central late Dec – mid Jan**; **southwest 25 Jan – 8 Feb**. ≥ **60 days** variation *within* single counties | 🟢 peer-reviewed + agency county map | [Turner et al. 2019](https://wildlife.onlinelibrary.wiley.com/doi/abs/10.1002/wsb.1031) · [Outdoor Alabama — WFF rut map](https://www.outdooralabama.com/node/3171) |
+| Mississippi, by unit | 30.3–35°N | **late Nov** in NW counties → **mid-Feb** in SE counties (~80 d within one state); Delta median **27 Dec**; statewide mean 1 Jan | 🟢 agency, >20 yr of deer health checks | [MDWFP](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) · [MSU Deer Lab](https://www.msudeer.msstate.edu/ecology-of-the-rut.php) |
+| Louisiana, 10 deer areas | 29–33°N | **Area 2 peak Nov**; **Areas 4 & 9 (Florida Parishes / SE) peak early–mid Dec**; **Areas 1, 5, 6 late rut in Jan**. Published as two-week peak windows, from fetal measurements | 🟢 agency fetal data, area resolution | [LDWF estimated deer breeding periods](https://www.wlf.louisiana.gov/page/deer-breeding-periods) |
+| Texas, all ecoregions | 26–34°N | Pineywoods **N 22 Nov / S 12 Nov** (total 21 Oct–5 Jan) · Post Oak **central 10 Nov / S 11 Nov** (30 Sep–16 Jan) · Cross Timbers **N 15 Nov / S 17 Nov** (13 Oct–17 Dec) · Edwards Plateau **E 7 Nov / central 24 Nov / W 5 Dec** · Trans-Pecos **8 Dec** (4 Nov–4 Jan) · Gulf Prairies **N 30 Sep / S 31 Oct** (**24 Aug**–30 Nov) · South Texas Brush **E 16 Dec / W 24 Dec** (9 Nov–1 Feb) | 🟢 agency, 16 study sites, 2,436 does | [TPWD](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/) |
+| Florida, 4 disjunct herds (peer-reviewed) | 26–30.5°N | mean breeding: **Rotenberger (S) 10 Aug · Tosohatchee (central) 7 Oct · Camp Blanding (N) 2 Nov · Eglin AFB (NW) 22 Feb** — "as much as **6 months asynchronous** among herds", n = 380 tracts, 1978–1981 | 🟢 peer-reviewed fetal/tract data | [Richter & Labisky 1985, *JWM* 49:964–971](https://journals.flvc.org/edis/article/view/114365) |
+
+**Richter & Labisky is the most important single citation in this section.** It
+is peer-reviewed, it is conception-date data rather than an agency map, and it
+contains the inversion outright: the **northernmost** Florida herd sampled has
+the **latest** mean breeding date in the state. No latitude function of any
+degree can fit four points where the extremes are 196 days apart and the sign
+alternates.
+
 **The finding that kills latitude, stated as sharply as the data allows.**
 Pass 2's example was Texas Gulf (30 Sep) vs Mississippi (1 Jan) at similar
 latitudes. The Carolinas make it worse, because they remove the "different
