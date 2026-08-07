@@ -212,7 +212,7 @@ export default function App() {
          * time — and always while coverage is partial, which is the one state
          * where the text alone is actively misleading about *where* the gap is.
          */
-        showCoverage={sheetOpen || coverage?.state === 'partial'}
+        showCoverage={sheetOpen || isPartialCoverage(coverage)}
       />
 
       <div className="map-chrome">
@@ -301,6 +301,17 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/**
+ * Only a measured `partial` result forces the overlay on with the sheet shut.
+ *
+ * Written as a guard rather than inline so "checking" and "unavailable" cannot
+ * be accidentally folded into the same branch as a real verdict — the whole
+ * point of this feature is that not-yet-known never behaves like an answer.
+ */
+function isPartialCoverage(state: CoverageState): boolean {
+  return state.kind === 'result' && state.result.status === 'partial';
 }
 
 function octant(deg: number): string {

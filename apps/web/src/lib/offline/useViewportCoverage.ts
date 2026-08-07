@@ -20,17 +20,29 @@
  * view changes.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type maplibregl from 'maplibre-gl';
 import { boundsToBBox } from '../map/demTiles';
-import { queryViewportCoverage, type CoverageState } from './coverage';
+import { invalidateCoverageCache, queryViewportCoverage, type CoverageState } from './coverage';
 
 /** Long enough to skip the frames of a flick, short enough to feel immediate. */
 const SETTLE_MS = 250;
 
-export function useViewportCoverage(map: maplibregl.Map | null): CoverageState {
+export interface ViewportCoverage {
+  coverage: CoverageState;
+  /**
+   * Re-measure now, ignoring memoised probe results.
+   *
+   * For after a region download or delete: the store changed underneath us and
+   * the cached answer would otherwise keep reporting the pre-download verdict.
+   */
+  refresh: () => void;
+}
+
+export function useViewportCoverage(map: maplibregl.Map | null): ViewportCoverage {
   const [state, setState] = useState<CoverageState>({ kind: 'checking' });
   const token = useRef(0);
+  const refreshRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     if (!map) return;
@@ -77,6 +89,12 @@ export function useViewportCoverage(map: maplibregl.Map | null): CoverageState {
       if (timer) clearTimeout(timer);
     };
 
+    refreshRef.current = () => {
+      invalidate();
+      invalidateCoverageCache();
+      run();
+    };
+
     map.on('movestart', onMoveStart);
     map.on('zoomstart', onMoveStart);
     map.on('moveend', schedule);
@@ -90,6 +108,7 @@ export function useViewportCoverage(map: maplibregl.Map | null): CoverageState {
 
     return () => {
       disposed = true;
+      refreshRef.current = () => undefined;
       if (timer) clearTimeout(timer);
       map.off('movestart', onMoveStart);
       map.off('zoomstart', onMoveStart);
@@ -98,5 +117,7 @@ export function useViewportCoverage(map: maplibregl.Map | null): CoverageState {
     };
   }, [map]);
 
-  return state;
+  const refresh = useCallback(() => refreshRef.current(), []);
+
+  return { coverage: state, refresh };
 }

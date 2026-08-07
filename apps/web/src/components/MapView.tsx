@@ -6,7 +6,6 @@ import { LAYERS, layerById } from '../lib/layers';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
 import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
 import { exposeDevHook } from '../lib/devHook';
-import { DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
 import { CoverageOverlay, coverageExtentToDraw } from '../lib/map/coverageOverlay';
 import type { CoverageState } from '../lib/offline/coverage';
 
@@ -30,6 +29,15 @@ export interface MapViewProps {
    * `coverageExtentToDraw`, not to this component.
    */
   coverage?: CoverageState | null;
+  /**
+   * Whether the user wants the coverage extent drawn at all.
+   *
+   * Separate from `coverage` because they answer different questions: what is
+   * true (`coverage`) versus whether the map should be carrying that truth
+   * right now. Off while the Layers sheet is closed keeps the map clean; the
+   * *text* verdict is never suppressed this way.
+   */
+  showCoverage?: boolean;
 }
 
 const BASE_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom: number }> = {
@@ -69,6 +77,7 @@ export function MapView({
   onMove,
   protocol,
   coverage,
+  showCoverage = false,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -130,12 +139,12 @@ export function MapView({
     // sniffing the GL framebuffer gives false negatives because the drawing
     // buffer is cleared between frames unless preserveDrawingBuffer is set,
     // which would cost real performance in production.
-    (window as unknown as { __ridgeline?: { map: maplibregl.Map } }).__ridgeline = {
-      map: instance,
-    };
+    exposeDevHook({ map: instance });
     onReady?.(instance);
 
     return () => {
+      overlay.current?.destroy();
+      overlay.current = null;
       instance.remove();
       map.current = null;
     };
@@ -155,13 +164,16 @@ export function MapView({
     else instance.once('load', apply);
   }, [activeLayers, opacities, windFromDeg, atUtc, filterStackId, protocol]);
 
-  // Coverage is its own effect and its own module: it is not an analysis layer,
-  // it changes on a different cadence (every move), and `map-builder` should be
-  // able to retune its cartography without touching the layer stack above.
+  // Coverage gets its own effect and its own module: it is not an analysis
+  // layer, it changes on a different cadence (every move), and `map-builder`
+  // should be able to retune its cartography without touching the layer stack
+  // above. What is *drawable* is decided by `coverageExtentToDraw`, not here —
+  // an indeterminate or sampled answer has no honest extent and draws nothing.
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
-    syncCoverageOverlay(instance, coverage ?? null, showCoverage);
+    overlay.current ??= new CoverageOverlay(instance);
+    overlay.current.setTiles(showCoverage ? coverageExtentToDraw(coverage ?? null) : []);
   }, [coverage, showCoverage]);
 
   return <div ref={container} className="map-canvas" data-testid="map-canvas" />;
@@ -185,6 +197,11 @@ const GROUP_ANCHOR: Record<string, string> = {
   saved: 'anchor-features',
 };
 
+/** True for the ids `syncLayers` owns: a real layer, a basemap, or the filter stack. */
+export function isSyncedLayer(id: string): boolean {
+  return id === '__filters' || Boolean(BASE_SOURCES[id]) || Boolean(layerById(id));
+}
+
 function syncLayers(
   map: maplibregl.Map,
   active: Set<string>,
@@ -197,9 +214,17 @@ function syncLayers(
   if (filterStackId) wanted.add('__filters');
 
   // Remove layers that are no longer wanted.
+  //
+  // Only ones this function created. The `rl-` prefix alone is not enough: the
+  // coverage overlay (`lib/map/coverageOverlay.ts`) also lives under it, and a
+  // prefix-only test tore it off the map on the next layer toggle — the badge
+  // still said "Partial", the hatch showing *which half* silently vanished.
+  // Matching against the known layer registry keeps ownership explicit, and
+  // survives the overlay being renamed.
   for (const layer of map.getStyle().layers ?? []) {
     if (!layer.id.startsWith('rl-')) continue;
     const id = layer.id.slice(3);
+    if (!isSyncedLayer(id)) continue;
     if (!wanted.has(id)) {
       map.removeLayer(layer.id);
       if (map.getSource(layer.id)) map.removeSource(layer.id);

@@ -25,14 +25,21 @@ An `Assumed` grade is not a failure. Hiding one is.
 | 🟡 **Doctrine** | Consistent, widely-reported field practice; no measurement behind it |
 | 🔴 **Assumed** | A number chosen because the code needed one |
 
-**Current state: 12 Measured · 6 Inferred · 9 Doctrine · 17 Assumed.**
-*(Pass 2: 10 · 5 · 8 · 18. Net: two rows left red, one row entered it.)*
+**Current state: 14 Measured · 10 Inferred · 9 Doctrine · 18 Assumed.**
+*(Pass 3: 12 · 6 · 9 · 17. Pass 2: 10 · 5 · 8 · 18.)*
 
 Pass 2 wrote one row per number and retracted two citations. Pass 3 reopened
 every row pass 2 had closed as a settled negative and worked them with search
 rather than with memory. Four rows moved up, one negative result was overturned
 outright, and the rows that stayed 🔴 now carry the query list that justifies
 them.
+
+**Pass 4 was a single-topic pass: `R9`, rut regionalisation.** It scored the
+shipped `peakBreedingDayOfYear` against **40 published regional peaks**, found
+the mechanism paper behind southern heterogeneity, **corrected an overclaim this
+register itself had made** about restocking genetics, and added seven rows
+(🟢 +2, 🔵 +4, 🔴 +1). The 🔴 it added is the most useful thing in it:
+`rutConfidence` returns a number that is not the probability of anything.
 
 > **Reading conditions.**
 >
@@ -1316,22 +1323,57 @@ breeder mechanism plus two introduced-range observations, neither of which is a
 conception-date study. The southern-hemisphere branch should carry
 `conf ≤ 0.40` and the note *"introduced range, no conception-date data"*.
 
-### 🔴 `rutConfidence` thresholds — too generous by a wide margin
-Returns **0.65 for 32–38°N**. Mississippi and Alabama are 32–33°N and the model
-is a month or more wrong there. 0.65 is not a defensible confidence for a
-one-month error. Recommend, until a region lookup exists:
+### 🔴 The `rutConfidence` scalar has no defined meaning — *new row, pass 4*
+`rutConfidence(latitude): number` returns 0.2–0.9 and is documented in code as
+"how much to trust the phase at this latitude, 0..1". **Nothing in the codebase
+or in this register says what that number is the probability *of*.** An
+undefined confidence is worse than none: it cannot be falsified, it cannot be
+back-tested against the 40 rows above, and it renders as a chip a hunter reads
+as odds. This is a 🔴 row about a number that is not a measurement of anything.
 
-| Latitude | Now | Recommended | Why |
-|---|---|---|---|
-| ≥ 38°N | 0.90 | 0.90 | supported by fetal-aging data |
-| 36–38°N | 0.65 | 0.55 | edge of the tight photoperiod window |
-| < 36°N | 0.65 / 0.40 / 0.20 | **0.15**, or refuse to return a date | latitude is not predictive here |
+**Prescription — define it first, and the values then follow from measurement
+rather than from taste:**
+> `rutConfidence` = *the modelled probability that the true population mean
+> conception date lies within **±7 days** of the returned date.*
 
-36°N, not 38°N, is the boundary the literature uses: north of ~36° most deer
-breed mid-October to mid-December with a November peak; between 28–36° breeding
-spans late September to late March and peaks in November, December *or* January
-depending on the area. The cutpoints themselves remain 🔴 — they are a policy
-choice about how loud to be when we do not know.
+±7 d is chosen because it is the half-width of the 21-day window inside which
+most breeding occurs (MSU Deer Lab), i.e. the tolerance at which being wrong
+still changes where a hunter sits. Once defined this way the value is testable:
+score it against the region table and it should be calibrated.
+
+### 🔴 `rutConfidence` thresholds — measurably too generous, and keyed on the wrong variable
+Returns **0.65 for 32–38°N**. From the error table, at 32–33°N the shipped model
+is off by **+24 d (South Carolina), +32 d (SC Lower Coastal Plain), −33 d
+(Mississippi Delta), −36 d (Mississippi statewide)**. A 0.65 confidence on a
+one-month error is the single most misleading number in the rut model, because
+0.65 reads to a user as "probably right".
+
+Worse, **it is keyed on latitude, which pass 4 shows is not the variable that
+predicts the error.** At 30.5°N the model is 4 days out in the Trans-Pecos and
+80 days out at Eglin AFB; one latitude, one confidence, a twentyfold difference
+in error. Confidence must key on **which tier answered**, not on latitude.
+
+| Tier | Condition | Now | Recommended | Derivation |
+|---|---|---|---|---|
+| T0 | user-calibrated, ≥ 3 seasons | n/a | **0.90** | population annual mean SD = 4 d ⇒ P(\|err\| ≤ 7 d) ≈ 0.92 (Dye 2012) |
+| T3 | ≥ 37°N, no region hit | 0.90 | **0.70** | region-to-region spread of population means ≈ ±8 d ⇒ P(\|err\| ≤ 7 d) ≈ 0.6–0.7 |
+| T1 | region hit at county / unit / ecoregion / zone | n/a | **0.55** | agency map resolution vs ≥ 60 d within-county variation (Turner 2019) |
+| T4 | 35–37°N interior/upland, no region hit | 0.65 | **0.40** | TN/AR/OK cluster 17–25 Nov; NC at the same latitude does not |
+| T2 | region hit at state resolution only, spread > 30 d | 0.65 | **0.25**, and return a range not a date | AL 13 Nov–8 Feb; MS late Nov–mid Feb |
+| T5 | < 37°N, no region hit | 0.65 / 0.40 / 0.20 | **refuse — return UNKNOWN** | errors of −80 to +131 d are observed here |
+| T6 | \|lat\| < 18°N | 0.20 | **refuse — UNKNOWN, permanently** | breeding is aseasonal (Costa Rica) |
+| — | southern hemisphere branch | inherits | **cap at 0.40** | introduced range, no conception-date data |
+
+**Pass 3 recommended a floor of 0.15 for < 36°N. Pass 4 replaces that with a
+refusal**, because 0.15 is still a number on a chip next to a date, and a date
+that can be 131 days wrong should not be shown at all. `CLAUDE.md`: *"Grey out
+layers whose inputs are unset rather than rendering a default."* An
+uncharacterised herd in south Georgia is an unset input.
+
+The tier *cutpoints* (37°N, 35°N, the 30-day state-spread threshold) remain
+🔴 — they are a policy choice about how loud to be when we do not know, informed
+by but not derived from the table. The **confidence values** attached to them
+are now 🔵, derived from measured dispersions.
 
 ### 🟢 Moon phase does not drive the rut — *modelled by exclusion*
 48 GPS-collared bucks in Mississippi, two years, 15-minute fixes: bucks averaged
@@ -1343,6 +1385,24 @@ weather and hunting pressure.
 
 **Citation replaced.** The previous register supported this 🟢 row with a Mossy
 Oak blog post. The conclusion survives; the sourcing did not.
+
+**Pass 4 upgraded the sourcing again, to the strongest form of this test.** The
+two citations above measure *movement*; a lunar-rut claim is about *breeding*,
+and that has now been tested directly against conception dates rather than
+against activity:
+
+> **Moon phase did not accurately predict conception date for either individuals
+> or populations of deer**, in captive individuals (Texas and Mississippi) or in
+> wild Mississippi populations. Body condition did not influence conception date
+> at the population level either.
+> [Dye et al. 2012, *Wildl. Soc. Bull.* 36:107–114](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/wsb.98)
+
+Two independent lines now converge: moon phase does not predict when deer breed
+(Dye 2012, conception dates), and rut timing has not shifted in 29 years while
+lunar phase relative to the calendar has (Ontario DVC, above). **Peer-reviewed,
+on the exact quantity a lunar rut predictor would claim to forecast.** The
+answer to the founder is still no, and it is now no with a conception-date study
+behind it rather than an activity study.
 
 **Decision recorded, and it is not up for reconsideration:** breeding is
 photoperiod-driven, moon phase is not a rut predictor, and a lunar rut feature
@@ -1420,17 +1480,70 @@ phenomenon is the doctrine layer on top of it — and note the cycling data abov
 implies a *third* and *fourth* recurrence too, which nobody hunts, so the
 phenomenon's practical size is unmeasured.
 
-### 🔴 The other phase window day counts (seeking −21…−10 d, chasing −10…−2 d, lockdown …)
-Our own partition of a continuous process. Ordering is doctrine; the day counts
-are invented. **Re-searched; still no source** giving durations for seeking or
-chasing. The only durations anyone measures are the two physiological ones now
-recorded above — oestrus 24–30 h and the tending bond ~24 h — and neither sets
-a multi-day phase boundary. Everything except `SecondRut` stays 🔴.
+### 🔵 The *outer* rut window is measured — 16–21 days *(new; split out of the 🔴 row below)*
+Pass 3 recorded every phase-window day count as invented. Pass 4 found the
+envelope, twice, by two methods:
 
-**Queries:** `white-tailed deer rut seeking chasing tending lockdown duration
-days GPS collar breeding chronology phases` · `National Deer Association
-lockdown phase myth GPS collar buck movement` · `white-tailed deer estrous cycle
-length days estrus duration recurrence peer reviewed`.
+- **Changepoint analysis of daily movement rates** on 188 GPS-collared males,
+  SW Wisconsin, 15 Oct – 1 Dec, 2017–2020: peak breeding season **23 Oct –
+  12 Nov**. **Peak rut length was 20–21 days from movement metrics and 16 days
+  from conception dates**, with little variation among age classes or metrics.
+  Mean movement rate peaked in the week of **5–11 Nov**; 2-year-olds moved most;
+  firearm-season opening weekend had no significant effect.
+  [Hunsaker et al. 2025, *Ecology and Evolution*](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589)
+- Independently: within any region, breeding duration is **30–45 days**, with
+  **most breeding inside a 21-day window centred on the peak**.
+  [MSU Deer Lab — ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php)
+
+**Consequence for the parameter.** Our windows put `Seeking` through
+`PostRut` at −21…+24 d, a 45-day envelope. That matches the *duration* figure
+but is roughly **twice** the 16–21 day measured peak. The huntable core is
+narrower than we render it. **Recommended:** keep the outer envelope at
+−21…+24 d (matches the 30–45 d duration), but mark the **±10 d band around peak
+as the measured high-odds window** and let the UI distinguish the two. 🔵 rather
+than 🔵🟢 because the Wisconsin result is one site at 43°N and the MSU figure is
+a lab summary rather than a primary table.
+
+**Scope caution:** both are northern/tight-window populations. In Florida, an
+area's own conception spread runs **9–110 days (mean 45)**; a 21-day core does
+not exist there, and the phase model should widen or refuse alongside
+`peakBreedingDay`.
+
+### 🔴 The *internal* phase day counts (seeking −21…−10 d, chasing −10…−2 d, lockdown −2…+8 d)
+Our own partition of a continuous process. Ordering is doctrine; the internal
+boundaries are invented. **Re-searched across three passes; still no source**
+giving separate durations for seeking versus chasing. The only durations anyone
+measures are the envelope above and the two physiological ones — oestrus 24–30 h
+and the tending bond ~24 h — and neither sets a multi-day internal boundary.
+Everything except `SecondRut` and the outer envelope stays 🔴.
+
+**Queries (cumulative across passes 2–4):** `white-tailed deer rut seeking
+chasing tending lockdown duration days GPS collar breeding chronology phases` ·
+`National Deer Association lockdown phase myth GPS collar buck movement` ·
+`white-tailed deer estrous cycle length days estrus duration recurrence peer
+reviewed` · `buck movement rate peaks days before peak conception GPS collar
+chasing phase timing relative to breeding date` · `"Breeding Season and Movement
+Ecology of Male White-Tailed Deer in Southwest Wisconsin" peak movement date
+conception excursions`.
+
+### Rut-model parameters for other species — sourced, and all wrong for whitetail dates
+The transfer table further down grades species scope; these are the numbers
+behind its "Rut timing ❌❌❌" row, so the register does not have to assert it
+without a source.
+
+| Species | Rut / breeding peak | Gestation | Source class |
+|---|---|---|---|
+| Elk (*Cervus canadensis*) | rut mid-Sep – mid-Oct; **peak within 5–10 days of the autumnal equinox**; >70 % of cows bred by 15 Oct | ~245 ± 10 d; calving peak ~7 Jun | 🟡 agency / club summaries |
+| Mule deer (*O. hemionus*) | breeding peak **late Nov – mid-Dec** | ~204 d; births 16 Jun – 6 Jul, most in June | 🟡 agency / reference summaries |
+| White-tailed deer | DOY 314 ± 8 (≥ 37°N) | ~200 d | 🟢 (this section) |
+
+[Montana FWP — reproductive strategies (PDF)](https://fwp.mt.gov/binaries/content/assets/fwp/montana-outdoors/2016/reproductivestrategies.pdf) ·
+[TWRA — elk in Tennessee](https://www.tn.gov/twra/wildlife/mammals/large/elk.html) ·
+[Texas Tech NSRL — Mammals of Texas, *Odocoileus hemionus*](https://www.depts.ttu.edu/nsrl/mammals-of-texas-online-edition/Accounts_Artiodactyla/Odocoileus_hemionus.php)
+
+**DOY 314 is ~7 weeks wrong for elk.** The rut model must either refuse for
+non-whitetail species or carry a species parameter; it currently does neither
+and has no species input at all.
 
 ---
 

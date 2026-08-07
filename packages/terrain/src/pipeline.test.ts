@@ -111,6 +111,12 @@ describe('analyze', () => {
 
   it('moves bedding onto the sun-facing slope in cold weather (R22)', () => {
     const jan = new Date('2027-01-15T17:30:00Z');
+    // Shelter is held equal across the two faces on purpose. On a pair of
+    // opposing infinite planes, lee and shelter are perfectly confounded — the
+    // sun face on a south wind is also the face with nothing upwind of it — and
+    // shelter is a separate requirement that R22 did not make season-aware.
+    // Pinning it isolates the aspect term, which is what changed.
+    const flatShelter = new Float32Array(SIZE * SIZE).fill(0.8);
     const score = (gradeNorth: number, temperatureC?: number): number =>
       analyze(syntheticGrid(plane(0, gradeNorth), { size: SIZE, halo: 24 }), {
         layers: ['bedding'],
@@ -119,12 +125,16 @@ describe('analyze', () => {
         latitude: 40,
         longitude: -84,
         temperatureC,
+        bedding: { shelter: flatShelter },
       }).bedding![centerIndex(SIZE)];
 
     // Leeward-only: the north face wins, which in January is the deepest snow
-    // and the coldest cell on the property.
+    // and the coldest cell on the property (18.1 cm on the SE face against
+    // 42.0 cm on the NE face, Lang & Gates 1985).
     expect(score(-0.4)).toBeGreaterThan(score(0.4));
-    // Same wind, same terrain, -12 °C: the south face wins.
+    // Same wind, same terrain, -12 °C: the south face wins. This exercises the
+    // whole wiring — date and location resolved to a solar-noon sun position,
+    // insolation built, blend weight ramped — from a single temperature input.
     expect(score(0.4, -12)).toBeGreaterThan(score(-0.4, -12));
   });
 
