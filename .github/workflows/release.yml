@@ -160,6 +160,15 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.name }}
           cache-to: type=gha,scope=release-${{ matrix.name }},mode=max
 
+      - name: Lowercase the owner
+        # OCI repository names must be lowercase, and this account is
+        # "Overcastly-AI". docker/metadata-action lowercases for us, which is
+        # why the image builds work — but `helm push` and `cosign` take the
+        # reference verbatim, and both fail on the capitals:
+        #   invalid reference: invalid repository "Overcastly-AI/charts/ridgeline"
+        # GitHub expressions have no lowercase function, so it happens here.
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -172,7 +181,7 @@ jobs:
           # tag moves, which is worse than no signature because it looks like
           # tampering.
           cosign sign --yes \
-            "ghcr.io/${{ github.repository_owner }}/hunt-maps-${{ matrix.name }}@${DIGEST}"
+            "ghcr.io/${OWNER_LC}/hunt-maps-${{ matrix.name }}@${DIGEST}"
 
       - name: Summarise
         run: |
@@ -218,17 +227,30 @@ jobs:
             --set externalDatabase.url=postgresql://u:p@h:5432/d >/dev/null
           helm package ./deploy/helm/ridgeline --destination dist
 
+      - name: Attach to the release
+        # Before the registry push, deliberately. The GitHub release asset is
+        # the fallback distribution channel, and a registry problem should not
+        # also cost the .tgz — which is exactly what happened when the OCI push
+        # failed on a capitalised owner and this step never ran.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "v${{ needs.release.outputs.version }}" \
+            dist/ridgeline-${{ needs.release.outputs.version }}.tgz --clobber
+
+      - name: Lowercase the owner
+        # OCI repository names must be lowercase, and this account is
+        # "Overcastly-AI". docker/metadata-action lowercases for us, which is
+        # why the image builds work — but `helm push` and `cosign` take the
+        # reference verbatim, and both fail on the capitals:
+        #   invalid reference: invalid repository "Overcastly-AI/charts/ridgeline"
+        # GitHub expressions have no lowercase function, so it happens here.
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - name: Push the chart to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
           helm push \
             "dist/ridgeline-${{ needs.release.outputs.version }}.tgz" \
-            "oci://ghcr.io/${{ github.repository_owner }}/charts"
-
-      - name: Attach to the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "v${{ needs.release.outputs.version }}" \
-            dist/ridgeline-${{ needs.release.outputs.version }}.tgz --clobber
+            "oci://ghcr.io/${OWNER_LC}/charts"
