@@ -306,6 +306,25 @@ export const BEDDING_RING_SOFTNESS_DEG = 4;
 export const BEDDING_VRM_FULL_COVER = 0.06;
 
 /**
+ * Share of the *available* ring that must carry data before the surround term is
+ * allowed to speak. Dimensionless, 0..1.
+ *
+ * "Available" means directions that land inside the `SurfaceField` — not
+ * directions that fall off the tile, which is a border artefact and must never
+ * grey a cell (see `RingSlopeStats.missing`). Below this share the ring has not
+ * been measured, it has been guessed from whichever directions happened to have
+ * data, and the term reports unknown instead.
+ *
+ * 0.5 is not a free choice: `detectBenches` already requires `samples >= 8` of
+ * 16 to call the same geometry a bench, and the two layers are pinned to the same
+ * ring radius precisely so they cannot disagree about what a shelf is (see
+ * `DEFAULT_RING_RADIUS_CELLS`). Using a different quorum here would reintroduce
+ * that disagreement at the edge of every DEM void: bedding confidently scoring
+ * ground the bench layer had already declined to judge.
+ */
+export const BEDDING_RING_MIN_DATA_FRACTION = 0.5;
+
+/**
  * Above this air temperature the solar-aspect term is switched off entirely,
  * °C. Set at 5 °C so the season term is a **no-op through the entire early and
  * peak-rut season** — a Midwest October morning is 5–15 °C and the leeward
@@ -404,6 +423,8 @@ export interface BeddingOptions {
   ringSoftnessDeg?: number;
   /** Ring radius in cells; shared with `detectBenches` by default. */
   ringRadiusCells?: number;
+  /** Share of the in-grid ring that must carry data; see the constant. */
+  ringMinDataFraction?: number;
   /** VRM value at which the cover term saturates. */
   vrmFullCover?: number;
   /** Cold-season aspect inputs. Omit for leeward-only behaviour. */
@@ -426,9 +447,35 @@ export interface BeddingOptions {
  *  4. **Security cover** — dispersion of surface orientation (VRM), which is
  *     independent of slope by construction.
  *
- * Units: slopes in degrees; output dimensionless 0..1; `NaN` where the DEM has
- * no data. The ring term reads `SurfaceField` out to `ringRadiusCells`, and the
+ * Units: slopes in degrees; output dimensionless 0..1; `NaN` where the answer is
+ * unknown. The ring term reads `SurfaceField` out to `ringRadiusCells`, and the
  * `ringSlopeStats` edge caveat applies at the tile border.
+ *
+ * ## Unknown is a third answer, not a low one (`R30`, `R40`)
+ *
+ * Because the terms are multiplicative *requirements*, every one of them has a
+ * floor — a cell cannot lose everything to one bad factor. That is right for a
+ * measured input and catastrophic for a missing one: an unreadable input clamped
+ * to zero lands on its term's floor and the cell comes back with a confident
+ * **low** score, which a hunter reads as "checked, and it is not bedding".
+ * Ground the engine cannot see must read as *unseen*, so a `NaN` in any input
+ * makes the whole cell `NaN` and the renderer leaves it blank:
+ *
+ * | input           | old value on unknown | scored as | now |
+ * | --- | --- | --- | --- |
+ * | `shelter`       | `clamp01(NaN)` → 0   | 0.25 floor, "fully exposed" | `NaN` |
+ * | `vectorRuggedness` | `clamp01(NaN)` → 0 | 0.40 floor, "smooth, no cover" | `NaN` |
+ * | `season.insolation` | `clamp01(NaN)` → 0 | "no sun at all" | `NaN` |
+ * | ring (mostly void) | dropped silently  | measured from whatever answered | `NaN` |
+ *
+ * The `shelter` row is `R30`; the other three are `R40`, which is the same
+ * defect one term over. The aspect and pad terms carry no such hole and need no
+ * guard beyond the slope test at the top of the loop — a flat cell's 0.5 lee is
+ * a real answer about real ground, not a swallowed unknown.
+ *
+ * Wrong-length input arrays **throw** rather than reading `undefined` and folding
+ * it onto a floor, which is the same failure wearing a caller-error hat: it
+ * would have painted a confident low score across an entire tile.
  */
 export function beddingLikelihood(
   surface: SurfaceField,
@@ -440,6 +487,7 @@ export function beddingLikelihood(
   const ringMin = options.ringMinSlopeDeg ?? BEDDING_RING_MIN_SLOPE_DEG;
   const ringSoft = Math.max(1e-6, options.ringSoftnessDeg ?? BEDDING_RING_SOFTNESS_DEG);
   const ringRadius = Math.max(2, Math.round(options.ringRadiusCells ?? DEFAULT_RING_RADIUS_CELLS));
+  const ringMinData = clamp01(options.ringMinDataFraction ?? BEDDING_RING_MIN_DATA_FRACTION);
   const vrmFull = Math.max(1e-9, options.vrmFullCover ?? BEDDING_VRM_FULL_COVER);
   const exposure = windExposure(surface, options.windFromDeg);
   const { width, height } = surface;
@@ -453,17 +501,23 @@ export function beddingLikelihood(
     ? coldBlendWeight(options.season.temperatureC, options.season)
     : 0;
   const insolation = solarWeight > 0 ? options.season?.insolation : undefined;
-  if (insolation && insolation.length !== n) {
-    throw new Error(
-      `beddingLikelihood: season.insolation has length ${insolation.length}, expected ${n}`,
-    );
-  }
   const leeWeight = 1 - solarWeight;
+
+  // Hoisted out of the loop for two reasons. One is the `R30` inlining lesson —
+  // a property load per cell is ~65k loads per tile that V8 will not fold away.
+  // The other is correctness: reading `options.shelter[i]` on a short array
+  // yields `undefined`, `Number.isNaN(undefined)` is false, and `clamp01`
+  // turns it into the term's floor, so a caller passing a mismatched field used
+  // to get a confident low score painted over the entire tile with no error at
+  // all. Length is therefore checked once, up front, and it throws.
+  const shelterField = requireLength(options.shelter, n, 'shelter');
+  const coverField = requireLength(options.vectorRuggedness, n, 'vectorRuggedness');
+  requireLength(insolation, n, 'season.insolation');
 
   const out = new Float32Array(n);
   // Reused across cells — 65k short-lived objects per tile is real GC pressure
   // in a render loop.
-  const ring: RingSlopeStats = { samples: 0, steepCount: 0, meanSlopeDeg: NaN };
+  const ring: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
@@ -473,35 +527,17 @@ export function beddingLikelihood(
         continue;
       }
 
-      // Leeward term: exposure of -1 (fully leeward) → 1, +1 (windward) → 0.
-      // A flat cell has no aspect, so `windExposure` returns 0 and this lands on
-      // 0.5 — neither leeward nor windward, which is the honest answer.
-      const lee = (1 - exposure[i]) / 2;
-      const aspectTerm = insolation ? leeWeight * lee + solarWeight * clamp01(insolation[i]) : lee;
+      // ---- Unknown-propagation gate -------------------------------------
+      // Every per-cell array input is checked here, before any work, because a
+      // `NaN` in any one of them makes the product unknown and there is no point
+      // paying for a 16-direction ring scan to discard the answer. Ordered
+      // cheapest-first for the same reason.
 
-      // Pad term: monotone decreasing, half at `padHalfMax`. Never peaks in the
-      // interior — that shape is what Rowland et al. 2018 measured against.
-      const padTerm = 1 / (1 + (slope / padHalfMax) * (slope / padHalfMax));
-
-      // Ring term: is that pad embedded in steep ground, or is it a field?
-      // Falls back to the cell's own slope when the ring is entirely outside the
-      // tile, which keeps a uniform hillside self-consistent at the border
-      // instead of collapsing the term to "no surround".
-      ringSlopeStats(surface, x, y, ringRadius, ringMin, 16, ring);
-      const ringSlope = ring.samples > 0 ? ring.meanSlopeDeg : slope;
-      const ringTerm = 1 / (1 + Math.exp(-(ringSlope - ringMin) / ringSoft));
-
-      // Shelter term: without an upwind obstruction, "leeward" is meaningless.
-      //
-      // A `NaN` here means `terrainShelter` ran out of upwind DEM, not that the
-      // cell is unsheltered, and the two must not be conflated: `clamp01` would
-      // fold unknown onto the 0.25 floor and hand back a confident low score for
-      // ground the engine cannot see (`R30`). Unknown input, unknown output —
-      // every term of this product is a requirement, so one unknown factor makes
-      // the whole cell unknown.
+      // Shelter: `NaN` means `terrainShelter` ran out of upwind DEM, not that
+      // the cell is unsheltered (`R30`).
       let shelterTerm = 1;
-      if (options.shelter) {
-        const s = options.shelter[i];
+      if (shelterField) {
+        const s = shelterField[i];
         if (Number.isNaN(s)) {
           out[i] = NaN;
           continue;
@@ -509,10 +545,75 @@ export function beddingLikelihood(
         shelterTerm = 0.25 + 0.75 * clamp01(s);
       }
 
-      // Cover term: orientation dispersion, deliberately slope-independent.
-      const coverTerm = options.vectorRuggedness
-        ? 0.4 + 0.6 * clamp01(options.vectorRuggedness[i] / vrmFull)
-        : 1;
+      // Cover: `NaN` means `computeVectorRuggedness` had no complete window in
+      // range — a DEM void, a lake, a neighbour tile that never arrived — not
+      // that the ground is smooth and open (`R40`). Clamping it folded unknown
+      // onto the 0.4 floor, which is bit-identical to the score a *measured*
+      // billiard-table sidehill gets, so the map said "looked at it, no cover
+      // here" about ground it had never seen.
+      let coverTerm = 1;
+      if (coverField) {
+        const c = coverField[i];
+        if (Number.isNaN(c)) {
+          out[i] = NaN;
+          continue;
+        }
+        // Orientation dispersion, deliberately slope-independent.
+        coverTerm = 0.4 + 0.6 * clamp01(c / vrmFull);
+      }
+
+      // Insolation: `NaN` means no incidence could be computed for this cell.
+      // Clamping it to 0 claims "this face gets no sun", which in the cold
+      // branch is the strongest single downweight the composite has — and it
+      // would be applied hardest exactly when the solar term matters most.
+      let solarTerm = 0;
+      if (insolation) {
+        const sun = insolation[i];
+        if (Number.isNaN(sun)) {
+          out[i] = NaN;
+          continue;
+        }
+        solarTerm = clamp01(sun);
+      }
+
+      // ---- Terms ---------------------------------------------------------
+
+      // Leeward term: exposure of -1 (fully leeward) → 1, +1 (windward) → 0.
+      // A flat cell has no aspect, so `windExposure` returns 0 and this lands on
+      // 0.5 — neither leeward nor windward, which is the honest answer.
+      const lee = (1 - exposure[i]) / 2;
+      const aspectTerm = insolation ? leeWeight * lee + solarWeight * solarTerm : lee;
+
+      // Pad term: monotone decreasing, half at `padHalfMax`. Never peaks in the
+      // interior — that shape is what Rowland et al. 2018 measured against.
+      const padTerm = 1 / (1 + (slope / padHalfMax) * (slope / padHalfMax));
+
+      // Ring term: is that pad embedded in steep ground, or is it a field?
+      ringSlopeStats(surface, x, y, ringRadius, ringMin, 16, ring);
+      // A ring that is mostly no-data has not been measured. Falling back to the
+      // surviving directions would let one readable direction out of sixteen
+      // decide whether a cell is "embedded in steep ground" — the same swallowed
+      // unknown as the cover term, arriving through the surround instead
+      // (`R40`). Directions that fell *outside* the tile are excluded from this
+      // test on purpose: they are a `SurfaceField` border artefact, and greying
+      // on them would paint a ring-radius grey seam around every tile.
+      //
+      // `ring.missing > 0` is tested first so a fully-sampled ring — every cell
+      // of a well-covered tile — pays one compare and nothing else. This loop
+      // runs 65k times per tile inside a render budget.
+      if (
+        ring.missing > 0 &&
+        ring.samples < (ring.samples + ring.missing) * ringMinData
+      ) {
+        out[i] = NaN;
+        continue;
+      }
+      // With no in-grid direction at all (`samples` and `missing` both 0, i.e. a
+      // grid smaller than the ring) fall back to the cell's own slope, which
+      // keeps a uniform hillside self-consistent at the border instead of
+      // collapsing the term.
+      const ringSlope = ring.samples > 0 ? ring.meanSlopeDeg : slope;
+      const ringTerm = 1 / (1 + Math.exp(-(ringSlope - ringMin) / ringSoft));
 
       out[i] = clamp01(aspectTerm * padTerm * ringTerm * shelterTerm * coverTerm);
     }
@@ -522,4 +623,24 @@ export function beddingLikelihood(
 
 function clamp01(v: number): number {
   return !Number.isFinite(v) ? 0 : v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/**
+ * Assert a per-cell input covers the whole field, and hand it back narrowed.
+ *
+ * Throwing is the point. The alternative — indexing past the end and getting
+ * `undefined` — is silent, survives every `Number.isNaN` guard, and lands on the
+ * term's floor, so the tile renders as uniformly poor bedding rather than as an
+ * error anyone can see. A mismatched field is a caller bug, and a caller bug
+ * that paints a plausible map is the worst kind this engine can ship.
+ */
+function requireLength(
+  field: Float32Array | undefined,
+  n: number,
+  name: string,
+): Float32Array | undefined {
+  if (field && field.length !== n) {
+    throw new Error(`beddingLikelihood: ${name} has length ${field.length}, expected ${n}`);
+  }
+  return field;
 }

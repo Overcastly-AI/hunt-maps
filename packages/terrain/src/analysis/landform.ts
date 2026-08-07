@@ -427,7 +427,7 @@ export function detectBenches(
   const { width, height } = grid;
   const flag = new Uint8Array(width * height);
   // One reused stats object: this is a per-cell inner loop in a render budget.
-  const r: RingSlopeStats = { samples: 0, steepCount: 0, meanSlopeDeg: NaN };
+  const r: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -459,6 +459,26 @@ export const DEFAULT_RING_RADIUS_CELLS = 8;
 export interface RingSlopeStats {
   /** Ring directions that landed inside the grid and had data. */
   samples: number;
+  /**
+   * Ring directions that landed **inside** the grid but carried no data.
+   *
+   * Reported separately from the directions that fell outside the grid because
+   * the two mean opposite things and callers must not conflate them (`R40`):
+   *
+   *  - *outside the grid* is a tile-border artefact of `SurfaceField` covering
+   *    only the interior. The ground is there, it is simply not in this array,
+   *    and abstaining on it would grey a `radiusCells`-wide border around every
+   *    tile — a visible grid of seams across the whole layer.
+   *  - *inside the grid with no data* is ground the engine genuinely cannot see:
+   *    a DEM void, a lake, a neighbour tile that 404'd. A ring characterised from
+   *    the two directions that happen to have data is not a measurement of the
+   *    surround, and reporting it as one is how "unknown" becomes a confident
+   *    number.
+   *
+   * `samples + missing` is therefore the size of the ring actually available to
+   * speak about, and `samples / (samples + missing)` is how much of it answered.
+   */
+  missing: number;
   /** How many of those were at or above the steep threshold. */
   steepCount: number;
   /** Mean slope over the sampled directions, degrees; NaN when `samples` is 0. */
@@ -478,6 +498,11 @@ export interface RingSlopeStats {
  * fewer directions. That is a real (pre-existing) limitation shared by every
  * consumer, and it is why callers get `samples` back and decide for themselves
  * whether they have enough to speak.
+ *
+ * **No-data behaviour.** A direction that lands inside the grid on a cell with
+ * no slope is counted in `missing`, not silently forgotten. See the field's own
+ * note: without that count a caller cannot tell "I saw two of sixteen directions
+ * because fourteen are off the tile" from "…because fourteen are a lake".
  */
 export function ringSlopeStats(
   surface: SurfaceField,
@@ -486,11 +511,12 @@ export function ringSlopeStats(
   radiusCells: number,
   steepDeg: number,
   directions = 16,
-  out: RingSlopeStats = { samples: 0, steepCount: 0, meanSlopeDeg: NaN },
+  out: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN },
 ): RingSlopeStats {
   const { width, height, slope } = surface;
   const offsets = ringOffsets(radiusCells, directions);
   let samples = 0;
+  let missing = 0;
   let steepCount = 0;
   let sum = 0;
   for (let k = 0; k < directions; k++) {
@@ -498,12 +524,16 @@ export function ringSlopeStats(
     const sy = y + offsets[k * 2 + 1];
     if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
     const rs = slope[sy * width + sx];
-    if (!Number.isFinite(rs)) continue;
+    if (!Number.isFinite(rs)) {
+      missing++;
+      continue;
+    }
     samples++;
     sum += rs;
     if (rs >= steepDeg) steepCount++;
   }
   out.samples = samples;
+  out.missing = missing;
   out.steepCount = steepCount;
   out.meanSlopeDeg = samples > 0 ? sum / samples : NaN;
   return out;

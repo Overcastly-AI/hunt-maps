@@ -33,10 +33,19 @@ import {
 } from './solar.js';
 import { DEFAULT_SKY_VIEW_RADIUS_CELLS, skyViewFactor } from './shading.js';
 import {
+  BEDDING_RING_MIN_DATA_FRACTION,
+  BEDDING_VRM_FULL_COVER,
+  beddingLikelihood,
   DEFAULT_SHELTER_RADIUS_CELLS,
   SHELTER_FULL_HORIZON_DEG,
   terrainShelter,
 } from './wind.js';
+import { computeSurface, computeVectorRuggedness } from './surface.js';
+import {
+  DEFAULT_RING_RADIUS_CELLS,
+  ringSlopeStats,
+  type RingSlopeStats,
+} from './landform.js';
 import { emptyRingScan, emptyScan, scanHorizon, scanHorizonRing } from './horizon.js';
 import { isElevation, NODATA } from '../dem/encoding.js';
 import { assembleGrid, HeightGrid } from '../dem/grid.js';
@@ -519,5 +528,329 @@ describe('beddingLikelihood does not fold unknown shelter into "unsheltered" (R3
     const inland = 25 * SIZE + 15;
     expect(Number.isNaN(r.bedding![inland])).toBe(false);
     expect(r.bedding![inland]).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R40 — the same defect, one term over
+// ---------------------------------------------------------------------------
+
+/**
+ * `R30` propagated unknown out of the *shelter* term and left the other four
+ * alone. The cover term still ran `clamp01(vectorRuggedness[i])`, which maps a
+ * `NaN` to 0 and lands on the 0.4 cover floor, so ground with no elevation under
+ * it came back with a **confident low** bedding score — the exact reading a
+ * hunter takes as "checked, and it is not bedding".
+ *
+ * Measured on the old code, at one cell, one term at a time:
+ *
+ *   | unknown input       | old score | old meaning                     | now |
+ *   | ------------------- | --------- | ------------------------------- | --- |
+ *   | `vectorRuggedness`  | 0.0780    | identical to *measured* VRM = 0  | NaN |
+ *   | `season.insolation` | 0.0488    | "this face gets no sun at all"   | NaN |
+ *   | ring mostly no-data | 0.0728    | surround guessed from 2 of 16    | NaN |
+ *
+ * The first row is the sharpest statement of the bug: an unknown cover scored
+ * *bit-identically* to a measured billiard-table sidehill, so nothing downstream
+ * — not the ramp, not a saved filter, not the user — could tell them apart.
+ */
+describe('beddingLikelihood does not fold unknown cover into "no cover" (R40)', () => {
+  const SURF = () => computeSurface(build(plane(0, grade(15))));
+  const N = SIZE * SIZE;
+
+  it('returns NaN where VRM is unknown, not the 0.4 floor', () => {
+    // Old code: 0.0780.
+    const cover = new Float32Array(N).fill(BEDDING_VRM_FULL_COVER);
+    cover[CENTRE] = NaN;
+    const bed = beddingLikelihood(SURF(), { windFromDeg: 0, vectorRuggedness: cover });
+    expect(Number.isNaN(bed[CENTRE])).toBe(true);
+    // The neighbour, with cover actually measured, still scores normally: the
+    // guard must grey the unseen cell, not the layer.
+    expect(bed[CENTRE + 1]).toBeGreaterThan(0);
+  });
+
+  it('no longer scores unknown cover identically to measured-smooth cover', () => {
+    // This is the assertion that could not have been written before. On the old
+    // code both sides were 0.07804825901985168 — the same float, to the bit.
+    const unknown = new Float32Array(N).fill(BEDDING_VRM_FULL_COVER);
+    unknown[CENTRE] = NaN;
+    const smooth = new Float32Array(N).fill(BEDDING_VRM_FULL_COVER);
+    smooth[CENTRE] = 0;
+
+    const surface = SURF();
+    const a = beddingLikelihood(surface, { windFromDeg: 0, vectorRuggedness: unknown })[CENTRE];
+    const b = beddingLikelihood(surface, { windFromDeg: 0, vectorRuggedness: smooth })[CENTRE];
+
+    expect(a).not.toBe(b);
+    expect(Number.isNaN(a), 'unknown cover').toBe(true);
+    // A genuinely smooth face is a real, low, *definite* answer and must keep it.
+    expect(Number.isNaN(b), 'measured-smooth cover').toBe(false);
+    expect(b).toBeGreaterThan(0);
+  });
+
+  it('fires on a grid where computeVectorRuggedness really does return NaN', () => {
+    // Not a hand-fed array: a checkerboard of no-data, which is what a decimated
+    // or partially-corrupt LiDAR return looks like. No 3x3 window anywhere is
+    // complete, so VRM has nothing to integrate and reports NaN — while the
+    // 16 ring directions at r=8 all have even (dx+dy), so they land on the same
+    // parity as the centre and the ring is fully sampled. That combination is
+    // what isolates the cover guard from the ring guard below; no natural void
+    // shape separates them as cleanly.
+    const g = build(plane(0, grade(15)));
+    for (let y = -HALO; y < SIZE + HALO; y++) {
+      for (let x = -HALO; x < SIZE + HALO; x++) {
+        if (((x + y) & 1) === 1) g.set(x, y, NODATA);
+      }
+    }
+    const surface = computeSurface(g);
+    const vrm = computeVectorRuggedness(g);
+
+    // Preconditions: the cell has a slope, its ring is intact, its cover is not.
+    expect(Number.isFinite(surface.slope[CENTRE]), 'slope is definite').toBe(true);
+    expect(Number.isNaN(vrm[CENTRE]), 'VRM is unknown').toBe(true);
+    const ring: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
+    ringSlopeStats(surface, 15, 15, DEFAULT_RING_RADIUS_CELLS, 15, 16, ring);
+    expect(ring.missing, 'ring is fully sampled, so only cover can be to blame').toBe(0);
+
+    const bed = beddingLikelihood(surface, { windFromDeg: 180, vectorRuggedness: vrm });
+    expect(Number.isNaN(bed[CENTRE])).toBe(true);
+  });
+
+  it('greys a cell whose only elevation is its own, rather than calling it a flat pad', () => {
+    // A lone data cell in a sea of NODATA. Horn's kernel differences the
+    // sentinel against itself, so the terms cancel and the cell reports slope
+    // **0.0°** — a perfect pad, the maximum of the pad term — on a cell with no
+    // measurable surroundings at all. Old code scored it; it must not.
+    const g = HeightGrid.empty(SIZE, SIZE, HALO, CELL, 40, -83);
+    g.set(15, 15, 500);
+    const surface = computeSurface(g);
+    expect(surface.slope[CENTRE], 'the trap: NODATA differenced against itself').toBe(0);
+
+    const bed = beddingLikelihood(surface, {
+      windFromDeg: 0,
+      vectorRuggedness: computeVectorRuggedness(g),
+    });
+    expect(Number.isNaN(bed[CENTRE])).toBe(true);
+  });
+});
+
+describe('beddingLikelihood does not guess the surround from a mostly-void ring (R40)', () => {
+  /**
+   * A one-cell-wide strip of real terrain in a sea of no-data — the shape a
+   * partially written tile, or the edge of a half-downloaded offline region,
+   * actually leaves behind. Two of the sixteen ring directions have data.
+   */
+  function strip(): HeightGrid {
+    const g = HeightGrid.empty(SIZE, SIZE, HALO, CELL, 40, -83);
+    for (let y = -HALO; y < SIZE + HALO; y++) g.set(15, y, 500 + y * 2);
+    return g;
+  }
+
+  it('returns NaN when most of the in-grid ring is no-data', () => {
+    // Old code: 0.0728, built from a "surround" of 2 sampled directions out of
+    // 16 — a confident statement that this cell is not embedded in steep ground,
+    // made from ground it never read. No cover or shelter field here, so the
+    // ring is the only term that can be responsible.
+    const surface = computeSurface(strip());
+    const ring: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
+    ringSlopeStats(surface, 15, 15, DEFAULT_RING_RADIUS_CELLS, 15, 16, ring);
+    expect(ring.samples).toBe(2);
+    expect(ring.missing).toBe(14);
+
+    const bed = beddingLikelihood(surface, { windFromDeg: 180 })[CENTRE];
+    expect(Number.isNaN(bed)).toBe(true);
+  });
+
+  it('keeps a definite answer when half the in-grid ring answered', () => {
+    // The quorum is exactly `detectBenches`' own: at least half the ring. Pinned
+    // so the two layers cannot drift apart and start disagreeing about the same
+    // shelf at the edge of the same void.
+    expect(BEDDING_RING_MIN_DATA_FRACTION).toBe(0.5);
+    const g = build(plane(0, grade(25)));
+    // Void everything north of interior row 12; the ring at (15,13) then has 9
+    // of 16 directions left, all to the south.
+    for (let y = -HALO; y < 12; y++) {
+      for (let x = -HALO; x < SIZE + HALO; x++) g.set(x, y, NODATA);
+    }
+    const surface = computeSurface(g);
+    const ring: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
+    ringSlopeStats(surface, 15, 13, DEFAULT_RING_RADIUS_CELLS, 15, 16, ring);
+    expect([ring.samples, ring.missing]).toEqual([9, 7]);
+
+    const bed = beddingLikelihood(surface, { windFromDeg: 0 })[13 * SIZE + 15];
+    expect(Number.isNaN(bed)).toBe(false);
+  });
+
+  it('does NOT grey the tile border, where the ring falls outside the field', () => {
+    // The failure mode the quorum must not introduce. Directions that land off
+    // the tile are a `SurfaceField` artefact, not missing ground: counting them
+    // as unknown would paint a ring-radius grey frame around every tile, which
+    // is the seam grid this package exists to avoid. Every cell of a clean grid
+    // must therefore keep a definite score, corners included.
+    const bed = beddingLikelihood(computeSurface(build(plane(0, grade(15)))), {
+      windFromDeg: 180,
+    });
+    for (let i = 0; i < bed.length; i++) {
+      expect(Number.isNaN(bed[i]), `cell ${i % SIZE},${Math.floor(i / SIZE)}`).toBe(false);
+    }
+  });
+
+  it('still falls back to the cell slope when the whole ring is off a tiny grid', () => {
+    // `available === 0` is the documented border case, not an unknown one.
+    const tiny = computeSurface(syntheticGrid(plane(0, grade(20)), { size: 5, halo: 2, cellSize: CELL }));
+    const bed = beddingLikelihood(tiny, { windFromDeg: 180, ringRadiusCells: 8 });
+    for (const v of bed) expect(Number.isNaN(v)).toBe(false);
+  });
+});
+
+describe('beddingLikelihood does not fold unknown insolation into "no sun" (R40)', () => {
+  it('returns NaN where the cold-season insolation is unknown', () => {
+    // Old code: 0.0488 against a neighbour's 0.1659 — a 3.4x confident penalty,
+    // applied hardest at the temperature where the solar term matters most. The
+    // shipped `analyze()` path derives insolation from the same surface, so this
+    // is unreachable there today; it is reachable through `BeddingSeasonOptions`,
+    // which is public API and takes any field the caller has.
+    const surface = computeSurface(build(plane(0, grade(15))));
+    const insolation = new Float32Array(SIZE * SIZE).fill(0.8);
+    insolation[CENTRE] = NaN;
+    const bed = beddingLikelihood(surface, {
+      windFromDeg: 0,
+      season: { temperatureC: -10, insolation },
+    });
+    expect(Number.isNaN(bed[CENTRE])).toBe(true);
+    expect(bed[CENTRE + 1]).toBeGreaterThan(0);
+  });
+
+  it('is not consulted at all above the cold onset, so a NaN there cannot grey anything', () => {
+    // The warm path must stay bit-identical to leeward-only (see `coldBlendWeight`).
+    const surface = computeSurface(build(plane(0, grade(15))));
+    const insolation = new Float32Array(SIZE * SIZE).fill(NaN);
+    const warm = beddingLikelihood(surface, {
+      windFromDeg: 0,
+      season: { temperatureC: 12, insolation },
+    });
+    const leeOnly = beddingLikelihood(surface, { windFromDeg: 0 });
+    expect(Array.from(warm)).toEqual(Array.from(leeOnly));
+  });
+});
+
+describe('beddingLikelihood refuses a mismatched input field (R40)', () => {
+  // Reading past the end yields `undefined`, which survives `Number.isNaN` and
+  // then lands on the term's floor: the old code answered 0.0488 for a bogus
+  // shelter field and 0.0780 for a bogus cover field, for every cell of the
+  // tile, silently. A caller bug that paints a plausible map is worse than one
+  // that throws.
+  const surface = () => computeSurface(build(plane(0, grade(15))));
+
+  it('throws on a short shelter field instead of scoring the 0.25 floor', () => {
+    expect(() =>
+      beddingLikelihood(surface(), { windFromDeg: 0, shelter: new Float32Array(4) }),
+    ).toThrow(/shelter has length 4, expected 961/);
+  });
+
+  it('throws on a short cover field instead of scoring the 0.4 floor', () => {
+    expect(() =>
+      beddingLikelihood(surface(), { windFromDeg: 0, vectorRuggedness: new Float32Array(4) }),
+    ).toThrow(/vectorRuggedness has length 4, expected 961/);
+  });
+
+  it('still throws on a short insolation field', () => {
+    expect(() =>
+      beddingLikelihood(surface(), {
+        windFromDeg: 0,
+        season: { temperatureC: -10, insolation: new Float32Array(4) },
+      }),
+    ).toThrow(/season.insolation has length 4, expected 961/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The five terms must agree — the R30 agreement test, extended (R40)
+// ---------------------------------------------------------------------------
+
+describe('every term of beddingLikelihood treats unknown the same way (R40)', () => {
+  const N = SIZE * SIZE;
+  const surface = () => computeSurface(build(plane(0, grade(15))));
+
+  it('one grid, one cell: each input unknown in turn gives NaN, and none gives a floor', () => {
+    // The composite is a product of five requirements. If one term abstains and
+    // another answers, the layer is inconsistent with itself — a cell could be
+    // greyed for unreadable shelter and, one wind direction later, scored 0.078
+    // for equally unreadable cover. Same grid, same cell, three inputs.
+    const s = surface();
+    const good = beddingLikelihood(s, {
+      windFromDeg: 0,
+      shelter: new Float32Array(N).fill(0.5),
+      vectorRuggedness: new Float32Array(N).fill(BEDDING_VRM_FULL_COVER),
+      season: { temperatureC: -10, insolation: new Float32Array(N).fill(0.8) },
+    })[CENTRE];
+    expect(Number.isNaN(good), 'baseline with everything known').toBe(false);
+    expect(good).toBeGreaterThan(0);
+
+    const withNaN = (which: 'shelter' | 'cover' | 'insolation'): number => {
+      const shelter = new Float32Array(N).fill(0.5);
+      const cover = new Float32Array(N).fill(BEDDING_VRM_FULL_COVER);
+      const insolation = new Float32Array(N).fill(0.8);
+      if (which === 'shelter') shelter[CENTRE] = NaN;
+      if (which === 'cover') cover[CENTRE] = NaN;
+      if (which === 'insolation') insolation[CENTRE] = NaN;
+      return beddingLikelihood(s, {
+        windFromDeg: 0,
+        shelter,
+        vectorRuggedness: cover,
+        season: { temperatureC: -10, insolation },
+      })[CENTRE];
+    };
+
+    for (const which of ['shelter', 'cover', 'insolation'] as const) {
+      expect(Number.isNaN(withNaN(which)), which).toBe(true);
+    }
+  });
+
+  it('and none of them silently reproduces the score of its own floor', () => {
+    // The floors, stated as the numbers they are: an unknown input must never
+    // land on the value a *measured* worst case would produce, because then no
+    // consumer can distinguish "bad ground" from "no data".
+    const s = surface();
+    const shelterFloor = beddingLikelihood(s, {
+      windFromDeg: 0,
+      shelter: new Float32Array(N), // measured 0 → the 0.25 floor
+    })[CENTRE];
+    const coverFloor = beddingLikelihood(s, {
+      windFromDeg: 0,
+      vectorRuggedness: new Float32Array(N), // measured 0 → the 0.4 floor
+    })[CENTRE];
+    expect(shelterFloor).toBeGreaterThan(0);
+    expect(coverFloor).toBeGreaterThan(0);
+
+    const unknownShelter = new Float32Array(N);
+    unknownShelter[CENTRE] = NaN;
+    const unknownCover = new Float32Array(N);
+    unknownCover[CENTRE] = NaN;
+    expect(
+      beddingLikelihood(s, { windFromDeg: 0, shelter: unknownShelter })[CENTRE],
+    ).not.toBe(shelterFloor);
+    expect(
+      beddingLikelihood(s, { windFromDeg: 0, vectorRuggedness: unknownCover })[CENTRE],
+    ).not.toBe(coverFloor);
+  });
+
+  it('costs nothing where the data is complete', () => {
+    // The whole fix must be invisible on a well-covered tile: no new NaNs, and
+    // the same numbers the layer produced before it. A guard that greys real
+    // ground is its own defect.
+    const s = surface();
+    const bed = beddingLikelihood(s, {
+      windFromDeg: 0,
+      shelter: new Float32Array(N).fill(1),
+      vectorRuggedness: new Float32Array(N).fill(BEDDING_VRM_FULL_COVER),
+    });
+    for (const v of bed) expect(Number.isNaN(v)).toBe(false);
+    // Closed form on a uniform 15° plane that rises to the north, wind out of
+    // the north, everything known: the plane faces south, i.e. straight
+    // downwind, so lee = 1; pad = 1/(1+(15/12)²); ring = logistic(15 − 15) =
+    // 0.5; shelter = 0.25 + 0.75·1 = 1; cover = 0.4 + 0.6·1 = 1.
+    const pad = 1 / (1 + (15 / 12) ** 2);
+    expect(bed[CENTRE]).toBeCloseTo(1 * pad * 0.5 * 1 * 1, 3);
   });
 });
