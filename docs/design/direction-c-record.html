@@ -71,15 +71,18 @@ body{margin:0;background:#3B3D36;color:#1E211C}
   --collar:#D8D7CC;        /* the sheet's margin, one step down              */
   --collar2:#CFCEC2;
   --ink:#1E211C;           /* PROCESS BLACK, olive undertone                  */
-  --ink2:#5B6154;
-  --ink3:#62675B;
+  --ink2:#434840;
+  --ink3:#545950;
   --rule:#A7AA9C;
   --rule2:#BEC0B3;
   --contour:#8A6236;       /* CONTOUR BROWN — the warmth, in the map plate    */
   --water:#4E7A93;
-  --woodland:#6F8C57;      /* semantic: HELD / COMPLETE                       */
-  --ochre:#A8842B;         /* semantic: PARTIAL / ATTENTION                   */
-  --query:#B0361F;         /* semantic: ABSENT / ASSUMED / QUERIED            */
+  --woodland:#6F8C57;      /* semantic: HELD / COMPLETE (fill)                */
+  --woodland-ink:#3F5729;  /* the same meaning, at text luminance             */
+  --ochre:#A8842B;         /* semantic: PARTIAL / ATTENTION (fill)            */
+  --ochre-ink:#5C4506;
+  --query:#B0361F;         /* semantic: ABSENT / ASSUMED / QUERIED (marks)    */
+  --query-ink:#8B2411;
   --revision:#5E4A8C;      /* ACCENT: newer than the sheet, not field-checked */
   --toothblend:multiply; --toothop:.055;
 }
@@ -93,15 +96,18 @@ body{margin:0;background:#3B3D36;color:#1E211C}
   --collar:#191110;
   --collar2:#221614;
   --ink:#D9B48F;
-  --ink2:#9C7458;
-  --ink3:#9A7A63;
+  --ink2:#B08768;
+  --ink3:#AC8D73;
   --rule:#42291F;
   --rule2:#2E1D16;
   --contour:#8A5734;
   --water:#6B6A62;
   --woodland:#8A9668;
+  --woodland-ink:#9BA878;
   --ochre:#C39A46;
+  --ochre-ink:#D1A952;
   --query:#D9603C;
+  --query-ink:#E97F5F;
   --revision:#B98BA6;      /* under a red lamp purple collapses toward pink — */
                            /* which is exactly why grade is carried by LINE   */
                            /* convention and hue is only ever redundant.      */
@@ -132,7 +138,7 @@ body{margin:0;background:#3B3D36;color:#1E211C}
 .grade--inferred{border-bottom-style:dashed;border-bottom-color:var(--ink2)}
 .grade--doctrine{border-bottom-style:dotted;border-bottom-color:var(--ink2)}
 .grade--assumed{border-bottom-style:dotted;border-bottom-color:var(--query)}
-.qmark{font-family:var(--press);color:var(--query);font-size:var(--t12);font-style:italic}
+.qmark{font-family:var(--press);color:var(--query-ink);font-size:var(--t12);font-style:italic}
 
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;
   text-align:left}
@@ -182,7 +188,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 .sec{padding:34px 40px}
 .sec--tight{padding:24px 40px}
 .kicker{font-family:var(--hand);text-transform:uppercase;letter-spacing:.22em;
-  font-size:var(--t10);font-weight:700;color:var(--query)}
+  font-size:var(--t10);font-weight:700;color:var(--query-ink)}
 h1{font-family:var(--press);font-size:var(--t36);line-height:1.06;margin:.28em 0 0;
   font-weight:700;letter-spacing:.01em;text-transform:uppercase}
 h1 small{display:block;font-size:var(--t15);letter-spacing:.18em;font-weight:400;
@@ -211,7 +217,7 @@ p{font-family:var(--hand);font-size:var(--t15);line-height:1.6;margin:0 0 12px;
 
 .spec{border-bottom:1px solid var(--rule2);padding:10px 0}
 .spec .lab{font-family:var(--hand);font-size:var(--t10);text-transform:uppercase;
-  letter-spacing:.14em;color:var(--query);font-weight:700}
+  letter-spacing:.14em;color:var(--query-ink);font-weight:700}
 .spec .why{font-family:var(--press);font-style:italic;font-size:var(--t11);
   color:var(--ink2);line-height:1.4;margin-top:3px}
 
@@ -290,13 +296,13 @@ p{font-family:var(--hand);font-size:var(--t15);line-height:1.6;margin:0 0 12px;
 .basisstrip>.bs__t{width:186px;flex:0 0 auto;padding:8px 10px;border-right:1px solid var(--rule)}
 .basisstrip>.bs__t b{font-family:var(--press);font-size:var(--t11);text-transform:uppercase;
   letter-spacing:.11em;display:block;line-height:1.25}
-.basisstrip>.bs__t span{font-family:var(--ledger);font-size:8.5px;color:var(--query)}
+.basisstrip>.bs__t span{font-family:var(--ledger);font-size:8.5px;color:var(--query-ink)}
 .bs__c{flex:1;min-width:0;padding:7px 12px;border-right:1px solid var(--rule2)}
-.bs__c em{font-style:normal;font-family:var(--hand);font-size:8.5px;text-transform:uppercase;
+.bs__c em{font-style:normal;font-family:var(--hand);font-size:9px;text-transform:uppercase;
   letter-spacing:.14em;color:var(--ink2);font-weight:700;display:block}
 .bs__c .v{font-family:var(--ledger);font-variant-numeric:tabular-nums;font-size:var(--t13);
   display:block;margin:3px 0 3px}
-.bs__c .g{font-family:var(--hand);font-size:8px;text-transform:uppercase;letter-spacing:.13em;
+.bs__c .g{font-family:var(--hand);font-size:9px;text-transform:uppercase;letter-spacing:.13em;
   color:var(--ink3);display:block;margin-top:3px}
 .bs__n{width:246px;flex:0 0 auto;padding:8px 12px;border-right:0}
 .blk{padding:10px 14px;border-bottom:1px solid var(--rule)}
@@ -326,7 +332,7 @@ p{font-family:var(--hand);font-size:var(--t15);line-height:1.6;margin:0 0 12px;
   text-transform:uppercase;flex:0 0 auto;margin-top:3px}
 .s-inked{color:var(--ink)}
 .s-held{color:var(--ink3)}
-.s-not{color:var(--query)}
+.s-not{color:var(--query-ink)}
 .entry.is-off .entry__n{color:var(--ink2);font-weight:500}
 .entry.is-blocked .entry__n{color:var(--ink2);text-decoration:line-through;
   text-decoration-thickness:1px;text-decoration-color:var(--query)}
@@ -351,7 +357,7 @@ p{font-family:var(--hand);font-size:var(--t15);line-height:1.6;margin:0 0 12px;
 .brow .k{font-family:var(--hand);font-size:var(--t11);line-height:1.25}
 .brow .v{font-family:var(--ledger);font-size:var(--t11);text-align:right}
 .brow .g{padding-bottom:5px}
-.brow .g em{display:block;font-family:var(--hand);font-style:normal;font-size:8.5px;
+.brow .g em{display:block;font-family:var(--hand);font-style:normal;font-size:9px;
   text-transform:uppercase;letter-spacing:.1em;color:var(--ink3);margin-bottom:3px;
   text-align:right}
 
@@ -439,14 +445,14 @@ p{font-family:var(--hand);font-size:var(--t15);line-height:1.6;margin:0 0 12px;
   border-top:1px solid var(--ink2)}
 .pcond button{flex:1;min-width:0;padding:9px 11px;border-right:1px solid var(--rule2)}
 .pcond button:last-child{border-right:0}
-.pcond .l{font-family:var(--hand);font-size:8.5px;text-transform:uppercase;
+.pcond .l{font-family:var(--hand);font-size:9px;text-transform:uppercase;
   letter-spacing:.16em;font-weight:700;color:var(--ink2)}
 .pcond .v{font-family:var(--ledger);font-variant-numeric:tabular-nums;
   font-size:var(--t17);margin:5px 0 4px;line-height:1}
-.pcond .s{font-family:var(--ledger);font-size:8.5px;color:var(--ink3);line-height:1.4}
+.pcond .s{font-family:var(--ledger);font-size:9px;color:var(--ink3);line-height:1.4}
 .prev{height:20px;flex:0 0 auto;background:var(--collar2);border-top:1px solid var(--rule2);
   display:flex;align-items:center;padding:0 12px;gap:12px;
-  font-family:var(--ledger);font-size:8.5px;color:var(--ink2);letter-spacing:.02em}
+  font-family:var(--ledger);font-size:9px;color:var(--ink2);letter-spacing:.02em}
 
 /* the legend, opened. It stops above the conditions collar — the wind is
    readable while the layer that depends on it is being read. */
@@ -671,7 +677,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
     never measured for this species on this ground.</div>
   </div>
   <div>
-    <div class="caps" style="color:var(--query)">Assumed <span class="qmark">(?)</span></div>
+    <div class="caps" style="color:var(--query-ink)">Assumed <span class="qmark">(?)</span></div>
     <div class="num" style="font-size:var(--t17);margin:8px 0 4px">22° <span class="qmark">(?)</span></div>
     <span class="grade grade--assumed"></span>
     <div class="marg" style="margin-top:7px">A number somebody picked. Printed at full
@@ -704,17 +710,17 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
     sheet, not field-checked.</div>
   </div>
   <div>
-    <div class="caps" style="color:var(--ochre)">C · Stale</div>
+    <div class="caps" style="color:var(--ochre-ink)">C · Stale</div>
     <div class="num" style="font-size:var(--t21);margin:8px 0 4px">282° W</div>
     <span class="grade grade--measured"></span>
-    <div class="num" style="font-size:9.5px;color:var(--ochre);margin-top:7px">OBS 03:40 · 1 H 51 M — RE-OBSERVE</div>
+    <div class="num" style="font-size:9.5px;color:var(--ochre-ink);margin-top:7px">OBS 03:40 · 1 H 51 M — RE-OBSERVE</div>
     <div class="marg" style="margin-top:5px">The value stays and the ink stays. Only the
     stamp changes. A record does not delete.</div>
   </div>
   <div>
-    <div class="caps" style="color:var(--query)">D · Not held</div>
+    <div class="caps" style="color:var(--query-ink)">D · Not held</div>
     <div style="margin:8px 0 4px"><span class="blank"></span> <span class="num" style="font-size:var(--t12);color:var(--ink2)">in&nbsp;Hg</span></div>
-    <div class="num" style="font-size:9.5px;color:var(--query);margin-top:7px">NO READING HELD</div>
+    <div class="num" style="font-size:9.5px;color:var(--query-ink);margin-top:7px">NO READING HELD</div>
     <div class="marg" style="margin-top:5px">A ruled blank with its unit printed. The
     field exists and is empty — which is a different statement from a default.</div>
   </div>
@@ -870,7 +876,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
             <div class="covtop">
               <span class="chip screen screen--full"></span>
               <span class="nm">Big Pine Hollow</span>
-              <span class="st" style="color:var(--woodland)">Covered</span>
+              <span class="st" style="color:var(--woodland-ink)">Covered</span>
               <span class="fig">30/30</span>
             </div>
           </div>
@@ -879,7 +885,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
             <div class="covtop">
               <span class="chip screen" style="--dotr:1.5px;--dotcol:var(--ochre)"></span>
               <span class="nm">Rocky Fork East</span>
-              <span class="st" style="color:var(--ochre)">Partial — 62%</span>
+              <span class="st" style="color:var(--ochre-ink)">Partial — 62%</span>
               <span class="fig">19/30</span>
             </div>
             <div class="covdet">CHECKED ALL 30 TILES AT ZOOM 15. 19 HELD, 11 MISSING.<br>
@@ -891,7 +897,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
             <div class="covtop">
               <span class="chip screen--none" style="height:15px"></span>
               <span class="nm">Conkles Ridge</span>
-              <span class="st" style="color:var(--query)">Not downloaded</span>
+              <span class="st" style="color:var(--query-ink)">Not downloaded</span>
               <span class="fig">0/30</span>
             </div>
           </div>
@@ -957,7 +963,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
           <span class="cond__l">Pressure trend</span>
           <span class="cond__v"><span class="blank"></span>&nbsp;<small>in Hg</small></span>
           <span class="grade" style="width:118px;border-bottom:1.5px solid var(--rule)"></span>
-          <span class="cond__stamp" style="color:var(--query)">NO READING HELD<br>
+          <span class="cond__stamp" style="color:var(--query-ink)">NO READING HELD<br>
             <span style="color:var(--ink3)">NOT USED BY ANY PLATE ON THIS SHEET</span></span>
         </button>
       </div>
@@ -1002,15 +1008,19 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
 </div>
 </div>
 <div class="frameblock">
-  <p class="cap"><b>Desktop · day plate</b> The collar carries everything: legend right,
-  conditions and declination along the foot, revision statement across the bottom. Nothing
-  is inside the neatline except the map and the marks a hunter put there. The bedding
-  entry is struck through with its reason printed beside it and its basis stated
-  underneath — four constants, three of which are not measured — which is the confidence
-  signal made to read as a survey sheet's accuracy statement rather than a disclaimer. The
-  day plate is the snow-glare plate: 13:1 contrast, no glass, no translucency, no shadow,
-  every separation made by rule weight and ink density so it survives a screen you can
-  barely see.</p>
+  <p class="cap"><b>Desktop · day plate</b> The collar carries everything and nothing sits
+  inside the neatline except the map and the marks a hunter put there. Three deliberate
+  orderings: the <b>refusal is pinned at the top</b> of the collar, out of the scroll,
+  because a layer declining to draw is this product's best behaviour and should never be
+  something you have to find; the legend is ordered <b>terrain analysis first</b> and base
+  imagery last, because that is what the user came for; and the <b>basis of the analysis
+  runs the full width of the foot</b> — four constants, three of them not measured, each
+  carrying its grade as a line convention. That is the confidence signal set as a survey
+  sheet's accuracy statement rather than as a disclaimer in a tooltip. Coverage is pinned
+  below the legend so a running download can never disappear when you look away. The day
+  plate is the snow-glare plate: no glass, no translucency, no shadow anywhere, every
+  separation made by rule weight and ink density so it survives a screen you can barely
+  see.</p>
 </div>
 </div>
 
@@ -1061,7 +1071,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
     <div class="pcmd">
       <button><span class="l">Legend</span><span class="v">4 INKED · 1 BLOCKED</span></button>
       <button><span class="l">Mark</span><span class="v">STAND · SIGN · TRACK</span></button>
-      <button><span class="l">Coverage</span><span class="v" style="color:var(--ochre)">PARTIAL 62%</span></button>
+      <button><span class="l">Coverage</span><span class="v" style="color:var(--ochre-ink)">PARTIAL 62%</span></button>
     </div>
 
     <div class="pcond">
@@ -1122,7 +1132,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
         <button class="x">✕</button>
       </div>
       <div class="psheet__s">
-        <div class="grp" style="color:var(--query)">Not pulled — 1 plate</div>
+        <div class="grp" style="color:var(--query-ink)">Not pulled — 1 plate</div>
         <div class="entry is-blocked" style="display:block">
           <div style="display:flex;gap:10px;align-items:flex-start">
             <span class="entry__sw" style="background-image:repeating-linear-gradient(45deg,var(--query) 0 1px,transparent 1px 5px);border-color:var(--query)"></span>
@@ -1196,7 +1206,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
     <div class="pcmd">
       <button class="is-on"><span class="l">Legend</span><span class="v">OPEN</span></button>
       <button><span class="l">Mark</span><span class="v">STAND · SIGN · TRACK</span></button>
-      <button><span class="l">Coverage</span><span class="v" style="color:var(--ochre)">PARTIAL 62%</span></button>
+      <button><span class="l">Coverage</span><span class="v" style="color:var(--ochre-ink)">PARTIAL 62%</span></button>
     </div>
 
     <div class="pcond">
@@ -1262,6 +1272,11 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
     ~9% relative luminance; the brightest ink (<span class="num">#D9B48F</span>) appears
     only in figures and rules, never as a filled area. Warmth here is not decorative: it
     is the mechanism.</p>
+    <p>Contrast and dark adaptation point the same way here, which is worth saying because
+    people usually assume they conflict: every text colour on both plates clears WCAG AA
+    against its own ground (measured on rendered state, not on the palette), and on the
+    night plate that is achieved by keeping the <i>ground</i> black rather than by making
+    the page brighter — so the same legibility is bought with far less emitted light.</p>
     <p>The honest cost: under that lamp, photorevision purple collapses toward pink and
     query red toward orange. That is precisely why grade and state are carried by
     <b>line convention</b> — solid, dashed, dotted, queried — with hue as redundant
@@ -1333,7 +1348,7 @@ code{font-family:var(--ledger);font-size:.92em;background:rgba(30,33,28,.07);pad
     trade and the founder should be told it was made on purpose.</p>
   </div>
 
-  <div style="border-bottom:0">
+  <div style="border-bottom:0;grid-column:1 / -1;border-right:0">
     <h3>What I would check on a real device before trusting this</h3>
     <ul>
       <li><b>The night plate on a mid-range LCD phone at minimum brightness, outdoors, in
