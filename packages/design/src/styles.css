@@ -84,6 +84,19 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+ * Plate — a second material for chrome that should read as a bolted-on
+ * instrument bezel, not a pane of glass over the map. No blur, no highlight
+ * inset: flat is the entire distinction from `.rl-glass` above. See the
+ * `plate` token group's doc comment in `tokens.ts` for why this is a
+ * separate class rather than a `glass` variant.
+ * -------------------------------------------------------------------------- */
+
+.rl-plate {
+  background: var(--plate-bg);
+  border: 1px solid var(--plate-border);
+}
+
+/* --------------------------------------------------------------------------
  * Eyebrow / section heading
  * -------------------------------------------------------------------------- */
 
@@ -143,7 +156,8 @@ body {
   background: transparent;
   color: var(--color-text-dim);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease),
+  transition:
+    background var(--motion-fast) var(--motion-ease),
     color var(--motion-fast) var(--motion-ease);
 }
 
@@ -215,7 +229,8 @@ body {
   font: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--motion-fast) var(--motion-ease),
+  transition:
+    background var(--motion-fast) var(--motion-ease),
     color var(--motion-fast) var(--motion-ease);
 }
 
@@ -374,32 +389,21 @@ body {
 .rl-conditions {
   display: flex;
   align-items: stretch;
-  gap: 1px;
-  border-radius: var(--radius-lg);
   /*
-   * Deliberately NOT `overflow: hidden`.
+   * Hard edge, no rounding — an instrument bezel, not a soft panel
+   * (`docs/design/PLAN-direction-a.md` §a: radius-to-zero is a
+   * component-by-component pass, and this is that pass for `ConditionsBar`).
    *
-   * The obvious way to round a segmented bar is to clip it, and that is exactly
-   * what broke the wind and time editors: they anchor *inside* a cell so their
-   * caret points at the right control, and clipping the bar clipped them out of
-   * existence. They still painted (a bounding box is not affected by an
-   * ancestor's clip) but `elementFromPoint` returned the map underneath, so the
-   * buttons were visible and unclickable — the worst kind of broken.
-   *
-   * Corners are rounded on the end children instead.
+   * Deliberately NOT `overflow: hidden` — unrelated to the radius (there is
+   * none to clip to now) but the reason still applies to anything else this
+   * container might grow: the wind and time editors anchor *inside* a cell so
+   * their caret points at the right control, and clipping this bar would clip
+   * them out of existence. They would still paint (a bounding box is not
+   * affected by an ancestor's clip) but `elementFromPoint` would return the
+   * map underneath, so the buttons would be visible and unclickable — the
+   * worst kind of broken.
    */
-}
-
-.rl-conditions > *:first-child,
-.rl-conditions > *:first-child .rl-conditions__cell {
-  border-top-left-radius: var(--radius-lg);
-  border-bottom-left-radius: var(--radius-lg);
-}
-
-.rl-conditions > *:last-child,
-.rl-conditions > *:last-child .rl-conditions__cell {
-  border-top-right-radius: var(--radius-lg);
-  border-bottom-right-radius: var(--radius-lg);
+  border-radius: 0;
 }
 
 .rl-conditions__cell {
@@ -409,11 +413,19 @@ body {
   padding: var(--space-2) var(--space-4);
   background: transparent;
   border: none;
+  /* The cell divider — a quieter hairline than the plate's own outer border,
+     matching Direction A's `.cond-cell{ border-left: 1px solid var(--hairline) }`. */
+  border-left: 1px solid var(--plate-divider);
   color: inherit;
   font: inherit;
   cursor: pointer;
   min-height: var(--space-touch);
   transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.rl-conditions > *:first-child,
+.rl-conditions > *:first-child .rl-conditions__cell {
+  border-left: none;
 }
 
 .rl-conditions__cell:hover {
@@ -457,6 +469,15 @@ body {
   height: 30px;
   flex-shrink: 0;
   color: var(--color-accent);
+}
+
+/*
+ * The bezel (ring + ticks) is fixed, so only the inner `<g>` that carries the
+ * needle and hub rotates — `transition` is not an inherited CSS property, so
+ * this has to target that element directly rather than `.rl-needle` itself,
+ * which no longer has a per-render transform to animate.
+ */
+.rl-needle > g {
   transition: transform var(--motion-base) var(--motion-ease);
 }
 
@@ -508,6 +529,13 @@ body {
   color: var(--color-info);
   border-color: color-mix(in srgb, var(--color-info) 42%, transparent);
   background: color-mix(in srgb, var(--color-info) 10%, transparent);
+}
+/* The fourth evidence-grade tone (`Confidence`'s `assumed`) — see
+   `--color-critical`'s doc comment in `tokens.ts` for why this is not `danger`. */
+.rl-chip--critical {
+  color: var(--color-critical);
+  border-color: color-mix(in srgb, var(--color-critical) 42%, transparent);
+  background: color-mix(in srgb, var(--color-critical) 10%, transparent);
 }
 
 /* --------------------------------------------------------------------------
@@ -564,7 +592,8 @@ body {
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease),
+  transition:
+    background var(--motion-fast) var(--motion-ease),
     border-color var(--motion-fast) var(--motion-ease);
 }
 

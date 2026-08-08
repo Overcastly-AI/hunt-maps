@@ -2,6 +2,7 @@ import {
   Button,
   Callout,
   Chip,
+  Confidence,
   Legend,
   SectionHeading,
   Sheet,
@@ -131,6 +132,12 @@ export function LayersSheet({
                   : undefined
               }
             >
+              {layer.grade && (
+                <Confidence
+                  grade={layer.grade}
+                  note="Graded against docs/EVIDENCE.md — the slope term behind this score is a defensible estimate, not a measured value."
+                />
+              )}
               <input
                 type="range"
                 className="rl-range"

@@ -220,25 +220,25 @@ export function ConditionsBar({
   timeEditor,
 }: ConditionsBarProps) {
   return (
-    <div className="rl-conditions rl-glass">
+    <div className="rl-conditions rl-plate">
       <div className="rl-popover-anchor">
-      <button type="button" className="rl-conditions__cell" onClick={onWindClick}>
-        <WindNeedle
-          fromDeg={windFromDeg}
-          className={cx('rl-needle', windFromDeg === null && 'rl-needle--unset')}
-        />
-        <span>
-          <span className="rl-conditions__label">Wind from</span>
-          <span
-            className={cx(
-              'rl-conditions__value',
-              windFromDeg === null && 'rl-conditions__value--unset',
-            )}
-          >
-            {windFromDeg === null ? 'Not set' : `${Math.round(windFromDeg)}° ${windOctant}`}
+        <button type="button" className="rl-conditions__cell" onClick={onWindClick}>
+          <WindNeedle
+            fromDeg={windFromDeg}
+            className={cx('rl-needle', windFromDeg === null && 'rl-needle--unset')}
+          />
+          <span>
+            <span className="rl-conditions__label">Wind from</span>
+            <span
+              className={cx(
+                'rl-conditions__value',
+                windFromDeg === null && 'rl-conditions__value--unset',
+              )}
+            >
+              {windFromDeg === null ? 'Not set' : `${Math.round(windFromDeg)}° ${windOctant}`}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
         {windEditor}
       </div>
 
@@ -268,7 +268,7 @@ export function ConditionsBar({
 // Chip
 // ---------------------------------------------------------------------------
 
-export type ChipTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info';
+export type ChipTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info' | 'critical';
 
 export interface ChipProps {
   tone?: ChipTone;
@@ -363,8 +363,10 @@ export function Field({ id, label, value, hint, children }: FieldProps) {
   );
 }
 
-export interface RangeFieldProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
+export interface RangeFieldProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'value' | 'onChange'
+> {
   id: string;
   label: ReactNode;
   value: number;
@@ -444,9 +446,7 @@ export function ToggleRow({
           onChange={onToggle}
           aria-describedby={describedBy}
         />
-        {swatch && (
-          <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />
-        )}
+        {swatch && <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />}
         <span className="rl-toggle__label">{label}</span>
       </label>
       {(blurb || blockedReason) && (
@@ -555,7 +555,13 @@ export function Confidence({ grade, note }: { grade: EvidenceGrade; note?: strin
     measured: 'ok',
     inferred: 'info',
     doctrine: 'warn',
-    assumed: 'danger',
+    // Not `danger` — that tone renders in hunter-safety orange
+    // (`--color-blaze`), reserved for real alerts, and an "Assumed" evidence
+    // grade sharing it with "your storage is not persisting" is the exact
+    // coincidence `docs/design/PLAN-direction-a.md` §a warns becomes a real
+    // confusion the day both appear on the same screen — which they do, in
+    // `LayersSheet`.
+    assumed: 'critical',
   };
   const glyph: Record<EvidenceGrade, string> = {
     measured: '●',
