@@ -25,8 +25,21 @@ An `Assumed` grade is not a failure. Hiding one is.
 | 🟡 **Doctrine** | Consistent, widely-reported field practice; no measurement behind it |
 | 🔴 **Assumed** | A number chosen because the code needed one |
 
-**Current state: 14 Measured · 12 Inferred · 9 Doctrine · 28 Assumed.**
-*(Pass 4: 14 · 10 · 9 · 18. Pass 3: 12 · 6 · 9 · 17. Pass 2: 10 · 5 · 8 · 18.)*
+**Current state: 14 Measured · 13 Inferred · 10 Doctrine · 29 Assumed.**
+*(Pass 5: 14 · 12 · 9 · 28. Pass 4: 14 · 10 · 9 · 18. Pass 3: 12 · 6 · 9 · 17.
+Pass 2: 10 · 5 · 8 · 18.)*
+
+**Pass 6 was a single-topic pass: the two bedding *floors*** — `shelterTerm =
+0.25 + 0.75·s` and `coverTerm = 0.4 + 0.6·c` — plus the constants `R40` added.
+Both floors stay 🔴 **Assumed** and that is the finding, stated plainly: **they
+are unfalsifiable guesses that nonetheless decide the layer's output**, because
+a floor is the whole statement of how much a missing requirement costs. What
+changed is that they are no longer unfalsifiable *in principle*: `1/floor` is the
+best-vs-worst **selection ratio** the engine asserts (cover **2.5×**, shelter
+**4×**), a quantity `packages/shared` already computes. Three new findings sit
+under Bedding — the never-chosen ordering between them, a contrary measured
+result on thermal cover (Cook et al. 1998), and a shape problem in the cover term
+that contradicts Ridgeline's own leeward rationale.
 
 **The 🔴 count rose by ten and that is the most honest thing in this pass.**
 Nine of those ten are not new guesses — they are constants that shipped last
@@ -1086,13 +1099,303 @@ cheapest available upgrade for this row.
 Unregistered until now and not named in any backlog row. Same status as the VRM
 radius: a scale choice with no source. Registered so it is not invisible.
 
-### 🔴 Bedding cover-term floor `0.4` and shelter floor `0.25`
-`coverTerm = 0.4 + 0.6·(vrm/vrmFull)` and `shelterTerm = 0.25 + 0.75·shelter`
-each carry a floor that sets **how much the term is allowed to matter**, and
-neither was registered. These two constants, not the thresholds above them,
-decide which term wins when the terms disagree — which is precisely how `R31`
-happened. Both 🔴. The shelter floor is the subject of the `R31` prescription
-above; the cover floor 0.4 has had no scrutiny at all and should get some.
+### 🔴 The two term floors — cover `0.4`, shelter `0.25` *(full treatment, pass 6)*
+
+`beddingLikelihood` is a product of five requirement terms. Two of them carry a
+**floor**, written as bare literals inside the loop body rather than as named
+constants (`packages/terrain/src/analysis/wind.ts:545` and `:562`):
+
+```
+shelterTerm = 0.25 + 0.75 · clamp01(s)     // s = terrainShelter, 0..1
+coverTerm   = 0.40 + 0.60 · clamp01(c / BEDDING_VRM_FULL_COVER)
+```
+
+A floor is not a tuning knob. In a multiplicative model it is **the entire
+statement of how substitutable a requirement is** — how much a cell is allowed
+to lose for missing it. Because the other terms multiply through unchanged, the
+floor is also what settles which term wins when two disagree, which is the
+mechanism `R31` was actually about. Both are 🔴 **Assumed**, and the rest of this
+section is the case for that grade, the shape critique, and the falsification
+tests.
+
+#### What the floor means in a measurable unit
+
+For `term = f + (1−f)·x` with `x ∈ [0,1]`, the ratio between the best and the
+worst cell **on that axis alone**, all other terms held equal, is exactly `1/f`:
+
+| Floor | Best-vs-worst ratio the engine asserts | Read as |
+|---|---|---|
+| shelter `0.25` | **4.0×** | a fully sheltered bed is at most 4× as good as an identical fully exposed one |
+| cover `0.40` | **2.5×** | a fully concealed bed is at most 2.5× as good as an identical bare one |
+
+That reformulation matters because `1/f` is a **selection ratio**, which is a
+quantity wildlife studies actually report and which
+`packages/shared`'s own selection analytics already compute (Manly ratios against
+a `TerrainProfile` availability distribution). The floors are therefore not
+unfalsifiable in principle — they are unfalsifiable *today* because nobody has
+published the ratio for either axis, and because the engine has no observation
+set to compute it from. That distinction is the difference between a 🔴 with a
+test and a 🔴 without one, and it is the main product of this pass.
+
+#### Finding 1 — the ordering the two literals imply has never been chosen, and the evidence contradicts it
+
+Read together, `0.25 < 0.40` says **wind shelter is a stricter requirement for a
+bed than concealment cover** (4× vs 2.5×). Nobody decided that. It fell out of
+two literals picked independently in different commits. The available evidence
+points the other way on both halves of it:
+
+- **Concealment selection at bed sites is measured, repeatedly, across species.**
+  Bed sites carry more screening cover than paired random points in every
+  bed-site study located this pass (below).
+- **The thermal-shelter benefit is the one that has been tested and *failed*.**
+  See Finding 3.
+
+An ordering that the engine asserts, that no one chose, and that the literature
+leans against, is a defect of exactly the kind this register exists to catch.
+
+#### Finding 2 — what is measured about concealment at bed sites (the cover floor)
+
+All 🟢 for *direction*; none of them yields a substitutability ratio.
+
+| Finding | Value | Species / scope |
+|---|---|---|
+| Bed-site vegetative cover vs paired random | **28.1 % vs 19.9 %** (1991), **36.0 % vs 33.8 %** (1992); veg height 101 cm vs 75 cm | whitetail **fawns**, ponderosa pine, Black Hills SD — [Uresk et al., USFS RMRS](https://www.fs.usda.gov/rm/pubs_other/rmrs_1999_uresk_d001.pdf) *(abstract/snippet level)* |
+| Odds of bed-site selection per 1 cm of understory height | **OR 1.035** (95 % CI 1.008–1.062) | whitetail **neonates**, grassland, Northern Great Plains — [Grovenburg et al. 2010, *JWM*](https://wildlife.onlinelibrary.wiley.com/doi/10.1111/j.1937-2817.2010.tb01245.x) *(abstract-level)* |
+| Visual obstruction at beds consistently exceeds that at 25 m and at random; ~50 % of beds under or beside a woody plant | direction only | ungulate fawn bed-site literature, incl. roe deer — [PMC10682894](https://pmc.ncbi.nlm.nih.gov/articles/PMC10682894/) *(abstract-level)* |
+| Site temperature and canopy closure were the **most influential** bed-site attributes | rank, not magnitude | **mule deer** day-beds, AZ ponderosa pine, 236 beds vs 439 random — [Germaine et al. 2004, *WSB* 32:554](https://wildlife.onlinelibrary.wiley.com/doi/abs/10.2193/0091-7648(2004)32%5B554:COMDDA%5D2.0.CO;2) *(abstract-level)* |
+
+**Two things this does not give us.** First, every one of the numeric rows is
+**fawn or neonate** work; fawn bed-site selection is a hider-strategy problem and
+does not transfer to mature-buck bedding — the transfer is stated here only to be
+refused. Second, and more fundamentally, the *closest* numeric row (Uresk) shows
+bed and random distributions **overlapping heavily** — 28 % vs 20 %, and in the
+second year 36 % vs 34 %, essentially no separation. A covariate whose means
+differ by 1.07–1.41× between used and available sites is not evidence for a 2.5×
+best-vs-worst ratio in either direction; it is evidence that the ratio has not
+been measured on anything resembling the engine's axis.
+
+**The cover floor `0.4` therefore stays 🔴 Assumed.** Nothing found supports 0.4
+over 0.2 or 0.6.
+
+#### Finding 3 — the shelter floor has a *contrary* measured result, and it is the strongest single result in this section
+
+The nearest thing to a test of "how much does missing shelter cost" is the
+thermal-cover literature, and it is negative:
+
+> No positive effect of thermal cover was found on body condition of elk during
+> any of four winter-long and two summer-long experiments. **During winter, the
+> dense cover units actually provided the most costly energetic environments,
+> and the clearcuts the least.** The energetic benefits of thermal cover seem
+> inconsequential.
+> — Cook et al. 1998, *Wildlife Monographs* 141, "Relations of forest cover and
+> condition of elk: a test of the thermal cover hypothesis in summer and winter",
+> as summarised by
+> [PNW *Science Findings* 22](https://www.fs.usda.gov/pnw/sciencef/scifi22.pdf)
+> and [Cook et al. 2004, *Thermal cover needs of large ungulates: a review of
+> hypothesis tests*](https://www.fs.usda.gov/pnw/pubs/journals/pnw_2004_cook001.pdf)
+> *(both abstract/summary level; the monograph itself is found-but-unread)*
+
+Cook et al. 2004 add the methodological point that bears directly on this
+register: *"the majority of empirical support for the thermal cover hypothesis is
+derived from observational studies of habitat selection"*, i.e. the same class of
+evidence the engine's shelter term rests on. And a second, independent negative:
+a LiDAR + GPS study of winter habitat selection found temperature and snow height
+drove cover selection while **wind speed had no influence at all**
+([Ewald et al. 2014, *Forests* 5:1374](https://doi.org/10.3390/f5061374),
+European roe deer, montane, *abstract-level*).
+
+**Four caveats, stated so this is not over-read:**
+
+1. **Species drift.** Cook is elk, Ewald is roe deer. Neither is *Odocoileus
+   virginianus*, and elk are markedly more cold-tolerant.
+2. **Different kind of shelter.** Both measure *canopy* thermal cover. The
+   engine's `terrainShelter` is a **topographic** exposure index. This is the
+   same category slip pass 5 caught in `R31` — recorded here so this pass does
+   not commit it in the opposite direction.
+3. **Benefit ≠ selection.** Cook measured *whether cover helps*. The bedding
+   layer predicts *where deer will be*. An animal can select a resource that
+   confers no measurable fitness benefit, and Cook explicitly notes selection
+   studies show cover use. For a "where is the deer" layer, selection evidence is
+   the right currency and Cook is not decisive.
+4. Against these sit Courbin et al. 2017 (whitetail selecting thermal cover under
+   cold stress) and Lang & Gates 1985 (whitetail night beds in reduced wind), both
+   already in this register.
+
+**Net: the shelter floor `0.25` stays 🔴 Assumed**, and the direction of any
+future change is genuinely contested. What has moved is that there is now a
+peer-reviewed result pushing the floor **up** (toward "missing shelter costs
+little"), which is the same direction `R31` prescribes for cold — reached by a
+completely independent route. That is a modest, real corroboration of `R31`'s
+direction and **not** of its endpoints.
+
+#### Finding 4 — the linear shape is defensible for shelter and probably wrong for cover
+
+`f + (1−f)·x` is a bounded, **partially compensatory** aggregation operator: it
+prevents any one requirement from zeroing the product while still letting it
+dominate. That is a recognised design in habitat modelling — the product /
+geometric-mean family is the standard "limiting factor" aggregator, chosen
+precisely so that a location scores low if any single input is low, in contrast
+to the arithmetic mean, which is fully compensatory
+([USGS OF 2007-1254, HSI assessment](https://pubs.usgs.gov/of/2007/1254/pdf/OF07-1254_508.pdf);
+[Geospatial Suitability Indices toolbox, aggregation methods AM / GM / MLF](https://apps.dtic.mil/sti/trecms/pdf/AD1177555.pdf)
+*(both abstract/snippet level)*). The engine's five-way product sits at the
+non-compensatory end; the floors are the dial that adds compensation back. **The
+existence of floors is 🔵 — sound modelling practice with a real methodological
+literature. The values are 🔴.**
+
+Three specific shape criticisms, in decreasing confidence:
+
+1. **The cover term's monotonicity is contradicted by measurement.** `0.4 + 0.6·c`
+   says more concealment is always better, saturating at
+   `BEDDING_VRM_FULL_COVER`. Two peer-reviewed results say otherwise:
+   - Red deer **select intermediate habitat visibility**, from 3D cumulative
+     viewsheds built from terrestrial + airborne LiDAR — an interior optimum, not
+     a saturating ramp. [Zong, Wang, Skidmore & Heurich 2023, *J. Anim. Ecol.*
+     92:1306–1319](https://besjournals.onlinelibrary.wiley.com/doi/10.1111/1365-2656.13847)
+     *(abstract-level; open-access copy and Dryad data exist and are the cheapest
+     upgrade for this row)*
+   - **Horizontal visibility, not concealment cover, drove bedsite use and
+     predation risk** in whitetail fawns, and a *greater* field of view **lowered**
+     the odds of coyote predation. [Obermoller et al., *JWM*](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.70240)
+     *(abstract-level; fawns, so scope-limited)*
+   - The mechanism is quantified generally: concealment and visibility are
+     **inversely related opposing functional properties of the same cover**
+     ([Camp et al. 2013, *Ecosphere*](https://esajournals.onlinelibrary.wiley.com/doi/10.1890/ES12-00114.1),
+     shrub-steppe, *abstract-level*).
+
+   This is the pass's sharpest finding on shape, and it exposes an **internal
+   contradiction in Ridgeline's own model**: the leeward aspect term is justified
+   in this register by the doctrine that a buck beds to *watch downhill and smell
+   uphill* — which requires a sightline — while the cover term rewards
+   monotonically increasing sightline-breaking ruggedness. The two terms encode
+   opposite preferences about the same variable and multiply together.
+
+   ⚠️ **Do not act on this by inverting the cover term.** VRM is terrain
+   orientation dispersion; the cited work measures *vegetation* visibility. The
+   honest conclusion is that a monotone-increasing terrain-roughness term is an
+   unvalidated proxy for a quantity that is measured to have an interior optimum.
+
+2. **A floor is the right family for shelter.** The requirement is graded (wind
+   loading is continuous, not present/absent), the cost of being wrong is
+   symmetric, and a hard threshold would make the layer flicker along every break
+   of slope — the same argument already recorded for `BEDDING_RING_SOFTNESS_DEG`.
+   Linear-in-`x` specifically is 🔴: it says the marginal value of shelter is
+   constant, whereas the standard RSF form `w(x) = exp(βx)` says it is constant in
+   *log* odds. The two differ most exactly at the exposed end, which is where the
+   floor lives.
+
+3. **Both floors are silently wind-speed assumptions.** Already filed as `R38`;
+   restated here because it is a *shape* claim, not only a value claim. A fixed
+   floor asserts the shelter/solar trade is a constant, when Parker & Gillingham
+   measured wind swamping solar gain at 15 m·s⁻¹ and being near-irrelevant in calm
+   air. The correct object is `f(windSpeedKph)`, not a scalar.
+
+#### What would falsify each — stated so a later pass can settle them
+
+Both floors are, today, **unfalsifiable guesses that nonetheless decide the
+layer's output.** These are the observations that would change that, cheapest
+first:
+
+| Floor | Falsifying observation | Consequence |
+|---|---|---|
+| cover `0.4` | A Manly selection ratio for observed beds across VRM availability bands (this repo already computes these). If used:available for the **top** VRM band ÷ the **bottom** band exceeds **2.5**, the floor is too high; if it is below ~1.3, the term is close to inert and the floor should rise toward 1 or the term be dropped | direct, and computable from Ridgeline's own observation table once enough beds are logged |
+| cover `0.4` | Any published RSF reporting a coefficient for a **continuous concealment covariate at adult** deer beds. `exp(β · range)` is directly comparable to `1/f` | would move the row to 🔵 |
+| cover `0.4` — shape | Confirmation that the response has an **interior optimum** in a terrain-visibility (not vegetation) covariate | would falsify the *functional class*, as Rowland 2018 did for the 22° Gaussian — a bigger correction than the value |
+| shelter `0.25` | Any study relating whitetail bed selection to a **topographic** wind-exposure index (TOPEX/Sx-class). Still none found after this pass's queries plus pass 5's six | would move the row to 🔵 or 🟢 |
+| shelter `0.25` | A measured used-vs-available ratio for leeward vs windward bed positions at matched slope, aspect and cover | if < 4×, the floor is too low |
+| shelter `0.25` | `R38` landing: any demonstration that the ratio varies with wind speed | falsifies the *scalar*, regardless of its value |
+
+**Interim guidance for the build agents, so the 🔴 does not become paralysis:**
+leave both values as they are. Do not tune either one without one of the
+observations above — a floor moved on taste is strictly worse than a floor left
+at a value whose provenance is documented. The two changes that *are* warranted
+now are non-numeric: promote both literals to named exported constants so they
+are greppable and overridable (they are currently invisible to every consumer),
+and make the `Confidence` chip on the bedding layer say that the cover and
+shelter weightings are unmeasured.
+
+**Queries run this pass** (in addition to pass 5's six on topographic shelter),
+so a later pass does not redo them: `white-tailed deer bed site visual
+obstruction horizontal cover measured versus random sites` · `Odocoileus
+virginianus bed site selection concealment cover threshold resource selection
+function` · `threshold response habitat selection ungulate non-linear canopy
+cover breakpoint deer` · `mature male white-tailed deer daytime bed site
+characteristics GPS telemetry measured slope canopy` · `deer bed site logistic
+regression odds ratio visual obstruction per unit increase selection` ·
+`"selection ratio" white-tailed deer bedding cover type use availability Manly
+winter` · `Armstrong Euler Racey 1983 winter bed-site selection central Ontario
+results` · `Cook 1998 Wildlife Monographs test of the thermal cover hypothesis
+findings` · `Mysterud Ostbye 1999 cover as a habitat element for temperate
+ungulates conclusions` · `thermal cover hypothesis rejected ungulate winter
+energetics review` · `ungulate selection leeward slopes wind exposure index GPS
+collars measured` · `deer resting site selection wind speed reduction percent
+selection strength odds ratio winter bed microclimate measured` · `habitat
+suitability index model aggregation arithmetic versus geometric mean limiting
+factor compensatory` · `white-tailed deer habitat suitability index model HSI
+cover component minimum value limiting factor equation` · `hiding cover
+definition vegetation hide 90 percent of adult deer at 61 meters` · `Germaine
+2004 mule deer day-bed sites canopy closure bed versus random values` · `LiDAR
+forest structure GPS telemetry winter habitat selection European roe deer wind
+speed no influence` · `deer bed sites canopy closure percent mean at beds versus
+random points white-tailed daytime` · `Zong 2023 LiDAR intermediate visibility
+forest-dwelling ungulate results` · `deer trade-off concealment versus visibility
+bedding intermediate cover predator detection` · `relative importance thermal
+cover versus security cover ungulate bed site selection compensatory
+substitutable`.
+
+**Found-but-unread, ranked as leads for the next pass:** Cook et al. 1998
+*Wildlife Monographs* 141 (the primary; only agency summaries read here) ·
+Mysterud & Østbye 1999, *Wildl. Soc. Bull.* 27:385–394, *Cover as a habitat
+element for temperate ungulates* (a review written on exactly this question) ·
+Zong et al. 2023 (open-access PDF and **Dryad datasets** both exist — the only
+lead here that could produce a fitted curve rather than a direction) ·
+Armstrong, Euler & Racey 1983, *JWM* 47:880–884, which compared **day and night
+beds** in central Ontario and is therefore the single most relevant unread paper
+to the day-vs-night gap this register logged in pass 5.
+
+#### 🔴 One agency threshold worth recording, because it is *not* our shape
+Hiding cover is defined across USDA/NRCS and state guidance as **vegetation
+capable of hiding 90 % of a standing adult deer from a human at ≤ 200 ft (61 m)**
+([Colorado NRCS mule deer fact sheet](https://efotg.sc.egov.usda.gov/references/public/co/muledeer.pdf),
+[MSU Deer Lab](https://www.msudeer.msstate.edu/habitat-cover.php)). 🟡 **Doctrine**
+— it is a management convention with no measurement behind the 90 %/61 m pair,
+and it is asserted rather than derived in every source found. It is registered
+here for one reason: it is the discipline's own operational definition of cover
+and it is a **step function**, not a ramp. Our cover term is a ramp. Neither is
+measured; they are simply different models, and the ramp is the better choice for
+a rendered surface for the anti-flicker reason above.
+
+### 🔴 `BEDDING_RING_MIN_DATA_FRACTION = 0.5` — ring data quorum *(new, `R40`; registered pass 6)*
+
+**Not a biological parameter, and it must never be presented as one.** It is a
+statistical-honesty threshold: the share of the *in-grid* ring that must carry
+data before the surround term is allowed to speak, below which the cell returns
+`NaN`. It says nothing about deer. Graded 🔴 **Assumed** and registered so that
+it is visible, exactly as `BEDDING_RING_SOFTNESS_DEG` is.
+
+The constant's own doc comment states that 0.5 "is not a free choice" because
+`detectBenches` already requires `samples >= 8` of 16 for the same geometry.
+**Reading both sources, that justification is true in the tile interior and false
+at the tile border**, which is the region it exists to protect:
+
+| | `detectBenches` (`landform.ts:441`) | `beddingLikelihood` (`wind.ts:604`) |
+|---|---|---|
+| test | `samples >= 8` — absolute count | `samples >= 0.5 · (samples + missing)` — fraction of *available* ring |
+| denominator | all **16** directions, including those off the tile | only directions **inside** the grid |
+| at a tile border with 5 in-grid directions, all with data | `5 < 8` → **abstains** | `5 ≥ 0.5 × 5` → **speaks** |
+
+The two coincide only when `samples + missing == 16`. This is not a defect —
+`R40` deliberately chose not to grey a ring-radius seam around every tile, and
+that decision is right and is documented. What is wrong is the *claim of
+equivalence*: the two layers **can** disagree about what a shelf is, along every
+tile edge, by construction. The value 0.5 is a reasonable quorum with no
+derivation; "half the ring answered" is the same convention as `detectBenches`
+by coincidence of arithmetic, not by pinning.
+
+**Recommended, non-urgent:** either restate the comment to say the quorum is
+*conventionally* aligned rather than pinned, or make the alignment real by
+expressing both as a fraction of the available ring. Filed rather than fixed —
+`packages/terrain` is not this agent's territory.
 
 ### Cold-blend ramp — `coldBlendWeight`, graded per endpoint
 
@@ -1102,6 +1405,50 @@ above; the cover floor 0.4 has had no scrutiny at all and should get some.
 | `BEDDING_SEVERE_COLD_C` | −10 °C | 🔵 **Inferred** — *upgraded this pass* | Measured LCT for white-tailed deer fawns **fed a natural browse diet: −11.2 °C** (a 40 % rise in thermoneutral heat production moved it from −0.8 °C fasted to −11.2 °C fed), by indirect respiration calorimetry, 18 fasting + 18 on-feed trials. −10 °C sits **1.2 °C** from a measured physiological threshold for this species: below it a fed fawn must catabolise tissue. [Can. J. Zool. (1999)](https://cdnsciencepub.com/doi/10.1139/z99-111) *(abstract-level only.)* **Caveat: fawns.** Adults have a better surface-to-volume ratio and a lower LCT, so −10 °C is conservative for the mature buck the layer is aimed at. Corroborating band: black-tailed deer winter thermoneutral limits −6 to +18 °C. |
 | `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` | 0.75 | 🔴 **Assumed** | Chosen so lee never disappears. Defensible, unmeasured, and per the `R31` verdict **should not be raised**. |
 | Ramp shape | linear in T | 🔴 **Assumed** | Nothing measured prescribes linearity. Metabolic cost below LCT *is* approximately linear in the temperature deficit, which makes linear a reasonable default — recorded as reasoning, not as a source. |
+
+### Register-vs-source audit — bedding constants, re-read from the code *(pass 6)*
+
+Read directly from `packages/terrain/src/analysis/wind.ts` and
+`.../landform.ts`, not from this register's own account of them.
+
+| Constant | Value in source | Grade | Register accurate? |
+|---|---|---|---|
+| `BEDDING_PAD_HALF_MAX_SLOPE_DEG` | 12 | 🔵 | ✅ value and rationale match |
+| `BEDDING_RING_MIN_SLOPE_DEG` | 15 | 🔴 | ✅ value matches; **the source comment still carries the justification this register retracted in pass 5** (see below) |
+| `BEDDING_RING_SOFTNESS_DEG` | 4 | 🔴 (not biological) | ✅ source explicitly calls it a shape parameter |
+| `BEDDING_VRM_FULL_COVER` | 0.06 | 🔴 | ✅ source flags itself as geometry, not observation |
+| `BEDDING_RING_MIN_DATA_FRACTION` | 0.5 | 🔴 (not biological) | ⚠️ **was unregistered**; now registered above, with its stated pin to `detectBenches` corrected |
+| `BEDDING_COLD_ONSET_C` | 5 | 🔴 | ✅ |
+| `BEDDING_SEVERE_COLD_C` | −10 | 🔵 | ⚠️ value matches, but the **source comment does not carry the LCT citation** that earned the 🔵 — it still reads as an unsupported assertion |
+| `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` | 0.75 | 🔴 | ⚠️ value matches; **the source comment still quotes the retracted 42.0 cm figure** |
+| shelter floor | `0.25` (unnamed literal, `wind.ts:545`) | 🔴 | ⚠️ not a named constant; see the floors section |
+| cover floor | `0.40` (unnamed literal, `wind.ts:562`) | 🔴 | ⚠️ not a named constant; see the floors section |
+
+**Two stale source comments, both retractions this register has already made and
+the code has not.** Neither is a computational defect; both are the kind of
+confidently-wrong provenance that gets copied forward into the next parameter.
+
+1. `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`'s comment reads *"the mechanism is measured:
+   18.1 cm of snow on the SE-facing slope against 42.0 cm on the NE-facing slope
+   in the same study area (Lang & Gates 1985)"*. That is the **mean-versus-maximum
+   comparison retracted in pass 5**. Lang & Gates' three site means are bottomland
+   11.2 / SE 18.1 / NE 21.7 cm — an aspect effect of **1.20×, not 2.32×** — and the
+   sheltered bottomland is the shallowest of the three. This register and
+   `docs/BACKLOG.md`'s `R31` row both state it correctly; **checked this pass and
+   they have not drifted back.** The code comment is the last place the wrong
+   figure survives.
+2. `BEDDING_RING_MIN_SLOPE_DEG`'s comment places 15° "at the bottom of the BC WHR
+   band". That band bottoms at **5.7°**; 15° is its centre. Retracted in pass 5,
+   still in the source.
+
+Both are one-line comment edits owned by whoever next touches
+`packages/terrain/src/analysis/wind.ts`. Filed, not fixed — not this agent's
+territory.
+
+**Also confirmed against the code:** `R31`'s prescribed
+`shelterFloor(T) = 0.25 + 0.40 · coldBlendWeight(T)/0.75` has **not shipped**. The
+shelter floor is still the fixed literal `0.25`, so every statement in the `R31`
+section above remains a prescription rather than a description of the engine.
 
 ---
 
@@ -2261,6 +2608,14 @@ is the whole point of this register.
 | 30 | **Record the whitetail cold-cover disagreement in the UI, do not resolve it.** PLOS One 2013 (MN, 12 yr): colder → more open. Courbin et al. 2017 (Anticosti): cold stress → more thermal cover. Both peer-reviewed, both northern whitetail | — | `R10` |
 | 31 | **Decide day-vs-night explicitly.** Every shelter-dominant citation is a night-bed or whole-range source; the only daytime-specific one prescribes south/west slopes. The layer is used in daylight by accident, not by decision | — | new |
 | 32 | Measure the realised distribution of `coverTerm` on a real tile — VRM saturating at 0.06 against a natural range of 0–0.4 likely pins it at ceiling across most hill country | — | `R33` |
+| 33 | **Promote the two bedding floors to named exported constants.** `0.25` and `0.40` are bare literals at `wind.ts:545` and `:562`. No value change — they are 🔴 and must not be tuned on taste — but they are currently ungreppable, unoverridable by `BeddingOptions`, and invisible to any consumer that wants to report them | — | pass 6 |
+| 34 | **Compute the two floors as Manly selection ratios** once observations exist. `1/f` is the best-vs-worst ratio the engine asserts: **2.5× for cover, 4× for shelter**. `packages/shared` already computes selection ratios against a `TerrainProfile`; this is the cheapest path from 🔴 to 🔵 for either row and needs no new literature | 🔴 → 🔵 | pass 6 |
+| 35 | **The engine asserts wind shelter is a stricter bed requirement than concealment (4× vs 2.5×) and nobody chose that.** It fell out of two literals set in different commits. Decide the ordering deliberately, or set both floors equal until there is evidence to separate them | — | pass 6 |
+| 36 | **The cover term's monotonicity conflicts with two measured results and with Ridgeline's own leeward rationale.** Red deer select *intermediate* visibility (Zong 2023); horizontal visibility, not concealment, drove whitetail fawn bedsite use and *lowered* predation odds (Obermoller). Meanwhile the leeward term is justified by "watch downhill, smell uphill", which needs a sightline. **Do not invert the term** — VRM is terrain, the studies are vegetation — but stop presenting more ruggedness as monotonically better | — | pass 6 |
+| 37 | **Read Zong et al. 2023 and its Dryad datasets.** The only located lead that could yield a *fitted curve* for the cover term rather than a direction. Open-access PDF + two Dryad deposits | 🔴 → 🔵/🟢 | pass 6 |
+| 38 | **Read Armstrong, Euler & Racey 1983, *JWM* 47:880–884.** It compared **day and night beds** in central Ontario and is the single most relevant unread paper to the day-vs-night gap logged in pass 5 (item 31). A PDF surfaced this pass at `originalwisdom.com` | — | pass 6 |
+| 39 | **Fix two stale source comments in `wind.ts`.** `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` still quotes the retracted "18.1 vs 42.0 cm"; `BEDDING_RING_MIN_SLOPE_DEG` still calls 15° "the bottom of the BC WHR band" (it is the centre; the bottom is 5.7°). Both were retracted in pass 5 and survive only in the code | — | pass 6 |
+| 40 | **Restate `BEDDING_RING_MIN_DATA_FRACTION`'s comment.** It claims to be pinned to `detectBenches`' `samples >= 8 of 16`; the two tests use different denominators and **do** diverge at tile borders. The behaviour is correct and intentional; the claim of equivalence is not | — | pass 6 |
 
 Item 13 would resolve more red rows than everything else combined. Items 2, 3
 and **26** are corrections to things we currently state confidently and wrongly,
@@ -2329,3 +2684,21 @@ wind speed becomes available.**
 | `DEFAULT_VRM_RADIUS_CELLS = 4`, `DEFAULT_RING_RADIUS_CELLS = 8`, `BEDDING_RING_SOFTNESS_DEG = 4`, cover floor `0.4`, shelter floor `0.25`, `BEDDING_COLD_ONSET_C = 5`, `BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75`, linear ramp | unregistered | 🔴 **Assumed, all seven** | Four of them were in no backlog row at all. The two **floors** are the constants that decide which term wins a disagreement — i.e. the actual cause of `R31` — and neither had been looked at |
 | Wind speed | not considered | 🔴 **new gap** | `windSpeedKph` exists in `packages/shared/src/domain.ts:154` and never reaches the engine. Every fixed shelter floor is a hidden wind-speed assumption |
 | Day vs night beds | not distinguished | 🔴 **new gap** | The literature splits on exactly this axis and the layer's daytime reading is currently an accident rather than a decision |
+
+---
+
+## Pass-6 changelog — the two bedding floors, and the `R40` constants
+
+| Row | Before | After | Why |
+|---|---|---|---|
+| Shelter floor `0.25` | 🔴, one-line stub | 🔴 **Assumed — upheld, with a falsification test and a contrary result** | No study relates whitetail bed selection to a topographic wind-exposure index (pass 5's six queries + this pass's). New and cutting the other way: Cook et al. 1998/2004 found **no positive effect of thermal cover** on elk condition in six experiments, with dense cover the *most* energetically costly winter environment; Ewald et al. 2014 found **wind speed had no influence** on roe deer winter selection. Species and cover-type drift both apply — and *benefit ≠ selection* |
+| Cover floor `0.40` | 🔴, "has had no scrutiny at all" | 🔴 **Assumed — scrutinised, unchanged** | Concealment selection at beds is measured (Uresk, Grovenburg OR 1.035/cm, Germaine) but every numeric row is **fawn/neonate**, and the closest one shows used and available distributions **overlapping** (28.1 % vs 19.9 %; 36.0 % vs 33.8 %). Nothing supports 0.4 over 0.2 or 0.6 |
+| What a floor *is* | undefined | **defined as a measurable quantity** | `term = f + (1−f)x` ⇒ best-vs-worst ratio `1/f`. The engine therefore asserts **cover 2.5×, shelter 4×** — quantities that are exactly Manly selection ratios, which `packages/shared` already computes. The floors are unfalsifiable *today*, not unfalsifiable in principle |
+| Relative strictness of the two requirements | never examined | 🔴 **new finding: the ordering was never chosen** | `0.25 < 0.40` asserts wind shelter is a **stricter** bed requirement than concealment. It fell out of two independently-picked literals, and the located evidence leans the other way |
+| Floor *shape* — the existence of a floor | unexamined | 🔵 **sound modelling practice** | Product/geometric-mean aggregation is the standard "limiting factor" operator; the floors are the dial that adds compensation back to an otherwise non-compensatory product (USGS OF 2007-1254; GSI toolbox AM/GM/MLF) |
+| Floor *shape* — cover term monotonicity | unexamined | 🔴 **contradicted by two measured results** | Red deer select **intermediate** LiDAR-measured visibility (Zong et al. 2023, *J. Anim. Ecol.* 92:1306); **horizontal visibility, not concealment**, drove whitetail fawn bedsite use and greater field of view **lowered** coyote-predation odds (Obermoller, *JWM*); concealment and visibility are inversely-related properties of the same cover (Camp et al. 2013). ⚠️ Do not invert the term — VRM is terrain, these measure vegetation |
+| Internal contradiction | not noticed | **new** | The leeward term is justified here by "watch downhill, smell uphill" (needs a sightline); the cover term rewards monotonically increasing sightline-breaking roughness. The two encode opposite preferences and multiply together |
+| `BEDDING_RING_MIN_DATA_FRACTION = 0.5` | unregistered (new in `R40`) | 🔴 **Assumed — and not a biological parameter** | A data-quorum threshold, correctly designed. Its comment claims to be pinned to `detectBenches`' `samples >= 8 of 16`; **the two use different denominators** (all 16 vs in-grid only) and diverge at tile borders, which is the region the quorum exists to protect. Behaviour right, claim of equivalence wrong |
+| Hiding cover, 90 % of a standing deer at 61 m | not registered | 🟡 **Doctrine** | The discipline's own operational cover definition (NRCS, MSU Deer Lab) is a **step function**; ours is a ramp. Neither measured; registered so the difference is deliberate |
+| Lang & Gates correction | corrected in pass 5 | **verified unchanged this pass** | Register and `docs/BACKLOG.md` both still state 11.2 / 18.1 / 21.7 cm means and 1.20×. ⚠️ **The retracted 42.0 cm figure survives in `wind.ts`'s comment on `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`** |
+| `R31` shelter-floor ramp | prescribed in pass 5 | **confirmed not shipped** | `wind.ts:545` is still the fixed literal `0.25`. Every `R31` statement remains prescription, not description |
