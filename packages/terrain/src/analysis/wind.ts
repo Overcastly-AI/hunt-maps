@@ -532,11 +532,14 @@ export interface BeddingOptions {
  * | `vectorRuggedness` | `clamp01(NaN)` → 0 | 0.40 floor, "smooth, no cover" | `NaN` |
  * | `season.insolation` | `clamp01(NaN)` → 0 | "no sun at all" | `NaN` |
  * | ring (mostly void) | dropped silently  | measured from whatever answered | `NaN` |
+ * | cover window mostly void | a definite VRM from the survivors | 0.40 floor on a ridge crest | `NaN` |
  *
- * The `shelter` row is `R30`; the other three are `R40`, which is the same
- * defect one term over. The aspect and pad terms carry no such hole and need no
- * guard beyond the slope test at the top of the loop — a flat cell's 0.5 lee is
- * a real answer about real ground, not a swallowed unknown.
+ * The `shelter` row is `R30`; the next three are `R40`, which is the same defect
+ * one term over; the last is `R50`, which is that defect one *level* down —
+ * `vectorRuggedness` was not `NaN` at all, it was a confident number computed
+ * from a minority of its window. The aspect and pad terms carry no such hole and
+ * need no guard beyond the slope test at the top of the loop — a flat cell's 0.5
+ * lee is a real answer about real ground, not a swallowed unknown.
  *
  * Wrong-length input arrays **throw** rather than reading `undefined` and folding
  * it onto a floor, which is the same failure wearing a caller-error hat: it
@@ -607,12 +610,20 @@ export function beddingLikelihood(surface: SurfaceField, options: BeddingOptions
         shelterTerm = 0.25 + 0.75 * clamp01(s);
       }
 
-      // Cover: `NaN` means `computeVectorRuggedness` had no complete window in
-      // range — a DEM void, a lake, a neighbour tile that never arrived — not
-      // that the ground is smooth and open (`R40`). Clamping it folded unknown
-      // onto the 0.4 floor, which is bit-identical to the score a *measured*
-      // billiard-table sidehill gets, so the map said "looked at it, no cover
-      // here" about ground it had never seen.
+      // Cover: `NaN` means `computeVectorRuggedness` could not characterise the
+      // neighbourhood — a DEM void, a lake, a neighbour tile that never arrived
+      // — not that the ground is smooth and open (`R40`). Clamping it folded
+      // unknown onto the 0.4 floor, which is bit-identical to the score a
+      // *measured* billiard-table sidehill gets, so the map said "looked at it,
+      // no cover here" about ground it had never seen.
+      //
+      // Since `R50` that `NaN` also covers a window that is *partly* readable
+      // but below `VRM_MIN_DATA_FRACTION`, which is the same swallowed unknown
+      // one step subtler: a ridge crest with its western half under a lake
+      // returned VRM = 0 exactly — the floor again, from 36 of 81 cells that all
+      // happened to sit on one facet. Note the quorum there is 0.75, not the
+      // 0.5 used just below for the ring: the two operators fail differently and
+      // the numbers were measured separately. See `VRM_MIN_DATA_FRACTION`.
       let coverTerm = 1;
       if (coverField) {
         const c = coverField[i];

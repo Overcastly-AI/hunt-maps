@@ -54,13 +54,94 @@ export interface TpiOptions {
  * Fraction of a TPI neighbourhood that must carry data before the cell gets an
  * answer instead of `NaN`.
  *
- * Pinned to the same 0.5 as `BEDDING_RING_MIN_DATA_FRACTION` and
- * `detectBenches`' 8-of-16 ring, so the three layers a hunter reads side by side
- * cannot disagree about how much of a neighbourhood has to answer before the map
- * is allowed to speak. The denominator is the *in-grid* part of the window, not
- * the geometric window — see `computeTpi`.
+ * **This one is `Doctrine`, not `Measured` (`R60`).** 0.5 was picked to line up
+ * with `BEDDING_RING_MIN_DATA_FRACTION`, and the earlier note here went further
+ * and claimed the shared value meant TPI, the bedding ring and `detectBenches`
+ * "cannot disagree about how much of a neighbourhood has to answer". That is the
+ * claim `R55` retracted one file over, and it is no truer here. The denominators
+ * are not the same quantity:
+ *
+ *  - this one is the **full geometric window**, `(2r+1)²`. `computeTpi` pads its
+ *    summed-area table by exactly `r`, so an interior cell's window is never
+ *    clipped, and `HeightGrid.get` edge-replicates past the buffer. A tile whose
+ *    eight neighbours are present therefore has 100% coverage at every interior
+ *    cell, corners included — measured, not assumed.
+ *  - `detectBenches` tests `samples >= 8` of 16 ring directions **absolutely**,
+ *    and `SurfaceField` covers the tile interior only, so its directions go
+ *    missing at every tile border whether or not any data is.
+ *
+ * So at a tile border the two diverge by construction: benches fall silent and
+ * TPI speaks, because TPI reads the halo and benches cannot. Where they do agree
+ * is the case the shared number was really bought for — a lake, a DEM void or a
+ * 404'd neighbour *inside* the grid, which is the only thing that reduces TPI's
+ * coverage at all.
+ *
+ * What this quorum is for is the **symmetric** loss: a window eaten from all
+ * sides, where the survivors are still a fair sample of the disc but there are
+ * too few of them to describe it. One-sided loss is a different failure with a
+ * different magnitude and it is caught by `TPI_MAX_CENTROID_OFFSET_FRACTION`,
+ * not here. Neither test implies the other.
  */
 export const TPI_MIN_DATA_FRACTION = 0.5;
+
+/**
+ * How far the centroid of the surviving cells may sit from the cell being
+ * described, as a fraction of the window radius, before TPI abstains.
+ *
+ * ## The failure (`R59`)
+ *
+ * TPI is `z(c) − mean(z over the survivors)`. On a plane of gradient `∇z` that
+ * is exactly
+ *
+ *     TPI = −∇z · d          d = centroid of the survivors, relative to c
+ *
+ * so a complete (symmetric) window gives 0 and a one-sided one gives a
+ * **first-order** term in the gradient — on a uniform hillside, the largest
+ * quantity anywhere in the neighbourhood. A coverage quorum cannot see this. For
+ * the canonical straight void edge the survivors run `−r … m` and `d = (m−r)/2`,
+ * so the *worst* case sits at exactly `d = −r/2`, whose coverage is
+ * `(r+1)/(2r+1)` — a number that tends to 0.5 **from above** at every radius.
+ * `TPI_MIN_DATA_FRACTION = 0.5` therefore does not merely miss this case, it can
+ * never catch it.
+ *
+ * Measured, on a uniform 15° plane with one neighbour tile absent, 10 m cells:
+ * TPI at r=20 ramps from 0 to **+26.79 m** across the outer 20 columns, matching
+ * `∇z·(r/2)·cellSize` to four decimals. `standardize` is scale-free, so that
+ * fabricated relief became the tile's entire variance and z-scored straight past
+ * Weiss's ±1σ thresholds: **512 cells of UpperSlope and 128 of MountainTop, on a
+ * plane.** Those are classes a hunter goes looking for.
+ *
+ * ## The bound, and where 0.05 comes from
+ *
+ * Because the bias is `|∇z|·|d|·cellSize` and the window's own elevation span is
+ * `|∇z|·2r·cellSize`, bounding `|d| ≤ ε·r` bounds the bias at **ε/2 of the
+ * relief the window itself covers** — free of gradient, cell size and radius,
+ * which is why the constant is expressed as a fraction of `r` rather than in
+ * cells. At ε = 0.05 the admitted bias is 2.5% of the window's span: 2.68 m at
+ * r=20 on the 15° plane above, against the 26.79 m the unguarded operator
+ * reported two cells away.
+ *
+ * **Grade the number honestly: the *form* is derived, the *magnitude* is chosen.**
+ * 2.5% is a judgement about how much fabricated relief may reach `standardize`,
+ * not a measurement of deer or of DEMs. What is measured is the cost either side
+ * of it, and that is what should move it: at ε = 0.05 the guard silences a band
+ * `r` cells deep inside a void edge and touches nothing else; a scattered
+ * single-cell void shifts the centroid by at most `r√2/(n−1)` ≈ 0.017 cells and
+ * is nowhere near it.
+ *
+ * ## What it costs, and why that is the right trade here
+ *
+ * A band `r` cells deep — 200 m at r=20 on 10 m cells — greyed inside the edge
+ * of a partially downloaded region. `R40` faced the same choice for the bedding
+ * ring and went the other way, and was right to: `ringSlopeStats` reads a
+ * tile-interior field, so requiring symmetry there would grey a frame around
+ * **every** tile and paint a grid of seams across the whole layer. TPI reads the
+ * halo, so this band appears only where a neighbour is genuinely absent — once,
+ * around the edge of what the user actually downloaded, and never in the
+ * interior of a region. That is the measurement that separates the two cases,
+ * and it is why the same reasoning produces opposite answers.
+ */
+export const TPI_MAX_CENTROID_OFFSET_FRACTION = 0.05;
 
 /**
  * TPI = z(cell) − mean(z) over the neighbourhood.
@@ -91,12 +172,24 @@ export const TPI_MIN_DATA_FRACTION = 0.5;
  * apart on purpose, exactly as `RingSlopeStats` does (`R40`):
  *
  *  - the window is **clipped** to the padded region, and clipped-away cells are
- *    outside the denominator entirely. That is a border artefact — every cell
- *    within `radius` of a tile edge has a truncated window and always has — and
- *    counting it as missing would grey a `radius`-wide frame around every tile.
+ *    outside the denominator entirely. In practice this never fires: the padding
+ *    is exactly `r`, so an interior cell's window always fits, and `get`
+ *    edge-replicates past the buffer rather than returning the sentinel. It is
+ *    kept because the alternative — counting a clip as missing — would grey a
+ *    `radius`-wide frame around every tile.
  *  - cells **inside** the region carrying `NODATA` are counted in the
  *    denominator and not the numerator. That is ground the engine cannot see,
  *    and it is what drives the abstention.
+ *
+ * ## …and *where* the survivors are, not just how many (`R59`)
+ *
+ * A count is not enough. TPI compares a cell against the mean of a
+ * neighbourhood, and a mean over a lopsided sample of a sloping neighbourhood is
+ * biased by `−∇z·d` for a centroid offset `d` — first order in the gradient, and
+ * large. The quorum above cannot catch it, because the worst one-sided case sits
+ * at 50.x% coverage for every radius. So the survivors' centroid is tested as
+ * well; see `TPI_MAX_CENTROID_OFFSET_FRACTION` for the closed form and for the
+ * grey band it costs.
  */
 export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array {
   const { width, height } = grid;
@@ -130,8 +223,17 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
   // A grid with no sentinel anywhere in it cannot produce one through `get`,
   // which either indexes the buffer or clamps to a cell of it.
   const satN = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
+  // First moments of the data mask, for the centroid test. Gated behind the same
+  // `anyVoid` flag as `satN` and for the same reason: with no sentinel in the
+  // grid every window is complete and perfectly symmetric, so the centroid is
+  // provably (0, 0) and two more ~700 kB Float64 tables per call would be pure
+  // cost on the overwhelmingly common case. `classifyWeiss` calls this twice.
+  // Float64 rather than Float32 because these are running sums of padded indices
+  // — ~1.3e7 on a 256² tile at r=20, past Float32's 2^24 exact-integer range.
+  const satMx = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
+  const satMy = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
 
-  if (satN === null) {
+  if (satN === null || satMx === null || satMy === null) {
     for (let y = 0; y < sh; y++) {
       let rowZ = 0;
       for (let x = 0; x < sw; x++) {
@@ -144,16 +246,25 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
     for (let y = 0; y < sh; y++) {
       let rowZ = 0;
       let rowN = 0;
+      let rowMx = 0;
+      let rowMy = 0;
       for (let x = 0; x < sw; x++) {
         const v = grid.get(x - pad, y - pad);
         if (v > NODATA_FLOOR) {
           rowZ += v;
           rowN += 1;
+          // Moments in *padded* coordinates; the centre is subtracted per cell
+          // below. Accumulating raw indices keeps the table independent of which
+          // window reads it, which is what makes a SAT applicable at all.
+          rowMx += x;
+          rowMy += y;
         }
         const o = (y + 1) * rowStride + (x + 1);
         const u = y * rowStride + (x + 1);
         satZ[o] = satZ[u] + rowZ;
         satN[o] = satN[u] + rowN;
+        satMx[o] = satMx[u] + rowMx;
+        satMy[o] = satMy[u] + rowMy;
       }
     }
   }
@@ -180,6 +291,13 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
     return Math.max(0, bx - ax) * Math.max(0, by - ay);
   };
 
+  // Hoisted out of the per-cell loop — the `R30`/`R49` lesson again: these are
+  // module bindings, and this loop runs once per interior cell.
+  const minFraction = TPI_MIN_DATA_FRACTION;
+  // Squared, so the centroid test is a comparison against a squared magnitude
+  // and never takes a square root.
+  const maxOffsetSq = (TPI_MAX_CENTROID_OFFSET_FRACTION * r) ** 2;
+
   const out = new Float32Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -191,7 +309,7 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
       let sum = box(satZ, x - r, y - r, x + r, y + r);
       let area = boxArea(x - r, y - r, x + r, y + r);
       // With no sentinel in the grid, every in-region cell answered, so the
-      // count *is* the area and the quorum test below is trivially satisfied.
+      // count *is* the area and both tests below are trivially satisfied.
       let count = satN === null ? area : box(satN, x - r, y - r, x + r, y + r);
       if (inner > 0) {
         sum -= box(satZ, x - inner, y - inner, x + inner, y + inner);
@@ -201,8 +319,32 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
       }
       // `count > 0` is not enough: a mean over the two corners of a window that
       // is otherwise a lake is not a description of landscape position.
-      out[i] =
-        count > 0 && count >= area * TPI_MIN_DATA_FRACTION ? grid.get(x, y) - sum / count : NaN;
+      if (!(count > 0 && count >= area * minFraction)) {
+        out[i] = NaN;
+        continue;
+      }
+      // Nor is *how many* enough on its own. A window that lost its whole
+      // eastern half still clears 50%, and the mean of what is left is taken
+      // over ground that sits, on average, half a radius west of this cell — on
+      // a slope that is a first-order error (`R59`). `count !== area` is the
+      // fast path out: a complete window is symmetric by construction, so every
+      // cell of a well-covered tile pays one integer compare and nothing else.
+      if (count !== area && satMx !== null && satMy !== null) {
+        let mx = box(satMx, x - r, y - r, x + r, y + r);
+        let my = box(satMy, x - r, y - r, x + r, y + r);
+        if (inner > 0) {
+          mx -= box(satMx, x - inner, y - inner, x + inner, y + inner);
+          my -= box(satMy, x - inner, y - inner, x + inner, y + inner);
+        }
+        // Moments are in padded coordinates; this cell sits at (x+pad, y+pad).
+        const dx = mx / count - (x + pad);
+        const dy = my / count - (y + pad);
+        if (dx * dx + dy * dy > maxOffsetSq) {
+          out[i] = NaN;
+          continue;
+        }
+      }
+      out[i] = grid.get(x, y) - sum / count;
     }
   }
   return out;

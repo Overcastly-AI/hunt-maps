@@ -8,6 +8,30 @@
 
 The analytics engine, validated against analytically-known surfaces.
 
+- [x] **Two operators reported a confident answer from a one-sided sample —
+      `BACKLOG R50`/`R59`/`R60`, 244 → 260 tests.** The rows assumed a tile
+      border was the problem. Measurement said otherwise: a fully-haloed tile is
+      **100% covered at every interior cell**, corners included, because both
+      operators read the halo and `HeightGrid.get` edge-replicates past it. So a
+      quorum here can never paint a seam grid — it fires only at the edge of what
+      the user actually downloaded, which is what made the fix affordable.
+      `computeVectorRuggedness` had no quorum at all: on a roof surface with
+      36 of 81 cells surviving it returned **exactly 0**, the engine's strongest
+      possible claim that a ridge crest is a billiard table, feeding the bedding
+      cover term its floor. Random thinning to 30% kept the error under 6% — VRM
+      survives losing cells and fails when it loses a *direction*, which is why
+      it gets a coverage quorum at 0.75 (≤11% error, against 72% at 0.5) and TPI
+      gets a centroid test instead. TPI's own bias is exact and first-order:
+      `TPI = −∇z · d` for centroid `d`, and the worst one-sided window sits at
+      coverage tending to 0.5 **from above at every radius** — so `R49`'s
+      `MIN_DATA_FRACTION = 0.5` could never have caught it. End to end, one
+      missing neighbour made `classifyWeiss` fabricate **15.6% of a uniform
+      plane** as UpperSlope and MountainTop. Now 128 cells, with the remainder
+      pinned as a known residual and filed as `R64`: the guard bounds fabricated
+      *relief*, but `standardize` divides by a field's own σ, and a plane has
+      none. Cost is +18% on TPI at r=20 on tiles containing a void, invisible at
+      `analyze()`.
+
 - [x] **Source comments no longer carry retracted provenance —
       `BACKLOG R54`/`R55`.** The evidence register was corrected two passes
       earlier; the source was not, and source is what the next engineer reads.
@@ -103,24 +127,21 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
-      identity and craft, not information architecture. Three concepts were
-      built blind and a fourth explored as a hybrid; the founder chose A
-      unmodified. `docs/design/direction-a-instrument.html` is the spec,
-      `docs/design/PLAN-direction-a.md` the plan.
-
-      Worth recording that **B and C converged independently** on chrome drawn
-          as if printed on the map sheet, inside a neatline — which is what made A,
-          the dark instrument panel, the genuinely different option rather than one
-          of three variations.
-
-          The exploration paid for itself in two findings that outlive it. Both
-          sibling files shipped a defect invisible to every DOM query: B painted
-          every layer row's name on top of its description, from a `line-height: 0`
-          that inherited into every text box; D rendered on-map text in paper ink
-          over a mid-grey raster. Both are now new invariant classes in the plan.
-          And D established that a light theme over a frozen map has **two grounds,
-          not one** — the panel's and the raster's — so one ink token cannot serve
-          both. Anyone attempting a day mode later inherits that.
+      identity and craft, not information architecture. Three concepts were built
+      blind and a fourth explored as a hybrid; the founder chose A unmodified.
+      `docs/design/direction-a-instrument.html` is the spec,
+      `docs/design/PLAN-direction-a.md` the plan. Worth recording that **B and C
+      converged independently** on chrome drawn as if printed on the map sheet,
+      inside a neatline — which is what made A, the dark instrument panel, the
+      genuinely different option rather than one of three variations. The
+      exploration paid for itself in two findings that outlive it: both sibling
+      files shipped a defect invisible to every DOM query — B painted every layer
+      row's name on top of its description, from a `line-height: 0` that
+      inherited into every text box, and D rendered on-map text in paper ink over
+      a mid-grey raster. Both are now new invariant classes in the plan. And D
+      established that a light theme over a frozen map has **two grounds, not
+      one** — the panel's and the raster's — so one ink token cannot serve both;
+      anyone attempting a day mode later inherits that.
 
 - [x] **P0 SHIPPED — `offlineReady` replaced with per-viewport coverage truth**
       (`BACKLOG R8`). The boolean was sampled once at mount and rendered behind

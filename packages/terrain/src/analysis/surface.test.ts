@@ -7,6 +7,7 @@ import {
   NODATA,
 } from './surface.js';
 import { HeightGrid } from '../dem/grid.js';
+import { BEDDING_VRM_FULL_COVER, beddingLikelihood } from './wind.js';
 import {
   centerIndex,
   channel,
@@ -19,6 +20,21 @@ import {
 
 const SIZE = 33;
 const CENTER = centerIndex(SIZE);
+
+/**
+ * FNV-1a over the raw Float32 bits of a field.
+ *
+ * The point is `Object.is` semantics across a whole array: a data quorum that
+ * accidentally shifts an interior value by one ulp is exactly the bug a
+ * `toBeCloseTo` sweep cannot see, and writing out 1089 literals is not a test
+ * anybody will maintain. Any single-bit change anywhere moves the digest.
+ */
+function float32Hash(field: Float32Array): string {
+  const bits = new Uint32Array(field.buffer, field.byteOffset, field.length);
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < bits.length; i++) h = (Math.imul(h, 16777619) ^ bits[i]) >>> 0;
+  return h.toString(16);
+}
 
 describe('computeSurface — slope', () => {
   it('recovers the true slope of a tilted plane', () => {
@@ -238,18 +254,50 @@ describe('computeSurface — no-data anywhere in the window (R49)', () => {
     }
   });
 
-  it('agrees with computeVectorRuggedness about which cells are measurable', () => {
-    // The two used to disagree, which is the whole of `R49`: VRM refused the
-    // exact windows Horn was differencing against the sentinel. VRM's window
-    // contains the cell itself, so a definite slope now implies a definite
-    // cover — pinned here so the two cannot drift apart again.
+  it('abstains on the same cells as slope only where the ground itself is void', () => {
+    // `R49` pinned this as "a definite slope implies a definite cover", which was
+    // true when VRM's only rule was `n > 0`. `R50` gave VRM a quorum and the
+    // implication broke in **both** directions, so what is pinned now is the
+    // divergence itself, measured, rather than a tidier claim that is false:
+    //
+    //  - slope is a 3x3 measurement, cover a 9x9 one, so a cell can have a clean
+    //    3x3 while two thirds of its cover window is lake → slope, no cover;
+    //  - and a cell's own 3x3 can straddle a void while 72 of the other 80
+    //    windows in its neighbourhood are clean → cover, no slope. Cell (15,15)
+    //    below is exactly that: diagonal to the void, 72/81 covered.
+    //
+    // Both are safe because `beddingLikelihood` abstains on a `NaN` from
+    // *either*, which is asserted at the bottom of this test rather than assumed.
     const g = syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 8 });
     g.set(16, 16, NODATA);
     g.set(5, 20, NODATA);
     const s = computeSurface(g);
     const vrm = computeVectorRuggedness(g);
+
+    // Where the ground itself is missing, both must abstain. That is the part of
+    // the R49 agreement that is load-bearing and it still holds exactly.
+    for (const [x, y] of [
+      [16, 16],
+      [5, 20],
+    ]) {
+      expect(Number.isNaN(s.slope[y * SIZE + x]), `slope ${x},${y}`).toBe(true);
+      expect(Number.isNaN(vrm[y * SIZE + x]), `vrm ${x},${y}`).toBe(true);
+    }
+    // The measured divergence, so a future change to either quorum has to look
+    // at it rather than discover it.
+    expect(Number.isNaN(s.slope[15 * SIZE + 15]), 'own 3x3 touches the void').toBe(true);
+    expect(Number.isNaN(vrm[15 * SIZE + 15]), '72 of 81 windows are clean').toBe(false);
+
+    // The invariant that actually protects the map: the composite refuses
+    // wherever either input refused.
+    const bedding = beddingLikelihood(s, {
+      windFromDeg: 270,
+      vectorRuggedness: vrm,
+    });
     for (let i = 0; i < s.slope.length; i++) {
-      if (Number.isFinite(s.slope[i])) expect(Number.isNaN(vrm[i]), `cell ${i}`).toBe(false);
+      if (Number.isNaN(s.slope[i]) || Number.isNaN(vrm[i])) {
+        expect(Number.isNaN(bedding[i]), `cell ${i % SIZE},${Math.floor(i / SIZE)}`).toBe(true);
+      }
     }
   });
 });
@@ -485,5 +533,173 @@ describe('computeVectorRuggedness', () => {
     const vrm = computeVectorRuggedness(grid);
     // Two cells away from the hole: window still touches it, value must stay ~0.
     expect(vrm[16 * SIZE + 18]).toBeLessThan(1e-6);
+  });
+});
+
+describe('computeVectorRuggedness — the window quorum (R50)', () => {
+  /**
+   * ## The surface, and why it has a closed form
+   *
+   * A "roof": `z = 500 − g·|x|` metres. Two planar facets meeting at a crest —
+   * the elementary broken-ground feature, and a real one (a ridge crest is
+   * exactly this). Horn's kernel is exact on a plane, so every window one cell
+   * or more off the crest sits wholly on one facet and returns `dz/dx = ∓g`
+   * exactly, while the crest column returns 0 by symmetry. The 9x9 VRM window
+   * centred on the crest therefore holds exactly three distinct unit normals in
+   * known proportions (4 columns : 1 column : 4 columns), and
+   *
+   *     VRM_crest = 1 − (8/√(1+g²) + 1) / 9
+   *
+   * with no numerical fitting anywhere in it. Every expectation below is that
+   * closed form evaluated over the columns that survive a flood, so a wrong
+   * answer is wrong by a stated amount rather than by a tolerance.
+   */
+  const GRADE = 0.5;
+  const RSIZE = 33;
+  const HALO = 8;
+  const RC = (RSIZE - 1) / 2;
+  const CREST = RC * RSIZE + RC;
+  const roof = (x: number, y: number): number => {
+    void y;
+    return 500 - GRADE * Math.abs(x);
+  };
+  /** Unit-normal components of one facet: (∓sin, 0, cos) of the facet tilt. */
+  const COS = 1 / Math.sqrt(1 + GRADE * GRADE);
+  const SIN = GRADE * COS;
+  const TRUE_CREST_VRM = 1 - (8 * COS + 1) / 9;
+
+  /**
+   * Roof grid with everything strictly west of interior column `cut` flooded —
+   * the shape a lake edge, a mosaic boundary or a missing neighbour tile leaves.
+   * A padded cell keeps a complete 3x3 iff it sits at `cut + 1` or further east,
+   * so the crest's 9-column window retains columns `cut+1 … RC+4`.
+   */
+  function floodedRoof(cut: number): HeightGrid {
+    const g = syntheticGrid(roof, { size: RSIZE, halo: HALO, cellSize: 10 });
+    for (let y = -HALO; y < RSIZE + HALO; y++) {
+      for (let x = -HALO; x < cut; x++) g.set(x, y, NODATA);
+    }
+    return g;
+  }
+
+  /** Closed-form VRM over `west` west-facet columns, `crest` crest columns, `east` east. */
+  function closedForm(west: number, crest: number, east: number): number {
+    const n = 9 * (west + crest + east);
+    const sx = 9 * (east - west) * SIN;
+    const sz = 9 * ((west + east) * COS + crest);
+    return 1 - Math.hypot(sx, sz) / n;
+  }
+
+  it('reads a ridge crest as broken ground — the closed form', () => {
+    const vrm = computeVectorRuggedness(
+      syntheticGrid(roof, { size: RSIZE, halo: HALO, cellSize: 10 }),
+      { radiusCells: 4 },
+    );
+    expect(TRUE_CREST_VRM).toBeCloseTo(0.0938425, 7);
+    expect(vrm[CREST]).toBeCloseTo(TRUE_CREST_VRM, 6);
+    expect(vrm[CREST]).toBeCloseTo(closedForm(4, 1, 4), 6);
+  });
+
+  it('refuses a window that is 44% covered instead of calling a crest a billiard table', () => {
+    // The R50 defect in one number. Flooding to the crest column leaves the four
+    // east-facet columns — 36 of 81 cells, all of them the *same* normal — so
+    // the old `n > 0` rule returned VRM = 0 EXACTLY: not "a bit smoother than it
+    // really is", but the engine's strongest possible statement that this ground
+    // is a plane and conceals nothing. It is a ridge crest.
+    const g = floodedRoof(RC);
+    expect(closedForm(0, 0, 4)).toBe(0);
+    const vrm = computeVectorRuggedness(g, { radiusCells: 4 });
+    expect(Number.isNaN(vrm[CREST]), '36/81 covered, was a definite 0').toBe(true);
+  });
+
+  it('refuses at 56% — the coverage the neighbouring 0.5 quorums would have passed', () => {
+    // 45 of 81 = 0.556 clears `TPI_MIN_DATA_FRACTION` and
+    // `BEDDING_RING_MIN_DATA_FRACTION`. It must not clear this one: the closed
+    // form here is 0.01704 against a truth of 0.09384, which is a 5.5x
+    // understatement of the concealment on this cell.
+    const g = floodedRoof(RC - 1);
+    expect(closedForm(0, 1, 4)).toBeCloseTo(0.017037, 5);
+    expect(0.556).toBeGreaterThan(0.5);
+    const vrm = computeVectorRuggedness(g, { radiusCells: 4 });
+    expect(Number.isNaN(vrm[CREST]), '45/81 covered').toBe(true);
+  });
+
+  it('answers at 78% and the answer is worth having', () => {
+    // 63/81 = 0.778 is the tightest coverage the quorum admits on a straight
+    // flood edge. The closed form there is 0.08156 against a truth of 0.09384 —
+    // a 13% understatement, and (see the bedding test below) small enough that
+    // the cover term it feeds does not move far.
+    const g = floodedRoof(RC - 3);
+    const vrm = computeVectorRuggedness(g, { radiusCells: 4 });
+    expect(vrm[CREST]).toBeCloseTo(closedForm(2, 1, 4), 6);
+    expect(vrm[CREST]).toBeCloseTo(0.08156, 5);
+  });
+
+  it('bounds what the admitted error can do to the bedding cover term', () => {
+    // This is the measurement the 0.75 was chosen from, so it is pinned here
+    // rather than asserted in prose. The cover term is
+    // `0.4 + 0.6·clamp01(vrm / BEDDING_VRM_FULL_COVER)`, i.e. a 0.6-wide range.
+    const coverTerm = (v: number): number =>
+      0.4 + 0.6 * Math.min(1, Math.max(0, v / BEDDING_VRM_FULL_COVER));
+    // Worst measured geometry: a roof gentle enough that the cover term is not
+    // saturated, so the whole error passes through to the score.
+    const g35 = 0.35;
+    const cos35 = 1 / Math.sqrt(1 + g35 * g35);
+    const truth35 = 1 - (8 * cos35 + 1) / 9;
+    const build = (cut: number): HeightGrid => {
+      const g = syntheticGrid(
+        (x, y) => {
+          void y;
+          return 500 - g35 * Math.abs(x);
+        },
+        { size: RSIZE, halo: HALO, cellSize: 10 },
+      );
+      for (let y = -HALO; y < RSIZE + HALO; y++) {
+        for (let x = -HALO; x < cut; x++) g.set(x, y, NODATA);
+      }
+      return g;
+    };
+    // Admitted (coverage 0.778): error must stay inside 15% of the term's range.
+    const admitted = computeVectorRuggedness(build(RC - 3), { radiusCells: 4 })[CREST];
+    expect(Number.isNaN(admitted)).toBe(false);
+    const admittedErr = Math.abs(coverTerm(admitted) - coverTerm(truth35));
+    expect(admittedErr).toBeLessThan(0.15 * 0.6);
+    // Refused (coverage 0.667 and 0.556): had they been admitted, the error
+    // would have been 29% and 68% of the range. Those are the numbers that put
+    // the threshold above 0.667 rather than at the neighbours' 0.5.
+    for (const cut of [RC - 2, RC - 1]) {
+      expect(
+        Number.isNaN(computeVectorRuggedness(build(cut), { radiusCells: 4 })[CREST]),
+        `cut ${cut}`,
+      ).toBe(true);
+    }
+  });
+
+  it('is inert on a fully covered tile — nothing in the interior moves', () => {
+    // A quorum bug hides inside an epsilon, so this is `Object.is` against a
+    // hash of the pre-R50 output, not a tolerance. The grid is fully haloed, and
+    // the measured fact that makes this safe is that a haloed VRM window is
+    // *always* 81/81 covered: unlike `ringSlopeStats`, VRM reads the halo, so
+    // there is no clipped-window border case for a fraction quorum to catch.
+    const g = syntheticGrid(
+      (x, y) => 500 + 0.25 * x + 4 * Math.sin(x / 23) * Math.cos(y / 19) + 0.9 * Math.sin(x / 7),
+      { size: 33, halo: 8, cellSize: 10 },
+    );
+    const vrm = computeVectorRuggedness(g, { radiusCells: 4 });
+    expect(float32Hash(vrm), 'pre-R50 baseline').toBe('1ff8f706');
+    for (let i = 0; i < vrm.length; i++) expect(Number.isNaN(vrm[i]), `cell ${i}`).toBe(false);
+  });
+
+  it('still answers everywhere on a tile whose neighbours are all present', () => {
+    // The cost of the quorum is paid only where data is genuinely absent. Every
+    // interior cell of a haloed grid — corners included — keeps a complete
+    // window, so a well-covered tile is untouched and no seam grid appears.
+    for (const halo of [5, 8, 20]) {
+      const g = syntheticGrid(paraboloid(-0.0015), { size: 33, halo, cellSize: 10 });
+      const vrm = computeVectorRuggedness(g, { radiusCells: 4 });
+      for (let i = 0; i < vrm.length; i++) {
+        expect(Number.isNaN(vrm[i]), `halo ${halo}, cell ${i}`).toBe(false);
+      }
+    }
   });
 });

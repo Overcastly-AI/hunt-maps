@@ -339,6 +339,68 @@ export interface VectorRuggednessOptions {
 }
 
 /**
+ * Fraction of the VRM window that must carry a complete 3x3 before the cell gets
+ * a dispersion figure instead of `NaN`. Dimensionless, 0..1.
+ *
+ * ## Why this is not 0.5, and not the same number as its neighbours (`R50`)
+ *
+ * `TPI_MIN_DATA_FRACTION` and `BEDDING_RING_MIN_DATA_FRACTION` are both 0.5.
+ * This one is deliberately not, and copying them would have been the mistake:
+ * the three operators fail in different ways, so the same quorum buys different
+ * amounts of protection in each. The number here is measured against the term it
+ * feeds, which is `beddingLikelihood`'s security-cover factor —
+ * `0.4 + 0.6·clamp01(vrm / BEDDING_VRM_FULL_COVER)`, a range of 0.6.
+ *
+ * The measurement uses a **roof** (`z = 500 − g·|x|`): two planar facets meeting
+ * at a crest, which is a real ridge crest and the elementary case of broken
+ * ground. Horn is exact on a plane, so the crest's window holds three known
+ * normals and VRM has a closed form; flooding the window from one side — the
+ * shape a lake edge or a missing neighbour tile leaves — gives error against
+ * that closed form as a function of coverage. Worst case over grades 0.2/0.35/0.5
+ * (the softest grade is worst, because a steeper roof saturates the cover term
+ * and hides the error):
+ *
+ * | coverage | VRM error | error in the cover term | share of its 0.6 range |
+ * | --- | --- | --- | --- |
+ * | 72/81 = 0.889 | 0.005 | 0.017 | 3% |
+ * | 63/81 = 0.778 | 0.011 | 0.065 | 11% |
+ * | 54/81 = 0.667 | 0.017 | 0.173 | 29% |
+ * | 45/81 = 0.556 | 0.041 | 0.430 | 72% |
+ * | 36/81 = 0.444 | 0.050 | 0.600 | 100% |
+ *
+ * At 0.444 the surviving cells are one facet, every normal identical, and VRM is
+ * **exactly 0** — not an understatement but the engine's strongest possible claim
+ * that a ridge crest is a billiard table, feeding the cover term its floor.
+ *
+ * 0.75 admits at most 11% of the term's range. 0.5 would admit 72%. Any value in
+ * (0.667, 0.778] behaves identically on a straight flood edge, which is the
+ * geometry `fillVoids` leaves behind; 0.75 is the midpoint of that interval.
+ *
+ * ## Why one-sidedness is the whole story here
+ *
+ * An *unbiased* thinning of the same window costs almost nothing: sampling 40
+ * random masks at each coverage down to 0.3 kept the cover-term error under 6%
+ * of the range on every surface tried. VRM is a dispersion statistic, so it
+ * survives losing cells at random and fails when it loses a **direction** —
+ * which is exactly what a lake edge, a mosaic seam or an absent neighbour tile
+ * takes away. That is also why this operator gets a coverage quorum while
+ * `computeTpi` gets a centroid test: TPI's error is first-order in *where* the
+ * survivors sit, VRM's is in *how much* of the neighbourhood is left.
+ *
+ * ## What it costs
+ *
+ * Nothing on a well-covered tile. Measured: every interior cell of a haloed grid
+ * — corners included — has a 81/81 window, because VRM reads the halo rather
+ * than a tile-interior field. There is no clipped-window border case here of the
+ * kind `RingSlopeStats.missing` exists to protect, so this quorum can only fire
+ * on ground the engine genuinely cannot see. Where a neighbour tile is absent it
+ * greys the outer 3 columns of the r+1 partially covered ones (r=4: coverage runs
+ * 0.889/0.778/0.667/0.556/0.444 inward from the edge); at a corner where two
+ * neighbours are absent, 4 cells deep on the diagonal.
+ */
+export const VRM_MIN_DATA_FRACTION = 0.75;
+
+/**
  * Vector Ruggedness Measure (Sappington, Longshore & Thompson 2007,
  * *J. Wildl. Manage.* 71:1419), dimensionless on **[0, 1]**.
  *
@@ -375,6 +437,11 @@ export interface VectorRuggednessOptions {
  *  - A cell is skipped if it or any of its 8 neighbours is no-data, because a
  *    Horn gradient straddling the NODATA sentinel is a ~32 km cliff. Skipped
  *    cells are removed from the divisor rather than counted as smooth.
+ *  - Below `VRM_MIN_DATA_FRACTION` of the window the cell abstains with `NaN`.
+ *    Removing skipped cells from the divisor keeps the *arithmetic* honest but
+ *    says nothing about whether what is left describes the neighbourhood; see
+ *    that constant for the measurement, and for why its value differs from the
+ *    0.5 two neighbouring operators use.
  *
  * Reads up to `radiusCells + 1` cells outside the interior, so the grid halo
  * must be at least that (`requiredHalo` handles this for `bedding`).
@@ -466,6 +533,13 @@ export function computeVectorRuggedness(
     sat[(y1 + 1) * sw + x0] +
     sat[y0 * sw + x0];
 
+  // Hoisted, not read per cell: `VRM_MIN_DATA_FRACTION` is a module binding and
+  // this loop runs 65k times per tile (see `NODATA_FLOOR` for what a property
+  // load in here measured at). The window is the full geometric (2r+1)² — there
+  // is no clipped-denominator case, because the padded region the SAT covers is
+  // sized to the window and `HeightGrid.get` edge-replicates beyond the buffer.
+  const minCells = (2 * r + 1) * (2 * r + 1) * VRM_MIN_DATA_FRACTION;
+
   const out = new Float32Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -480,7 +554,9 @@ export function computeVectorRuggedness(
       const x1 = x + 2 * r;
       const y1 = y + 2 * r;
       const n = box(satN, x0, y0, x1, y1);
-      if (n <= 0) {
+      // `n > 0` was the old rule, and one surviving cell out of 81 passed it.
+      // Written as a negated `>=` so it also rejects a NaN count.
+      if (!(n >= minCells)) {
         out[i] = NaN;
         continue;
       }
