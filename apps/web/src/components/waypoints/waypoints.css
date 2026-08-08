@@ -1,0 +1,216 @@
+/**
+ * `components/waypoints` — layout only. Every value below reads a token from
+ * `@hunt-maps/design`; see `apps/web/src/index.css`'s own header comment for
+ * why that rule exists. Prefixed `wp-` so nothing here collides with the
+ * shared `rl-` vocabulary it builds on.
+ */
+
+.wp-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The type picker. `auto-fit`/`minmax` at the gloved-touch floor, same
+   technique as `.region-segments` (`apps/web/src/index.css`) — a ten-entry
+   grid wraps cleanly on a 390px sheet without ever producing a sub-44px cell. */
+.wp-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.wp-type-btn {
+  min-height: var(--space-touch);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  text-align: center;
+}
+
+.wp-type-btn:hover {
+  border-color: var(--color-line-strong);
+}
+
+.wp-type-btn--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-weight: var(--weight-semibold);
+}
+
+.wp-type-blurb {
+  margin-top: calc(var(--space-4) * -1 + var(--space-1));
+  margin-bottom: var(--space-4);
+}
+
+.wp-octant-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.wp-lane-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.wp-lane-row .rl-range {
+  flex: 1;
+}
+
+.wp-lane-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.wp-lane-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  background: var(--color-raised);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+
+.wp-latlng-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.wp-textarea {
+  min-height: calc(var(--space-touch) * 2);
+  resize: vertical;
+  font-family: var(--font-sans);
+}
+
+.wp-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.wp-inline-link {
+  padding: 0;
+  min-height: 0;
+  vertical-align: baseline;
+}
+
+/* --------------------------------------------------------------------------
+ * List
+ * -------------------------------------------------------------------------- */
+
+.wp-list__items {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.wp-row {
+  width: 100%;
+  min-height: var(--space-touch);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wp-row:hover {
+  border-color: var(--color-line);
+}
+
+.wp-row__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+ * Detail
+ * -------------------------------------------------------------------------- */
+
+.wp-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.wp-detail__notes {
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+  line-height: var(--leading-normal);
+  margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.wp-detail__facts {
+  margin-bottom: var(--space-4);
+}
+
+.wp-detail__log-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.wp-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line);
+}
+
+.wp-detail__confirm-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.wp-windcheck {
+  margin-top: var(--space-4);
+}
+
+.wp-windcheck--blocked {
+  opacity: 0.85;
+}
+
+.wp-windcheck__reasons {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+}
