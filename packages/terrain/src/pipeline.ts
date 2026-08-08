@@ -167,9 +167,7 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
   if (want.has('aspect')) result.aspect = surface.aspect;
 
   const needsCurvature =
-    want.has('curvatureProfile') ||
-    want.has('curvaturePlan') ||
-    want.has('wood');
+    want.has('curvatureProfile') || want.has('curvaturePlan') || want.has('wood');
   let curvature: CurvatureField | undefined;
   if (needsCurvature) {
     curvature = computeCurvature(grid);
@@ -179,14 +177,10 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
   }
 
   if (want.has('tpiSmall')) {
-    result.tpiSmall = standardize(
-      computeTpi(grid, { radius: request.tpiSmallRadius ?? 3 }),
-    );
+    result.tpiSmall = standardize(computeTpi(grid, { radius: request.tpiSmallRadius ?? 3 }));
   }
   if (want.has('tpiLarge')) {
-    result.tpiLarge = standardize(
-      computeTpi(grid, { radius: request.tpiLargeRadius ?? 20 }),
-    );
+    result.tpiLarge = standardize(computeTpi(grid, { radius: request.tpiLargeRadius ?? 20 }));
   }
 
   // Two different ruggedness measures, on purpose. TRI is the layer a user
@@ -268,8 +262,11 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
  *
  * The insolation is evaluated at **mean solar noon** — the moment the aspect
  * contrast between faces is largest and the one that governs how much snow a
- * slope sheds (18.1 cm on the SE face vs 42.0 cm on the NE face, Lang & Gates
- * 1985). Mean solar noon rather than true solar noon: the equation of time moves
+ * slope sheds (Lang & Gates 1985 mean depths: SE face 18.1 cm vs NE face
+ * 21.7 cm, a **1.20×** effect — *not* the 2.32× this comment used to quote,
+ * which compared a mean against the study's deepest single reading; see
+ * `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`). Mean solar noon rather than true solar
+ * noon: the equation of time moves
  * it by at most ±16 minutes, which shifts the sun's azimuth by ~4° and changes
  * nothing about which face wins, whereas making the field depend on the local
  * time zone would make it depend on politics.

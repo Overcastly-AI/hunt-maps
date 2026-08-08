@@ -700,9 +700,13 @@ describe('beddingLikelihood does not guess the surround from a mostly-void ring 
   });
 
   it('keeps a definite answer when half the in-grid ring answered', () => {
-    // The quorum is exactly `detectBenches`' own: at least half the ring. Pinned
-    // so the two layers cannot drift apart and start disagreeing about the same
-    // shelf at the edge of the same void.
+    // The quorum matches `detectBenches`' own — at least half the ring — for the
+    // case this test covers: an in-grid void, where `samples + missing == 16` and
+    // the two layers' denominators are the same 16 directions, so they fall
+    // silent together at the edge of the same void. They deliberately diverge at
+    // a *tile border*, where directions are off-grid rather than voided; see
+    // `BEDDING_RING_MIN_DATA_FRACTION` for why aligning them there would grey a
+    // seam around every tile.
     expect(BEDDING_RING_MIN_DATA_FRACTION).toBe(0.5);
     const g = build(plane(0, grade(25)));
     // Void everything north of interior row 12; the ring at (15,13) then has 9

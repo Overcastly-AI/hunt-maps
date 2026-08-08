@@ -291,8 +291,16 @@ export const BEDDING_PAD_HALF_MAX_SLOPE_DEG = 12;
  * sightline downhill, a thermal advantage, and an exit nobody can follow. Slope
  * alone cannot express it — the same 8° reads as a bench, a ridge crown or the
  * middle of a hayfield. `detectBenches` requires ≥18° in a 16-direction ring;
- * this is the soft version of the same test, at the bottom of the BC WHR band so
- * that it credits ground the hard threshold would reject outright.
+ * this is the soft version of the same test, set below that hard threshold so it
+ * credits ground the bench layer rejects outright.
+ *
+ * 15° is the **centre** of the BC WHR whitetail winter-range band, not its floor:
+ * the band is 10–45% slope, which bottoms out at **5.7°** and tops out at 24.2°.
+ * This comment used to call 15° "the bottom of the BC WHR band", which invites
+ * the next reader to lower it toward 5.7° believing they are moving it *onto* the
+ * cited value when they would be moving it half a band below it. At 5.7° of
+ * surround the ring term saturates on rolling farm ground and reports it as
+ * "embedded in steep ground" — the one thing this term exists to rule out.
  */
 export const BEDDING_RING_MIN_SLOPE_DEG = 15;
 
@@ -326,12 +334,29 @@ export const BEDDING_VRM_FULL_COVER = 0.06;
  * been measured, it has been guessed from whichever directions happened to have
  * data, and the term reports unknown instead.
  *
- * 0.5 is not a free choice: `detectBenches` already requires `samples >= 8` of
- * 16 to call the same geometry a bench, and the two layers are pinned to the same
- * ring radius precisely so they cannot disagree about what a shelf is (see
- * `DEFAULT_RING_RADIUS_CELLS`). Using a different quorum here would reintroduce
- * that disagreement at the edge of every DEM void: bedding confidently scoring
- * ground the bench layer had already declined to judge.
+ * 0.5 is the same number `detectBenches` uses (`samples >= 8` of 16) and the two
+ * layers share a ring radius (`DEFAULT_RING_RADIUS_CELLS`), so they are asking
+ * about the same geometry with the same quorum. They are **not** asking the same
+ * question, and the claim that used to sit here — that the shared 0.5 means the
+ * two layers cannot disagree about what a shelf is — is false at precisely the
+ * place it was written to protect. The denominators differ:
+ *
+ *  - `detectBenches` tests `samples >= 8` **absolutely**: its denominator is all
+ *    16 directions, including the ones that fell off the tile.
+ *  - this tests `samples >= 0.5 · (samples + missing)`: the denominator is the
+ *    **in-grid** ring only.
+ *
+ * The two coincide only when `samples + missing == 16`. At a tile border with,
+ * say, five in-grid directions all carrying data, `detectBenches` abstains and
+ * bedding speaks.
+ *
+ * That divergence is deliberate and must not be "fixed" by aligning the tests.
+ * Adopting the absolute form here would abstain on a ring-radius frame around
+ * every tile and paint a grid of grey seams across the flagship layer — the
+ * artefact `R40` explicitly chose against, and the reason `missing` is reported
+ * separately from off-tile in the first place. What the shared 0.5 does buy is
+ * the case that actually matters: a DEM void, a lake or a 404'd neighbour
+ * *inside* the grid, where the two layers do fall silent at the same coverage.
  */
 export const BEDDING_RING_MIN_DATA_FRACTION = 0.5;
 
@@ -346,6 +371,20 @@ export const BEDDING_COLD_ONSET_C = 5;
 /**
  * At or below this temperature the solar-aspect term carries its full weight,
  * °C. −10 °C is a genuine winter-severity threshold, not a cold snap.
+ *
+ * This is the **best-grounded constant in the bedding set**, and carrying no
+ * citation made it read like a round number somebody liked — so the next reader
+ * would rank it alongside the genuinely assumed endpoints around it and tune it
+ * as freely. It is not free. The measured lower critical temperature for
+ * white-tailed deer fawns **fed a natural browse diet is −11.2 °C** (indirect
+ * respiration calorimetry; feeding raised thermoneutral heat production ~40%,
+ * moving the LCT from −0.8 °C fasted to −11.2 °C fed — *Can. J. Zool.* 1999,
+ * https://cdnsciencepub.com/doi/10.1139/z99-111). Below that a fed deer must
+ * catabolise tissue to hold core temperature, so full weight on the sun term
+ * begins **1.2 °C** from a species-specific physiological threshold rather than
+ * from a guess. Kept honest: the measurement is on **fawns**; an adult's better
+ * surface-to-volume ratio gives a lower LCT, so −10 °C is *conservative* for the
+ * mature buck this layer is aimed at. Graded 🔵 Inferred in `docs/EVIDENCE.md`.
  */
 export const BEDDING_SEVERE_COLD_C = -10;
 
@@ -353,15 +392,30 @@ export const BEDDING_SEVERE_COLD_C = -10;
  * Maximum share of the aspect term given to sun rather than to lee.
  *
  * Four agencies (BC WHR, Ontario, Nova Scotia, Maine) prescribe south/west
- * aspects for winter deer range, and the mechanism is measured: 18.1 cm of snow
- * on the SE-facing slope against 42.0 cm on the NE-facing slope in the same
- * study area (Lang & Gates 1985). At 0.75, a fully sun-facing but windward slope
+ * aspects for winter deer range, and those prescriptions stand. The *mechanism*
+ * this comment used to quote does not, and the wrong version is worth spelling
+ * out because the next reader will otherwise re-derive it from the same paper:
+ * "18.1 cm on the SE face against 42.0 cm on the NE face" compares a **mean
+ * against the study's deepest single reading**. Lang & Gates 1985's like-for-like
+ * means are bottomland **11.2 cm**, SE-facing **18.1 cm**, NE-facing **21.7 cm** —
+ * an aspect effect of **1.20×, not 2.32×**. And the reading cuts the other way
+ * from the folklore: the **sheltered bottomland was the shallowest of all three
+ * sites**, a 10.5 cm advantage over the NE face, roughly **3× the aspect
+ * effect**. The paper cited as the reason to send hunters to the sun slope
+ * measured topographic position beating aspect on that very variable.
+ *
+ * So 0.75 is not calibrated to a measured 2.32× snow mechanism — it never was,
+ * and must not be defended as if it were. It is a shape choice about how two
+ * live requirements trade: at 0.75 a fully sun-facing but windward slope
  * overtakes a fully leeward but shaded one at roughly **−7 °C** and below, and
  * lee still wins at every temperature above about 0 °C. Deep cold does not make
  * wind irrelevant — hence 0.75 and not 1 — it makes the sun the stronger of two
  * live requirements. The failure this prevents: on a south wind in January the
- * leeward-only term pointed at north-facing ground, the deepest snow and coldest
- * cell on the property, and presented it as the safe pick.
+ * leeward-only term pointed at north-facing ground, the coldest cell on the
+ * property, and presented it as the safe pick. The corrected figures argue for
+ * raising the *shelter floor* rather than this weight (`R31`); pushing this
+ * toward 1.0 would assert that lee is irrelevant in winter, which Courbin et al.
+ * 2017 measures against. Graded 🔴 Assumed in `docs/EVIDENCE.md`.
  */
 export const BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75;
 

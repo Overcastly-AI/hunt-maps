@@ -349,11 +349,14 @@ describe('beddingLikelihood — season-aware aspect (R22)', () => {
   });
 
   it('on a cold January south wind, the south face outscores the north face', () => {
-    // Four agencies prescribe south/west aspects for winter range; the measured
-    // mechanism is snow depth — 18.1 cm on the SE face against 42.0 cm on the
-    // NE face in the same study area (Lang & Gates 1985). Sending a hunter to
-    // the fully leeward north slope in deep cold points at the coldest, deepest-
-    // snow cell on the property and calls it the safe pick.
+    // Four agencies prescribe south/west aspects for winter range. The snow
+    // mechanism is real but modest: Lang & Gates 1985's means are SE face
+    // 18.1 cm against NE face 21.7 cm, **1.20×** — not the 2.32× this comment
+    // used to quote, which set a mean against the study's deepest single reading
+    // (see `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`). This test pins the *direction* of
+    // the trade, not its magnitude: sending a hunter to the fully leeward north
+    // slope in deep cold points at the coldest cell on the property and calls it
+    // the safe pick.
     const cold = -12;
     const north = beddingLikelihood(northFacing, {
       windFromDeg: SOUTH_WIND,

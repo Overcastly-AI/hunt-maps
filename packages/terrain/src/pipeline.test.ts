@@ -129,9 +129,10 @@ describe('analyze', () => {
         bedding: { shelter: flatShelter },
       }).bedding![centerIndex(SIZE)];
 
-    // Leeward-only: the north face wins, which in January is the deepest snow
-    // and the coldest cell on the property (18.1 cm on the SE face against
-    // 42.0 cm on the NE face, Lang & Gates 1985).
+    // Leeward-only: the north face wins, which in January is the coldest cell on
+    // the property and the one holding snow longest (Lang & Gates 1985 means:
+    // SE face 18.1 cm vs NE face 21.7 cm — 1.20×, not the 2.32× once quoted
+    // here, which compared a mean against a maximum).
     expect(score(-0.4)).toBeGreaterThan(score(0.4));
     // Same wind, same terrain, -12 °C: the south face wins. This exercises the
     // whole wiring — date and location resolved to a solar-noon sun position,

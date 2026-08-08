@@ -125,8 +125,7 @@ latest. Three GA counties are confirmed, out of 159.
 | R59 | TPI's data quorum is unweighted, so a one-sided window still biases the mean                                                        | P2  | S    | `terrain-scientist`                                   | Recorded by the `R49` agent against its own fix, which is the right instinct. `computeTpi` now excludes void cells from both numerator and count and requires `TPI_MIN_DATA_FRACTION = 0.5`, but a window that clears 50% **from one side only** still shifts the mean on sloping ground — the surviving samples are not a fair sample of the disc. Pre-existing in the same form at every tile border, so this is not a regression the fix introduced; it is a limitation the fix made visible. Also note `TPI_MIN_DATA_FRACTION = 0.5` is chosen for consistency with `BEDDING_RING_MIN_DATA_FRACTION`, **not derived** — it is the right _kind_ of number with no measurement behind it, and should be graded accordingly. A directional weighting or a symmetry requirement would be the real fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | R52 | **The engine asserts wind shelter is a stricter bed requirement than concealment — and nobody chose that**                          | P1  | S    | `game-biologist` then `terrain-scientist`             | Found in pass 6 of the evidence audit, and it is an emergent claim rather than a decision. For a term of the form `f + (1−f)·x`, the best-vs-worst ratio on that axis is exactly **1/f**. So the two floors assert: **shelter 4.0×** (`f = 0.25`) and **cover 2.5×** (`f = 0.40`) — i.e. a fully sheltered bed can be at most four times as good as an identical exposed one, while a fully concealed bed can be at most two and a half times as good as an identical bare one. Those two literals were set in different commits and the ranking between them was never anybody's call. **The located evidence leans the other way on both halves:** concealment selection at beds is measured repeatedly (Uresk et al., Black Hills — 28.1% vs 19.9% cover at beds vs random in 1991, 36.0% vs 33.8% in 1992; Grovenburg et al. 2010, OR 1.035 per cm of understory height), while the _thermal-shelter_ benefit is the one that has been tested and **failed** — Cook et al. 1998, _Wildlife Monographs_ 141, found no positive effect of thermal cover on elk condition across six winter/summer experiments, and that in winter _"the dense cover units actually provided the most costly energetic environments, and the clearcuts the least."_ **Decide it deliberately or set the two equal.** Note the ratios are **Manly selection ratios** — the exact quantity `packages/shared` already computes against a `TerrainProfile` — so this becomes falsifiable the moment there is an observation set. Do not move either number on taste in the meantime: a floor moved on judgement is worse than one left at a documented value.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | R53 | The cover term's "more ruggedness is always better" shape contradicts two measurements **and** our own leeward rationale            | P1  | M    | `game-biologist` then `terrain-scientist`             | The cover term is monotonic in VRM — rougher is always better concealment. Two peer-reviewed results say the response has an interior optimum or the opposite sign: **Zong et al. 2023** (_J. Anim. Ecol._ 92:1306) found red deer select **intermediate** LiDAR-measured 3D visibility; **Obermoller et al.** (_JWM_) found **horizontal visibility, not concealment cover**, drove whitetail fawn bedsite use, and that a _greater_ field of view **lowered** coyote-predation odds. Camp et al. 2013 make the structural point: concealment and visibility are inversely-related properties of the same cover. **This exposes a contradiction inside Ridgeline's own model.** The leeward aspect term is justified in the register by the doctrine that a buck beds to _watch downhill and smell uphill_ — which requires a sightline — while the cover term rewards monotonically increasing, sightline-breaking ruggedness. The two terms encode **opposite preferences about the same variable** and are multiplied together. **Do not simply invert the cover term** — the auditor was explicit: VRM measures terrain-orientation dispersion, the studies measure vegetation, and swapping the sign would import a vegetation result onto a terrain proxy. The work is to decide what the term is _for_, then shape it. Couples to `R39` and `R50`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| R54 | Three source comments still carry retracted or wrong provenance                                                                     | P1  | XS   | `terrain-scientist`                                   | Read out of the code in pass 6; the register is correct and the **source is where the retracted claims survive**. (1) `wind.ts:346` still reads _"18.1 cm … against 42.0 cm on the NE-facing slope"_ — 42.0 is the study's deepest single reading compared against a mean; Lang & Gates' means are bottomland 11.2 / SE 18.1 / NE 21.7 cm, an aspect effect of **1.20× not 2.32×**, and the _sheltered bottomland_ was shallowest of all three. This is the last place that error lives. (2) `BEDDING_RING_MIN_SLOPE_DEG`'s comment still calls 15° _"the bottom of the BC WHR band"_; the band is 10–45% slope, bottoming at **5.7°** — 15° is its centre. Retracted two passes ago, still in source. (3) `BEDDING_SEVERE_COLD_C`'s comment carries no citation, so the value reads as an unsupported assertion when it is actually the best-grounded constant in the set (measured LCT for fed whitetail fawns is −11.2 °C, Can. J. Zool. 1999). Comment-only; no behaviour changes. Do it in the same pass as any other `wind.ts` work rather than as its own commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| R55 | `BEDDING_RING_MIN_DATA_FRACTION`'s stated justification is false exactly at the border it protects                                  | P2  | XS   | `terrain-scientist`                                   | `R40` introduced this constant with the rationale that it is pinned to `detectBenches`' `samples >= 8 of 16` _"so the two layers cannot disagree about what a shelf is."_ Read against both sources, that claim does not hold: `detectBenches` tests `samples >= 8` **absolute** (denominator = all 16 directions, including off-tile ones), while `beddingLikelihood` tests `samples >= 0.5·(samples + missing)` (denominator = **in-grid only**). At a tile border with 5 in-grid directions all carrying data, `detectBenches` **abstains** and bedding **speaks**. The two coincide only when `samples + missing == 16`. **The behaviour is right and deliberate** — `R40` chose not to grey a ring-radius seam around every tile, which was the correct call — so this is a comment-and-claim fix, not a logic change. Either restate the rationale honestly or make the two genuinely agree and accept the seam. Do not "fix" it by greying borders.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| R60 | `TPI_MIN_DATA_FRACTION`'s comment repeats the three-layer-agreement claim `R55` just retracted                                      | P2  | XS   | `terrain-scientist`                                   | Found by the `R54`/`R55` agent while correcting the other five instances, and deliberately left rather than swept in. `landform.ts:57` still claims 0.5 is pinned across TPI, `BEDDING_RING_MIN_DATA_FRACTION` and `detectBenches`' 8-of-16 ring _"so the three layers a hunter reads side by side cannot disagree about how much of a neighbourhood has to answer before the map is allowed to speak."_ Same defect as `R55`: `detectBenches` tests `samples >= 8` **absolute** while TPI's denominator is the in-grid window, so at a tile border they diverge. Milder than `R55` — the very next sentence does disclose TPI's denominator — but the headline claim is still false where it matters. **Not a copy-paste of `R55`'s wording:** TPI's window is a clipped square, not a 16-direction ring, so the honest restatement is a different sentence. Comment-only, no behaviour change. Do it alongside `R59`, which questions the same constant's _value_ rather than its provenance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | R51 | The wind popover opens upward, unbounded, and blocks putting ConditionsBar on the bottom edge                                       | P1  | S–M  | `map-builder`                                         | Found by the `R44` agent while trying to also fix **F3** — `index.css`'s own comment says wind and time _"get the bottom edge, the only part of a large phone a thumb reaches reliably"_, and `column-reverse` puts the command bar there instead. Moving `ConditionsBar` to the true bottom edge **breaks collision group 4 at 390px**: the wind/time popover opens upward from inside it with no height bound (`bottom: calc(100% + var(--space-2))`) and its 385px lands squarely on the command bar directly above. A measured overlap, not a tuning issue. The agent reverted to the verified-safe arrangement rather than force it — correct, and the reason this row exists. **The fix belongs in `Popover`, not in the chrome layout:** the primitive needs to know how much chrome sits above its own anchor and clear it, or flip/clamp when it cannot. Until then the stated field rationale for the bottom edge stays inverted in practice. Depends on `R44` (shipped).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | R50 | `computeVectorRuggedness` has no data quorum — one surviving cell in 81 yields a confident VRM                                      | P1  | S    | `terrain-scientist`                                   | Named by the `R40` agent one operator below the term it was fixing. `computeVectorRuggedness` returns `NaN` only when **zero** cells in its window have a complete 3×3; a single survivor out of 81 produces a definite VRM that the cover term then treats as measured concealment. Same shape as the ring-quorum defect `R40` just fixed in `beddingLikelihood` — a statistic computed from a handful of samples and reported as though it were computed from all of them. `R40` introduced `BEDDING_RING_MIN_DATA_FRACTION = 0.5` for precisely this, pinned to `detectBenches`' existing `samples >= 8 of 16` so the two layers cannot disagree about what a shelf is; VRM wants the equivalent. Left untouched on purpose: VRM's current contract is exactly what the cover guard needed, and changing it mid-pass would have moved the ground under the fix. Couples to `R39` (the realised-VRM-distribution measurement) — do them together, since both need the same real-LiDAR sample.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | R46 | A running region download has no persistent indicator once the picker closes                                                        | P1  | S    | `frontend-builder`                                    | Both audits, independently (`QA-FIELD.md` finding 3, `AUDIT-PRODUCT.md` F5). `regions.active` — the live `{clientId, progress}` from `useOfflineRegions.ts:81` — is threaded to exactly one consumer, `<RegionPicker>` (`App.tsx:328`), which unmounts the moment `pickerOpen` goes false. The rail's own `active={pickerOpen}` (`App.tsx:284-293`) means **panel open**, not **download running**. So a hunter who starts a twenty-minute download and then looks at anything else has no way to tell from the chrome whether it is still running, finished, or died. The download itself survives — it lives in the hook — so this is a visibility failure rather than a data-loss one, but it sits directly against CLAUDE.md's "losing a region the user waited twenty minutes for, discovered blank in the field, is the worst failure this product has". Test group 11 asserts progress only _while the picker is open_. **Ship as part of `R44`:** the Offline cell states its own truth — idle `OFFLINE`, running a progress ring + `43%`, complete a brief `SAVED`, failed `FAILED` in warn tone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -226,46 +225,92 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
 
 ## Done — recent
 
+- [x] **`R54` (P1) + `R55` (P2) — retracted provenance was still in the source,
+      in four files rather than the one the row named.** The evidence register
+      had been corrected two passes earlier; source is what the next engineer
+      reads, and source still carried the retraction.
+
+      The Lang & Gates snow figure — *"18.1 cm on the SE face against 42.0 cm on
+          the NE face"* — compares the study's **deepest single reading** against a
+          **mean**. The actual means are bottomland 11.2 / SE 18.1 / NE 21.7 cm, an
+          aspect effect of **1.20×, not 2.32×**. It survived in `wind.ts`,
+          `pipeline.ts`, `wind.test.ts` and `pipeline.test.ts`.
+
+          **And the corrected reading cuts against the term it was cited to
+          justify.** The *sheltered bottomland was shallowest of all three* — a
+          10.5 cm advantage over the NE face, roughly three times the aspect
+          effect. The paper quoted as the reason to send a cold-weather bedding
+          model toward the sun slope actually measured topographic position beating
+          aspect. `BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75` is therefore **not**
+          calibrated to a measured 2.32× mechanism and must not be defended as if
+          it were; the comment now says so and points at `R31`, which argues the
+          shelter floor is the term to move.
+
+          Two more: `BEDDING_RING_MIN_SLOPE_DEG`'s comment called 15° *"the bottom
+          of the BC WHR band"* when the band is 10–45% slope — 5.7–24.2° — so 15°
+          is its **centre**; anyone "restoring" it to 5.7° would saturate the ring
+          term on rolling farm ground and call it embedded in steep country, the
+          one thing the term exists to rule out. And `BEDDING_SEVERE_COLD_C`
+          carried no citation at all, so the **best-grounded constant in the set**
+          (measured LCT −11.2 °C for fed whitetail fawns, *Can. J. Zool.* 1999)
+          read as a round number and would have been tuned as freely as the 🔴
+          endpoints beside it.
+
+          `R55`: the claim that `BEDDING_RING_MIN_DATA_FRACTION` is pinned to
+          `detectBenches` *"so the two layers cannot disagree about what a shelf
+          is"* is false exactly at the tile border it protects. Verified at both
+          call sites — `landform.ts:570` tests `samples >= 8` **absolute**,
+          `wind.ts:666` tests against an **in-grid-only** denominator, so five
+          in-grid directions all carrying data means benches abstain while bedding
+          speaks. The divergence is deliberate and correct (`R40` chose not to grey
+          a ring-radius frame around every tile); only the justification was wrong.
+
+          Comment-only, mechanically verified: `git diff -U0` filtered to
+          non-comment lines returns empty. 244 tests unchanged. A fifth instance in
+          `halo.test.ts` was fixed in passing; a sixth is filed as `R60` rather than
+          swept in, because TPI's window is a clipped square and needs its own
+          sentence, not a copy of this one.
+
 - [x] **`R49` (P0) — `computeSurface` fabricated slope next to no-data, and so
       did five more operators.** The row named one; following the blast radius
       found six, and one had been visibly wrong on the map since launch.
 
       | reproduction | before | after |
-          | --- | --- | --- |
-          | one NODATA neighbour | slope **89.9311°** | `NaN` |
-          | all eight NODATA | slope **0.00°** — the flat-pad *maximum* | `NaN` |
-          | curvature, one missing | crossSectional 27.7 → **"Channel / draw"** | `Unknown` |
-          | curvature, eight missing | maxCurvature 221.9 → **"Peak / knob"** | `Unknown` |
-          | TRI | **33,251.9 m** of "local relief" | `NaN` |
-          | TPI r=8, void 3 cells away | **115.14 m** vs closed form 0.02791 m | 0.02791 m |
-          | `detectBenches`, lone return on a 25° plane | **1 bench cell** | 0 |
+              | --- | --- | --- |
+              | one NODATA neighbour | slope **89.9311°** | `NaN` |
+              | all eight NODATA | slope **0.00°** — the flat-pad *maximum* | `NaN` |
+              | curvature, one missing | crossSectional 27.7 → **"Channel / draw"** | `Unknown` |
+              | curvature, eight missing | maxCurvature 221.9 → **"Peak / knob"** | `Unknown` |
+              | TRI | **33,251.9 m** of "local relief" | `NaN` |
+              | TPI r=8, void 3 cells away | **115.14 m** vs closed form 0.02791 m | 0.02791 m |
+              | `detectBenches`, lone return on a 25° plane | **1 bench cell** | 0 |
 
-          - **`ASPECT_RAMP` clamped the `-1` no-aspect sentinel onto its first
-            stop, so every flat field, lake and void rendered as solid
-            north-facing blue.** Product-visible, shipped, and nobody had noticed.
-            `renderHillshade` was likewise about to paint every void opaque black.
-          - **`computeTpi` was the widest and quietest**: it averaged the sentinel
-            into its mean, so the error was not a one-cell fringe but the *whole
-            radius window* — a ≈400 m disc at z13 — producing ordinary-looking
-            Weiss classes. `classifyWeiss` separately compared `NaN <= plainSlope`,
-            which is `false`, so voids fell through to `OpenSlope`.
-          - `classifyWood` returned `Planar` for unmeasurable ground;
-            `WoodFeature.Unknown` was **appended, not renumbered**, because the ids
-            are persisted on observation rows.
-          - **The fix is faster than the bug.** `computeSurface` −36%,
-            `computeRuggedness` −47%, `analyze()` −1.2% overall. The first attempt
-            was **+58% and +102%** — `NODATA + 1` is an *imported binding*
-            evaluated nine times per cell, ~585k per tile, the identical trap `R30`
-            measured at 880 ms. `grid.ts`, `horizon.ts` and `shading.ts` all keep a
-            module-local alias; `surface.ts` was the one that did not.
-          215 → **244 tests**, 12 of 20 new ones failing against the old code.
-          **Interior proven untouched with `Object.is`, not a tolerance** — every
-          cell at Chebyshev distance ≥2 from a void is bit-identical across all
-          four `SurfaceField` arrays, and the greyed count is exactly the 3×3
-          margins. Borders do not grey at halo 0, 1 or 4.
-          **Expect visible map changes, all intended** — a transparent fringe at
-          every void edge, and flat ground now transparent on the aspect layer
-          instead of north-blue.
+              - **`ASPECT_RAMP` clamped the `-1` no-aspect sentinel onto its first
+                stop, so every flat field, lake and void rendered as solid
+                north-facing blue.** Product-visible, shipped, and nobody had noticed.
+                `renderHillshade` was likewise about to paint every void opaque black.
+              - **`computeTpi` was the widest and quietest**: it averaged the sentinel
+                into its mean, so the error was not a one-cell fringe but the *whole
+                radius window* — a ≈400 m disc at z13 — producing ordinary-looking
+                Weiss classes. `classifyWeiss` separately compared `NaN <= plainSlope`,
+                which is `false`, so voids fell through to `OpenSlope`.
+              - `classifyWood` returned `Planar` for unmeasurable ground;
+                `WoodFeature.Unknown` was **appended, not renumbered**, because the ids
+                are persisted on observation rows.
+              - **The fix is faster than the bug.** `computeSurface` −36%,
+                `computeRuggedness` −47%, `analyze()` −1.2% overall. The first attempt
+                was **+58% and +102%** — `NODATA + 1` is an *imported binding*
+                evaluated nine times per cell, ~585k per tile, the identical trap `R30`
+                measured at 880 ms. `grid.ts`, `horizon.ts` and `shading.ts` all keep a
+                module-local alias; `surface.ts` was the one that did not.
+              215 → **244 tests**, 12 of 20 new ones failing against the old code.
+              **Interior proven untouched with `Object.is`, not a tolerance** — every
+              cell at Chebyshev distance ≥2 from a void is bit-identical across all
+              four `SurfaceField` arrays, and the greyed count is exactly the 3×3
+              margins. Borders do not grey at halo 0, 1 or 4.
+              **Expect visible map changes, all intended** — a transparent fringe at
+              every void edge, and flat ground now transparent on the aspect layer
+              instead of north-blue.
 
 - [x] **`R44` — the rail is gone; `CommandBar` replaces it, and the container
       is what changed.** `.rl-command__cell` is `flex: 1 1 0` with a
@@ -297,31 +342,31 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       ring too, and one hole that was not a guard at all.
 
       | term | verdict | what it did with unknown |
-          | --- | --- | --- |
-          | aspect / lee | clean | flat cell → lee 0.5, a real answer about real ground |
-          | aspect / solar | **dirty** | `clamp01(NaN)` → 0 — *"this face gets no sun"*, the strongest downweight the composite has, applied hardest exactly when the solar term carries most weight |
-          | pad | clean here | guarded — but its **input** is fabricated (`R49`) |
-          | ring | **dirty** | non-finite ring slopes dropped silently, so a cell whose ring was 14/16 void reported a definite surround measured from the two directions that answered |
-          | shelter | clean since `R30` | but a wrong-length array indexed to `undefined`, survived `Number.isNaN`, and landed every cell on the 0.25 floor **silently**. Now throws. |
-          | cover | **dirty** | `clamp01(NaN)` → 0 → the 0.4 floor |
+              | --- | --- | --- |
+              | aspect / lee | clean | flat cell → lee 0.5, a real answer about real ground |
+              | aspect / solar | **dirty** | `clamp01(NaN)` → 0 — *"this face gets no sun"*, the strongest downweight the composite has, applied hardest exactly when the solar term carries most weight |
+              | pad | clean here | guarded — but its **input** is fabricated (`R49`) |
+              | ring | **dirty** | non-finite ring slopes dropped silently, so a cell whose ring was 14/16 void reported a definite surround measured from the two directions that answered |
+              | shelter | clean since `R30` | but a wrong-length array indexed to `undefined`, survived `Number.isNaN`, and landed every cell on the 0.25 floor **silently**. Now throws. |
+              | cover | **dirty** | `clamp01(NaN)` → 0 → the 0.4 floor |
 
-          The load-bearing piece was in `landform.ts`: `RingSlopeStats` gains a
-          `missing` counter, because the ring drops samples for two *opposite*
-          reasons and the old struct conflated them — outside-the-grid is a border
-          artefact (greying on it would paint a grey frame around every tile),
-          inside-the-grid-with-no-data is genuinely unseen ground.
-          `BEDDING_RING_MIN_DATA_FRACTION = 0.5` is pinned to `detectBenches`'
-          existing `samples >= 8 of 16` so the two layers cannot disagree about
-          what a shelf is at the edge of a void.
-          **10 of 16 new tests fail against the old code**; the other 6 are
-          deliberate anti-over-correction guards that must pass both ways. The
-          sharpest: unknown VRM and *measured* VRM = 0 previously produced
-          **bit-identical** output — nothing downstream could tell "no data" from
-          "billiard-table sidehill". 199 → 215 tests.
-          Performance measured **interleaved** after a first non-interleaved batch
-          showed a +0.8 ms difference that did not reproduce: ~+0.5 ms (3%) on a
-          full tile, none on a half-void tile, where the guards short-circuit ahead
-          of the dominant ring scan.
+              The load-bearing piece was in `landform.ts`: `RingSlopeStats` gains a
+              `missing` counter, because the ring drops samples for two *opposite*
+              reasons and the old struct conflated them — outside-the-grid is a border
+              artefact (greying on it would paint a grey frame around every tile),
+              inside-the-grid-with-no-data is genuinely unseen ground.
+              `BEDDING_RING_MIN_DATA_FRACTION = 0.5` is pinned to `detectBenches`'
+              existing `samples >= 8 of 16` so the two layers cannot disagree about
+              what a shelf is at the edge of a void.
+              **10 of 16 new tests fail against the old code**; the other 6 are
+              deliberate anti-over-correction guards that must pass both ways. The
+              sharpest: unknown VRM and *measured* VRM = 0 previously produced
+              **bit-identical** output — nothing downstream could tell "no data" from
+              "billiard-table sidehill". 199 → 215 tests.
+              Performance measured **interleaved** after a first non-interleaved batch
+              showed a +0.8 ms difference that did not reproduce: ~+0.5 ms (3%) on a
+              full tile, none on a half-void tile, where the guards short-circuit ahead
+              of the dominant ring scan.
 
 - [x] **`R41` — the API allocated a halo it never filled, and the guard that
       should have caught it did not exist.** `gridForBBox` blitted only the
@@ -344,20 +389,20 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       Measured against the unmodified code on a synthetic flat DEM:
 
       | | before | after |
-          | --- | --- | --- |
-          | DEM fetches, 1-tile mosaic, halo 20 | 1 | 9 |
-          | halo cells passing `isElevation()` | fails at the first | 100% |
-          | `terrainShelter` NaN cells (24×24, halo 20) | **288 / 576** | **0 / 576** |
-          | `gridForBBox(halo = tileSize+6)` | resolved, no guard | throws `{required:30, available:24}` |
+              | --- | --- | --- |
+              | DEM fetches, 1-tile mosaic, halo 20 | 1 | 9 |
+              | halo cells passing `isElevation()` | fails at the first | 100% |
+              | `terrainShelter` NaN cells (24×24, halo 20) | **288 / 576** | **0 / 576** |
+              | `gridForBBox(halo = tileSize+6)` | resolved, no guard | throws `{required:30, available:24}` |
 
-          `InsufficientHaloError` was unhandled anywhere in `apps/api` and would
-          have surfaced as a raw 500. Now a global filter returns **422** with
-          `requiredHaloCells` / `availableHaloCells` / `layers`, so a client can
-          grey the layer and say why. API tests 14 → 19.
-          Verified rather than trusted: `buildCostSurface` skips non-finite
-          attraction (`cost.ts:86-89`) so corridors were never exposed, and
-          `samplePoint` pads ~450 m around the point so readouts read from near the
-          mosaic centre — both confirmed by reading the source, not assumed.
+              `InsufficientHaloError` was unhandled anywhere in `apps/api` and would
+              have surfaced as a raw 500. Now a global filter returns **422** with
+              `requiredHaloCells` / `availableHaloCells` / `layers`, so a client can
+              grey the layer and say why. API tests 14 → 19.
+              Verified rather than trusted: `buildCostSurface` skips non-finite
+              attraction (`cost.ts:86-89`) so corridors were never exposed, and
+              `samplePoint` pads ~450 m around the point so readouts read from near the
+              mosaic centre — both confirmed by reading the source, not assumed.
 
 - [x] **`R32` (P0) — the bedding layer painted nothing.** Measured on the built
       app: **0.00%** of map-canvas pixels carried colour with bedding enabled
@@ -439,7 +484,7 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       work: the download button sat below the fold of `.rl-sheet__body` and
       hit-tested to `null`; the button's byte figure was stale by one step
       _and_ 10× wrong while the count beside it was fresh; and a `position:
-    sticky` action bar painted over the Detail buttons — visible and
+  sticky` action bar painted over the Detail buttons — visible and
       unclickable, the failure class this repo keeps paying for.
 
 - [x] **`R30` — `NODATA` passed the halo guard; three layers silently reported
@@ -451,28 +496,28 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       in a no-data halo:
 
       | operator | halo has terrain | halo is NODATA (old) | now |
-          | --- | --- | --- | --- |
-          | `terrainShelter` | 0.500 | **0.000** "fully exposed" | `NaN` |
-          | `skyViewFactor` | 0.467 | **1.000** "open sky" | `NaN` |
-          | `castShadows` | 0 shaded | **1 lit** "full sun" | `SHADOW_UNKNOWN` |
+              | --- | --- | --- | --- |
+              | `terrainShelter` | 0.500 | **0.000** "fully exposed" | `NaN` |
+              | `skyViewFactor` | 0.467 | **1.000** "open sky" | `NaN` |
+              | `castShadows` | 0 shaded | **1 lit** "full sun" | `SHADOW_UNKNOWN` |
 
-          Fixed with one `isElevation(z) = Number.isFinite(z) && z > NODATA + 1`,
-          matching the pattern `grid.ts` already used, routed through every
-          sentinel test in the package. `analyze()` now throws
-          `InsufficientHaloError` rather than truncating, and `requiredHalo()`
-          reads the operators' own radius constants instead of restating them as
-          independent literals. 166 → 199 tests; **11 of 33 new tests fail against
-          the old guard**. Two of those tests failed on first run and both were the
-          test's fault — diagnosed, not tuned green.
-          **Performance was the trap.** The obvious implementation cost sky-view
-          460 ms/tile against a 326 ms baseline, and a naive cross-module
-          `isElevation` call cost 880 ms — CommonJS emits a property load V8 will
-          not inline, 25 M times per tile. Final: 300–320 ms, no regression.
-          Also fixed one layer downstream: `beddingLikelihood` no longer folds a
-          `NaN` shelter onto its 0.25 floor, which handed back a confident *low*
-          score for ground the engine cannot see. The **cover** term still does
-          exactly that — filed as `R40` rather than fixed, to avoid colliding with
-          the in-flight `R32` work.
+              Fixed with one `isElevation(z) = Number.isFinite(z) && z > NODATA + 1`,
+              matching the pattern `grid.ts` already used, routed through every
+              sentinel test in the package. `analyze()` now throws
+              `InsufficientHaloError` rather than truncating, and `requiredHalo()`
+              reads the operators' own radius constants instead of restating them as
+              independent literals. 166 → 199 tests; **11 of 33 new tests fail against
+              the old guard**. Two of those tests failed on first run and both were the
+              test's fault — diagnosed, not tuned green.
+              **Performance was the trap.** The obvious implementation cost sky-view
+              460 ms/tile against a 326 ms baseline, and a naive cross-module
+              `isElevation` call cost 880 ms — CommonJS emits a property load V8 will
+              not inline, 25 M times per tile. Final: 300–320 ms, no regression.
+              Also fixed one layer downstream: `beddingLikelihood` no longer folds a
+              `NaN` shelter onto its 0.25 floor, which handed back a confident *low*
+              score for ground the engine cannot see. The **cover** term still does
+              exactly that — filed as `R40` rather than fixed, to avoid colliding with
+              the in-flight `R32` work.
 
 - [x] **`R8` (P0) — `offlineReady` replaced with per-viewport coverage truth.**
       Six states with one claim each, an `≈` prefix whenever a figure came from

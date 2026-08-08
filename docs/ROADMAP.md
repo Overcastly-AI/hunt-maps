@@ -8,6 +8,18 @@
 
 The analytics engine, validated against analytically-known surfaces.
 
+- [x] **Source comments no longer carry retracted provenance —
+      `BACKLOG R54`/`R55`.** The evidence register was corrected two passes
+      earlier; the source was not, and source is what the next engineer reads.
+      The Lang & Gates snow figure survived in **four** files, comparing the
+      study's deepest single reading against a mean and overstating the aspect
+      effect as 2.32× when the means give **1.20×**. Correcting it exposed that
+      the paper cited to justify the cold-season aspect term actually measured
+      **topographic position beating aspect by roughly 3×** — the sheltered
+      bottomland was the shallowest of all three sites. `R31`'s conclusion, that
+      the shelter floor is the term to move, is now argued from the source
+      rather than only from the register. Comment-only; 244 tests unchanged.
+
 - [x] **Unknown ground now reads as unknown — `BACKLOG R49`, six operators.**
       The 3×3 kernels guarded only the centre cell, then ran Horn's kernel over
       a window that could contain the `-32768` sentinel. One missing neighbour
@@ -178,19 +190,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-          hit-testability against the viewport alone, so a row scrolled just past
-          the *sheet's* clipped edge was hit-tested at its unpainted position and
-          reported as visible-but-unclickable — a false failure indistinguishable
-          from the real clipping bug the suite is named after; it now intersects
-          against every clipping ancestor and hit-tests the centre of the visible
-          region. Ground truth was measured before accepting the greener result:
-          `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-          and no painted control fails a hit test. Then (`7ff42cee`) two more
-          guards on the helper itself: a synthetic fixture pinning both branches
-          of the clipped-ancestor fix so neither can regress silently, and a check
-          that the collision matrix's "no collision" result means a selector
-          matched and did not overlap, not that a renamed selector stopped
-          matching anything.
+              hit-testability against the viewport alone, so a row scrolled just past
+              the *sheet's* clipped edge was hit-tested at its unpainted position and
+              reported as visible-but-unclickable — a false failure indistinguishable
+              from the real clipping bug the suite is named after; it now intersects
+              against every clipping ancestor and hit-tests the centre of the visible
+              region. Ground truth was measured before accepting the greener result:
+              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+              and no painted control fails a hit test. Then (`7ff42cee`) two more
+              guards on the helper itself: a synthetic fixture pinning both branches
+              of the clipped-ancestor fix so neither can regress silently, and a check
+              that the collision matrix's "no collision" result means a selector
+              matched and did not overlap, not that a renamed selector stopped
+              matching anything.
 
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
