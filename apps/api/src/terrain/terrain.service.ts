@@ -71,11 +71,7 @@ export class TerrainService {
       date: request.date,
     };
 
-    const grid = await this.dem.gridForTile(
-      tile,
-      source,
-      requiredHalo(analysisRequest),
-    );
+    const grid = await this.dem.gridForTile(tile, source, requiredHalo(analysisRequest));
     const result = analyze(grid, analysisRequest);
     const size = source.tileSize;
     const n = size * size;
@@ -208,10 +204,7 @@ export class TerrainService {
     );
     const result = analyze(grid, request);
     const p = this.dem.pixelInMosaic(lng, lat, originTile, source.tileSize);
-    const i = Math.min(
-      grid.width * grid.height - 1,
-      Math.max(0, p.y * grid.width + p.x),
-    );
+    const i = Math.min(grid.width * grid.height - 1, Math.max(0, p.y * grid.width + p.x));
 
     return {
       elevationM: result.elevation?.[i],
@@ -231,9 +224,7 @@ export class TerrainService {
 
   private layersFor(request: TileRenderRequest): AnalysisLayer[] {
     if (request.layer === 'filter') {
-      return request.predicate
-        ? ([...requiredMetrics(request.predicate)] as AnalysisLayer[])
-        : [];
+      return request.predicate ? ([...requiredMetrics(request.predicate)] as AnalysisLayer[]) : [];
     }
     return [request.layer];
   }
@@ -251,7 +242,7 @@ export class TerrainService {
       case 'insolation':
         return renderRamp(result.insolation ?? new Float32Array(n), SUN_RAMP);
       case 'bedding':
-        return renderRamp(result.bedding ?? new Float32Array(n), HEAT_RAMP);
+        return renderBeddingLayer(result.bedding, n);
       case 'weiss':
         return renderCategorical(result.weiss ?? new Uint8Array(n), WEISS_COLORS);
       case 'wood':
@@ -278,4 +269,52 @@ export class TerrainService {
     png.data = Buffer.from(rgba.buffer, rgba.byteOffset, rgba.byteLength);
     return PNG.sync.write(png);
   }
+}
+
+/**
+ * Render the bedding layer.
+ *
+ * ## Absent field vs. measured zero
+ *
+ * `result.bedding` is only populated when the caller supplies a wind
+ * direction — `beddingLikelihood` needs one to score leeward shelter (see
+ * `packages/terrain/src/pipeline.ts`). `GET /terrain/tiles/bedding/:z/:x/:y.png`
+ * makes `?wind=` optional, so a client can legally request the bedding layer
+ * with none supplied, and `result.bedding` comes back `undefined`.
+ *
+ * Falling back to a zero-filled field there used to render fully transparent,
+ * but only because `HEAT_RAMP`'s zero stop happens to carry alpha 0 — the
+ * right answer for the wrong reason, and one ramp edit away from painting a
+ * *measured* zero across ground the engine never scored at all (the same
+ * confusion `R49` removed from six terrain operators). Filling with `NaN`
+ * instead routes an absent field through the same "unknown is transparent"
+ * path every other layer already uses — `sampleRamp` treats any non-finite
+ * value as fully transparent regardless of a given ramp's stop colours, so
+ * this stays correct even if `HEAT_RAMP`'s palette changes.
+ *
+ * ## R36 — domain rescale still missing here
+ *
+ * `beddingLikelihood` maxes near 0.14 on real terrain (product of five
+ * imperfect terms); `HEAT_RAMP` expects an absolute `[0, 1]` domain. The
+ * browser worker (`apps/web/src/workers/terrain.worker.ts`) rescales through
+ * `stretchToUnit(v, BEDDING_RAMP_DOMAIN_MAX)` from `@hunt-maps/design` before
+ * the ramp; this endpoint still does not, so a *present* bedding field still
+ * renders nearly blank. Wiring the same rescale here needs
+ * `BEDDING_RAMP_DOMAIN_MAX` / `stretchToUnit` reachable from `apps/api`,
+ * which today means pulling the whole `@hunt-maps/design` barrel — React
+ * components, icons, `@fontsource` assets — into a headless NestJS service
+ * that has no other reason to carry a UI framework. That import is exactly
+ * the kind of thing that deferred this row twice; see BACKLOG `R36` for the
+ * proposed fix (move `rampDomains.ts` into `@hunt-maps/shared`, already
+ * depended on by both apps and free of runtime dependencies). Do not
+ * duplicate `BEDDING_RAMP_DOMAIN_MAX` in this file to work around that — a
+ * second copy of the constant is exactly the divergence the shared-engine
+ * rule exists to prevent.
+ */
+export function renderBeddingLayer(
+  bedding: Float32Array | undefined,
+  n: number,
+): Uint8ClampedArray {
+  const field = bedding ?? new Float32Array(n).fill(NaN);
+  return renderRamp(field, HEAT_RAMP);
 }
