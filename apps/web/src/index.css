@@ -449,6 +449,312 @@
   letter-spacing: var(--track-label);
 }
 
+/* --------------------------------------------------------------------------
+ * Terrain readout — peek-detent bottom sheet (`TerrainReadout.tsx`, BACKLOG
+ * R6), replacing `.inspect-card` above once `App.tsx` is switched over.
+ *
+ * A small floating plate, not a full drawer like `.rl-sheet--drawer`
+ * (`LayersSheet`/`RegionPicker`) — `docs/design/direction-a-instrument.html`'s
+ * thesis names this the one thing allowed to float uninvited over the map,
+ * because it is answering "what is this ground *right here*", and burying
+ * the map to show that answer defeats the question. Anchored bottom-left
+ * (desktop) / full-width bottom (mobile) with the same vertical clearance
+ * `.rl-sheet--drawer` reserves above the command bar + conditions row, so
+ * opening it can never re-create BACKLOG R42 (a panel painting over the wind
+ * control). The clearance arithmetic is duplicated rather than shared across
+ * a selector list — this component and `LayersSheet` are different agents'
+ * file territories, and a custom property does not inherit across DOM
+ * siblings — so keep the two figures in sync if either row's height token
+ * changes.
+ * -------------------------------------------------------------------------- */
+
+.rl-readout {
+  position: absolute;
+  left: var(--space-3);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100% - var(--space-6)));
+  border-radius: var(--radius-xl);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+@media (min-width: 861px) {
+  .rl-readout {
+    /* Same figure as `.rl-sheet--drawer`'s desktop override, above. */
+    bottom: calc(var(--layout-command-bar-height) + var(--space-6));
+  }
+}
+
+@media (max-width: 860px) {
+  .rl-readout {
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+    /* Same figure as `--rl-mobile-bottom-clearance` on `.rl-sheet--drawer`,
+       above (BACKLOG R42). */
+    bottom: calc(
+      max(var(--space-3), env(safe-area-inset-bottom)) + var(--layout-command-bar-height) +
+        var(--space-3) + var(--layout-conditions-bar-height) + var(--space-3)
+    );
+  }
+}
+
+.rl-readout__grip-row {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* The drag handle is also a plain tap target (peek <-> expanded) — gloves and
+   cold make a precise drag unreliable, so every detent stays reachable with a
+   single tap, never only by dragging. Padded out to the touch floor even
+   though the visible bar is small. */
+.rl-readout__grip {
+  width: 100%;
+  min-height: var(--space-touch);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  touch-action: none;
+  cursor: grab;
+}
+
+.rl-readout__grip-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-line-strong);
+}
+
+.rl-readout__peek {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.rl-readout__peek-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* The fact line — measured geometry only, never a `Confidence` chip (see the
+   grade-rule note on `TerrainReadout.tsx`). */
+.rl-readout__facts {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rl-readout__sep {
+  color: var(--color-text-dim);
+  padding: 0 var(--space-1);
+}
+
+/* Loading / no-data / error headline — prose, not the mono fact-line style,
+   so it can never be mistaken for a figure. */
+.rl-readout__status {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+}
+
+/* "Not measured here" — the one rule this whole component exists to keep:
+   never a number, never a dash, never mono-styled like a figure. */
+.rl-readout__unmeasured {
+  font-family: var(--font-sans);
+  font-style: italic;
+  color: var(--color-text-dim);
+}
+
+.rl-readout__body {
+  padding: 0 var(--space-3) var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: min(320px, 42vh);
+}
+
+.rl-readout__section {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.rl-readout__section-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+}
+
+.rl-readout__fact-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.rl-readout__fact-label {
+  color: var(--color-text-dim);
+}
+
+.rl-readout__fact-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.rl-readout__judgement-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.rl-readout__judgement-label {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.rl-readout__judgement-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rl-readout__judgement-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+
+.rl-readout__provenance {
+  margin: var(--space-2) var(--space-3) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+/* --------------------------------------------------------------------------
+ * Auth (`components/auth/**`)
+ *
+ * A full-viewport dark shell with one centred card, built from the same
+ * `rl-glass`/`Field`/`Button` vocabulary the map chrome uses elsewhere in
+ * this file — see `AuthShell.tsx`'s doc comment for why this does not chase
+ * `docs/design/direction-a-instrument.html`'s not-yet-landed token set.
+ * -------------------------------------------------------------------------- */
+
+.auth-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  background: var(--color-ground);
+  padding: max(var(--space-6), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+  font-family: var(--font-condensed);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  margin-bottom: var(--space-4);
+}
+
+.auth-card__eyebrow {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--track-eyebrow);
+}
+
+.auth-card__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.auth-card__subtitle {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-dim);
+}
+
+.auth-card__footer {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+
+.auth-card__switch {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+}
+
+.auth-card__switch a {
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+  /*
+   * A real 44x44px hit area, not a visual one — the same technique
+   * `.rl-btn--link` uses (`packages/design/src/styles.css`), so this inline
+   * link meets the same gloved-fingertip floor a standalone button does
+   * regardless of the surrounding sentence's own font metrics.
+   *
+   * `min-width` matters as much as `min-height` here and was missing on the
+   * first pass: "Register" (login screen) happened to measure 44px+ wide on
+   * its own text alone, but "Sign in" (register screen) measured 35px —
+   * `apps/web/e2e/auth-invariants.spec.ts`'s touch-target check caught the
+   * narrower word failing the same rule the wider one passed by accident.
+   * `justify-content: center` keeps the (shorter) text centred in the wider
+   * box rather than left-hung against the extra width.
+   */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--space-touch);
+  min-width: var(--space-touch);
+}
+
+.auth-card__switch a:hover {
+  color: var(--color-accent-bright);
+}
+
 /* Readout rows: label left, monospace figure right, so values align in a column. */
 .readout {
   display: grid;

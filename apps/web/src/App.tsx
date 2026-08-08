@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Route, Routes } from 'react-router-dom';
 import type maplibregl from 'maplibre-gl';
 import {
   PRESET_FILTERS,
@@ -32,6 +33,7 @@ import { useOfflineRegions } from './lib/offline/useOfflineRegions';
 import { DEM_TEMPLATE } from './lib/map/demSource';
 import { demSourceZoom, demTileKey, demTilesForBounds } from './lib/map/demTiles';
 import { exposeDevHook } from './lib/devHook';
+import { LoginScreen, RegisterScreen } from './components/auth';
 import type { BBox } from '@hunt-maps/terrain';
 
 interface FilterEntry extends SavedFilterSummary {
@@ -54,7 +56,20 @@ interface FilterEntry extends SavedFilterSummary {
  */
 type Popover = 'wind' | 'time' | null;
 
-export default function App() {
+/**
+ * The map dashboard — everything this app did before `lib/api`/auth existed.
+ *
+ * Deliberately not gated behind `RequireAuth`: nothing this component renders
+ * calls an authenticated endpoint yet (satellite/terrain layers, offline
+ * regions and the point readout are all unauthenticated or on-device), and
+ * `apps/web/e2e/ui-invariants.spec.ts` navigates straight here against a
+ * `vite preview` server with no backend running at all — gating this route
+ * would fail the entire suite at the front door rather than testing the
+ * chrome it exists to check. The property/waypoint/observation/filter/
+ * analytics screens the next agents build *do* need `RequireAuth`
+ * (`components/auth/RequireAuth.tsx`) around their own routes.
+ */
+function MapWorkspace() {
   const [active, setActive] = useState<Set<string>>(
     () => new Set(['satellite', 'multiHillshade']),
   );
@@ -370,6 +385,23 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Routes. `/login` and `/register` are the two screens this pass adds
+ * (`components/auth/**`); everything else falls through to the map, which
+ * stays reachable with no sign-in — see `MapWorkspace`'s own doc comment for
+ * why. Next agents adding a route that touches a user-owned resource should
+ * wrap it in `RequireAuth` here, not gate the whole router.
+ */
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginScreen />} />
+      <Route path="/register" element={<RegisterScreen />} />
+      <Route path="*" element={<MapWorkspace />} />
+    </Routes>
   );
 }
 

@@ -125,6 +125,32 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **The app can finally call its own backend — and a terrain readout that
+      says when it does not know.** `apps/web` had **no API client, no auth and
+      no query layer**: 39 backend routes across properties, waypoints,
+      observations, filters, analytics and offline had no caller, which is why
+      this looked like a product with a strong engine and no doors. React Query
+      and React Router had been dependencies, unused, since the app was
+      scaffolded. Now: a single `apiFetch` with typed `ApiError` kinds,
+      single-flighted token refresh (the refresh tokens rotate, so two
+      concurrent 401s would otherwise log a user out), an offline write queue
+      keyed on `clientId` that keeps a 409 conflict rather than resolving or
+      dropping it, and login/register screens. **A network failure never reads
+      as a signed-out failure** — the distinction is pinned by test, because
+      conflating them puts a login screen in front of someone with no bars.
+      Alongside it, `R6`: the terrain readout as a peek-detent sheet, with a
+      `Reading<T>` type carrying the engine's abstention semantics to the pixel
+      so `flat` (a real measurement) never renders as `unmeasured` (a data gap).
+      120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
+
+      Three defects found by rendered-state harnesses that every DOM query
+      passed: a voided cell rendering **`-107507 ft`** because
+      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+      misconception as `R49`, now confirmed in all three packages; a
+      drag/click race where the browser's synthetic `click` after `pointerup`
+      made a dismiss-drag also fire a tap-toggle; and a register-screen link
+      measuring 35×44 px against the 44 px gloved-use floor.
+
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
       identity and craft, not information architecture. Three concepts were built
