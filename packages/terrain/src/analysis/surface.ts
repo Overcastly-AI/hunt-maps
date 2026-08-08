@@ -641,9 +641,18 @@ function loadWindow3(grid: HeightGrid, x: number, y: number, out: Float32Array):
   );
 }
 
-/** Aspect in degrees → the compass octant a hunter actually thinks in. */
-export function aspectOctant(aspectDeg: number): string {
-  if (aspectDeg < 0) return 'flat';
+/**
+ * Aspect in degrees → the compass octant a hunter actually thinks in.
+ *
+ * Pass `slopeDeg` and the answer distinguishes level ground from ground the
+ * engine could not measure; without it, `-1` can only be reported as `'flat'`,
+ * which is this file's own documented trap (`R69`). A point readout saying
+ * "flat" about a DEM void is the same confident lie as a hillshade painting it
+ * as a lit pad, and it is the readout a hunter reads before walking in.
+ */
+export function aspectOctant(aspectDeg: number, slopeDeg?: number): string {
+  if (slopeDeg !== undefined && !Number.isFinite(slopeDeg)) return 'unknown';
+  if (aspectDeg < 0 || !Number.isFinite(aspectDeg)) return 'flat';
   const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   return names[Math.round(aspectDeg / 45) % 8];
 }

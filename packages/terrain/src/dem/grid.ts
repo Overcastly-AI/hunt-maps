@@ -169,7 +169,8 @@ export class HeightGrid {
           for (let dx = -1; dx <= 1; dx++) {
             const nx = px + dx;
             const ny = py + dy;
-            if (nx < 0 || ny < 0 || nx >= this.stride || ny >= this.height + 2 * this.halo) continue;
+            if (nx < 0 || ny < 0 || nx >= this.stride || ny >= this.height + 2 * this.halo)
+              continue;
             const v = snapshot[ny * this.stride + nx];
             if (isElev(v)) {
               sum += v;
@@ -247,13 +248,7 @@ export function assembleGrid(
 }
 
 /** Copy `src` (a tileSize² buffer) into `grid` at interior offset (ox, oy). */
-function blit(
-  grid: HeightGrid,
-  src: Float32Array,
-  tileSize: number,
-  ox: number,
-  oy: number,
-): void {
+function blit(grid: HeightGrid, src: Float32Array, tileSize: number, ox: number, oy: number): void {
   for (let y = 0; y < tileSize; y++) {
     const ty = oy + y;
     if (ty < -grid.halo || ty >= grid.height + grid.halo) continue;

@@ -22,7 +22,23 @@
  *    data, not a script — which matters the moment filter sharing exists.
  */
 
-import { WeissLandform, WoodFeature } from '../analysis/landform.js';
+import { BenchFlag, WeissLandform, WoodFeature } from '../analysis/landform.js';
+
+/**
+ * Hoisted out of the enum object, and out of the module boundary.
+ *
+ * `evaluateAt` runs once per cell per predicate leaf — ~65k times per 256² tile,
+ * more once a filter has several clauses — and `BenchFlag.Unknown` read in that
+ * loop would be a property load across a module boundary, which is the shape
+ * `R30` measured at 880 ms/tile and `R49` at **+58%** on `computeSurface`.
+ *
+ * Honest caveat: the hoist is precautionary here. It was in place from the first
+ * measurement, so its cost was never isolated on this loop. What *was* measured
+ * on this function is the note on `matchesNoAspect`, and that turned out to be
+ * the binding that mattered.
+ */
+const BENCH_BENCH = BenchFlag.Bench;
+const BENCH_UNKNOWN = BenchFlag.Unknown;
 
 /** Every scalar field a predicate can address. */
 export type TerrainMetric =
@@ -59,7 +75,13 @@ export interface AspectPredicate {
   centerDeg: number;
   /** Half-width in degrees; 45 gives a 90° window. */
   toleranceDeg: number;
-  /** Treat flat cells (aspect = -1) as matching. Default false. */
+  /**
+   * Treat **measured** flat cells — real level ground, with no downslope
+   * direction — as matching. Default false.
+   *
+   * Does not, and must not, match cells the engine could not measure, which
+   * carry the same `aspect === -1`. See `evaluateAt` and `surface.ts:80-86`.
+   */
   includeFlat?: boolean;
 }
 
@@ -75,7 +97,12 @@ export interface WoodPredicate {
 
 export interface BenchPredicate {
   kind: 'bench';
-  /** Match cells flagged as bench (true) or not (false). */
+  /**
+   * Match cells flagged as bench (true) or measured-and-not-a-bench (false).
+   *
+   * Neither value matches a `BenchFlag.Unknown` cell: "not on a bench" is a
+   * claim about ground, and there is no ground to make it about.
+   */
   isBench: boolean;
 }
 
@@ -111,7 +138,14 @@ export interface TerrainFilter {
   outline?: boolean;
 }
 
-/** The field bundle a filter evaluates against. */
+/**
+ * The field bundle a filter evaluates against.
+ *
+ * **`slope` is doing double duty.** It is a filterable metric in its own right,
+ * and it is `SurfaceField`'s authoritative "was this cell measured at all" flag
+ * — which is why an `aspect` predicate asks for it via `requiredMetrics` even
+ * when the user never mentioned slope.
+ */
 export interface TerrainFields {
   width: number;
   height: number;
@@ -130,6 +164,7 @@ export interface TerrainFields {
   bedding?: Float32Array;
   weiss?: Uint8Array;
   wood?: Uint8Array;
+  /** `BenchFlag` per cell — three states, not a truthy mask. */
   bench?: Uint8Array;
 }
 
@@ -153,6 +188,13 @@ export function requiredMetrics(predicate: TerrainPredicate): Set<string> {
         break;
       case 'aspect':
         out.add('aspect');
+        // `slope` is not optional here (`R69`): `aspect === -1` covers both a
+        // genuinely flat cell and one the engine could not measure, and `slope`
+        // is the only field that separates them. Without it `evaluateAt`
+        // abstains on every flat cell, so omitting it would silently disable
+        // `includeFlat` rather than get it wrong — but the layer would be
+        // wrong, and the cost is one Horn pass that `aspect` already paid for.
+        out.add('slope');
         break;
       case 'weiss':
         out.add('weiss');
@@ -174,12 +216,32 @@ export function requiredMetrics(predicate: TerrainPredicate): Set<string> {
   }
 }
 
+/**
+ * The `aspect === -1` case, deliberately **out of line**.
+ *
+ * `-1` is two different cells (`R69`): genuinely level ground, and ground whose
+ * 3x3 window was not measurable. `surface.ts` ships the rule in terms — *"Never
+ * branch on `aspect` alone to decide whether a cell was measured"* — and this
+ * predicate used to do exactly that, so `includeFlat` matched every DEM void.
+ * `slope` is the authoritative flag; no `slope` field means we cannot tell, and
+ * guessing "flat" there is the same defect one level up.
+ *
+ * **Why it is a separate function.** `evaluateAt` runs per cell per leaf, and
+ * V8 inlines it into `evaluateFilter`'s loop only while it stays small. Written
+ * inline, these six lines pushed it over that budget and slowed *every* predicate
+ * kind: a bare `bench` filter went **0.107 → 0.554 ms/tile (+417%)** and a
+ * three-clause filter 2.03 → 2.98 ms, on a 256² tile — measured, not feared.
+ * Split out, the cold path costs the hot path nothing. Same lesson as `R30` and
+ * `R49`, one level up: there it was a property load, here it is an inline budget.
+ */
+function matchesNoAspect(predicate: AspectPredicate, fields: TerrainFields, i: number): boolean {
+  const slope = fields.slope;
+  if (!slope || !Number.isFinite(slope[i])) return false;
+  return predicate.includeFlat === true;
+}
+
 /** Evaluate a predicate at one cell. */
-export function evaluateAt(
-  predicate: TerrainPredicate,
-  fields: TerrainFields,
-  i: number,
-): boolean {
+export function evaluateAt(predicate: TerrainPredicate, fields: TerrainFields, i: number): boolean {
   switch (predicate.kind) {
     case 'range': {
       const arr = fields[predicate.metric];
@@ -194,10 +256,15 @@ export function evaluateAt(
       const arr = fields.aspect;
       if (!arr) return false;
       const a = arr[i];
-      if (a < 0 || !Number.isFinite(a)) return predicate.includeFlat === true;
-      let d = ((a - predicate.centerDeg + 180) % 360) - 180;
-      if (d < -180) d += 360;
-      return Math.abs(d) <= predicate.toleranceDeg;
+      // `a >= 0` is the whole fast path: it is false for the `-1` sentinel and
+      // false for `NaN`, so both land in the out-of-line helper below. Keeping
+      // that helper out of this function is not style — see `matchesNoAspect`.
+      if (a >= 0) {
+        let d = ((a - predicate.centerDeg + 180) % 360) - 180;
+        if (d < -180) d += 360;
+        return Math.abs(d) <= predicate.toleranceDeg;
+      }
+      return matchesNoAspect(predicate, fields, i);
     }
     case 'weiss': {
       const arr = fields.weiss;
@@ -212,7 +279,13 @@ export function evaluateAt(
     case 'bench': {
       const arr = fields.bench;
       if (!arr) return false;
-      return (arr[i] === 1) === predicate.isBench;
+      const v = arr[i];
+      // An unmeasurable cell answers neither `isBench: true` nor
+      // `isBench: false` (`R69`). It used to answer the second one, because
+      // "we looked and there is no shelf" and "we never looked" were the same
+      // zero — so "Not on a bench" selected every DEM void in the view.
+      if (v === BENCH_UNKNOWN) return false;
+      return (v === BENCH_BENCH) === predicate.isBench;
     }
     case 'not':
       return !evaluateAt(predicate.operand, fields, i);
@@ -224,10 +297,7 @@ export function evaluateAt(
 }
 
 /** Evaluate a predicate over an entire field bundle. */
-export function evaluateFilter(
-  predicate: TerrainPredicate,
-  fields: TerrainFields,
-): Uint8Array {
+export function evaluateFilter(predicate: TerrainPredicate, fields: TerrainFields): Uint8Array {
   const n = fields.width * fields.height;
   const out = new Uint8Array(n);
   for (let i = 0; i < n; i++) {

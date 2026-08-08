@@ -178,8 +178,17 @@ export interface ThermalField {
    */
   scentAzimuth: Float32Array;
   /**
-   * Strength 0..1. Scales with slope (steeper = stronger thermal) and, for
-   * sinking thermals, with convergence — draws concentrate cold air.
+   * Strength 0..1, or **`NaN` where the cell could not be measured** (`R69`).
+   *
+   * Scales with slope (steeper = stronger thermal) and, for sinking thermals,
+   * with convergence — draws concentrate cold air.
+   *
+   * The `NaN` is the same rule `windExposure` follows and for the same reason:
+   * a measured flat cell genuinely has no thermal, and `0` is the right answer
+   * about it. A cell with no measurable slope has no answer at all, and `0`
+   * there reads as *"your scent will sit still here"* — a confident claim about
+   * ground the engine never saw, in the one layer that exists to tell a hunter
+   * which way their scent is going in the first and last hour of light.
    */
   strength: Float32Array;
 }
@@ -206,9 +215,17 @@ export function computeThermals(
   const { phase } = options;
 
   for (let i = 0; i < n; i++) {
-    const aspect = surface.aspect[i];
     const slope = surface.slope[i];
-    if (aspect < 0 || !Number.isFinite(slope)) {
+    // Unmeasurable first, and it is a *different* answer from flat (`R69`).
+    // Both used to fall into the same branch and come out as "strength 0".
+    if (!Number.isFinite(slope)) {
+      scentAzimuth[i] = -1;
+      strength[i] = NaN;
+      continue;
+    }
+    const aspect = surface.aspect[i];
+    if (aspect < 0) {
+      // Measured and level: no fall line, so no thermal. A real zero.
       scentAzimuth[i] = -1;
       strength[i] = 0;
       continue;

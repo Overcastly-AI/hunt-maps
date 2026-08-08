@@ -18,7 +18,7 @@ import {
   SLOPE_BANDS,
   type SelectionAnalysisDto,
 } from '@hunt-maps/shared';
-import { analyze, sunTimes, WEISS_LABELS, type WeissLandform } from '@hunt-maps/terrain';
+import { analyze, BenchFlag, sunTimes, WEISS_LABELS, type WeissLandform } from '@hunt-maps/terrain';
 import { AuthModule } from '../auth/auth.module';
 import { TerrainModule } from '../terrain/terrain.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -106,11 +106,20 @@ export class AnalyticsService {
     );
     const landformShares = shareOf(result.weiss!, 11, (v) => v, mask);
 
+    // `bench` is tri-state since `R69` — `BenchFlag.Unknown = 2` marks ground
+    // the engine could not measure. Summing the array directly, as this did,
+    // adds **two** per void cell and inflates the share past 1.0 without
+    // throwing or failing typecheck. Skip unknowns entirely rather than
+    // counting them as "not a bench": an unmeasured cell is absent from the
+    // denominator, which is the same convention `shareOf` twelve lines above
+    // applies to non-finite values.
     let benchCount = 0;
     let benchTotal = 0;
     for (let i = 0; i < result.bench!.length; i++) {
       if (mask[i] === 0) continue;
-      benchCount += result.bench![i];
+      const flag = result.bench![i];
+      if (flag === BenchFlag.Unknown) continue;
+      if (flag === BenchFlag.Bench) benchCount++;
       benchTotal++;
     }
 

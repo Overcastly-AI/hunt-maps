@@ -121,6 +121,31 @@ describe('computeThermals', () => {
     const trans = computeThermals(surface, curvature, { phase: ThermalPhase.Transition });
     expect(trans.strength[CENTER]).toBeLessThan(rising.strength[CENTER]);
   });
+
+  it('reports NaN strength on unmeasurable ground, and a real 0 on a flat (R69)', () => {
+    // Found sweeping for `R69`'s pattern rather than named by it. Both cases
+    // used to return strength 0 through the same branch, so "no thermal here"
+    // and "no idea" were one number — and this is the layer that tells a hunter
+    // which way their scent goes in the first and last hour of light.
+    const g = syntheticGrid(plane(0, 0.4), { size: SIZE });
+    g.set(10, 10, NODATA);
+    const s = computeSurface(g);
+    const c = computeCurvature(g);
+    const t = computeThermals(s, c, { phase: ThermalPhase.Sinking });
+    const i = 10 * SIZE + 10;
+    expect(s.aspect[i], 'the sentinel that cannot carry the distinction').toBe(-1);
+    expect(t.strength[i], 'was 0 — "your scent will sit still here"').toBeNaN();
+    // Anti-over-correction: measured level ground still gets a definite zero,
+    // because it genuinely has no fall line for cold air to run down.
+    const flatGrid = syntheticGrid(() => 500, { size: SIZE });
+    const flat = computeThermals(computeSurface(flatGrid), computeCurvature(flatGrid), {
+      phase: ThermalPhase.Sinking,
+    });
+    expect(flat.strength[CENTER], 'a real answer about real ground').toBe(0);
+    expect(flat.scentAzimuth[CENTER]).toBe(-1);
+    // And the rest of the plane is untouched.
+    expect(t.strength[20 * SIZE + 20]).toBeGreaterThan(0);
+  });
 });
 
 describe('thermalPhaseAt', () => {

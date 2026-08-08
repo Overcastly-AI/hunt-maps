@@ -79,11 +79,7 @@ export function cone(slopeRatio: number) {
  * metres north of centre the elevation is held constant, producing a level
  * terrace with steep ground above and below it.
  */
-export function hillsideWithBench(
-  grade = 0.45,
-  benchLow = -30,
-  benchHigh = 30,
-) {
+export function hillsideWithBench(grade = 0.45, benchLow = -30, benchHigh = 30) {
   return (x: number, y: number): number => {
     void x;
     if (y > benchHigh) return 500 + grade * (y - benchHigh) + grade * (benchHigh - benchLow) * 0;
@@ -113,7 +109,8 @@ export function benchedHillside(
 ) {
   return (x: number, y: number): number => {
     void x;
-    if (y > benchHigh) return 500 + benchGrade * (benchHigh - benchLow) + hillGrade * (y - benchHigh);
+    if (y > benchHigh)
+      return 500 + benchGrade * (benchHigh - benchLow) + hillGrade * (y - benchHigh);
     if (y >= benchLow) return 500 + benchGrade * (y - benchLow);
     return 500 + hillGrade * (y - benchLow);
   };

@@ -225,6 +225,12 @@ export function renderHillshade(
  * The outline is what makes saved filters usable when several are stacked: a
  * hunter running "benches" over "leeward" over "saddles" needs to see the
  * boundaries, not three washes of colour averaging into mud.
+ *
+ * **Only `1` paints (`R69`).** This tested truthiness until `detectBenches` grew
+ * a third state, and this function renders that array directly — so
+ * `BenchFlag.Unknown = 2` would have come out as a solid orange shelf over every
+ * DEM void, on the one layer a hunter uses to pick a bed. Filter masks from
+ * `evaluateFilter` are only ever 0/1, so the stricter test costs them nothing.
  */
 export function renderMask(
   mask: Uint8Array,
@@ -241,7 +247,7 @@ export function renderMask(
 
   for (let i = 0; i < mask.length; i++) {
     const o = i * 4;
-    if (!mask[i]) {
+    if (mask[i] !== 1) {
       buf[o + 3] = 0;
       continue;
     }
@@ -255,16 +261,16 @@ export function renderMask(
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = y * width + x;
-        if (!mask[i]) continue;
+        if (mask[i] !== 1) continue;
         const edge =
           x === 0 ||
-          !mask[i - 1] ||
+          mask[i - 1] !== 1 ||
           x === width - 1 ||
-          !mask[i + 1] ||
+          mask[i + 1] !== 1 ||
           y === 0 ||
-          !mask[i - width] ||
+          mask[i - width] !== 1 ||
           y === height - 1 ||
-          !mask[i + width];
+          mask[i + width] !== 1;
         if (edge) {
           const o = i * 4;
           // Brighten toward white rather than switching hue, so the outline

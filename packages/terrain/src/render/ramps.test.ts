@@ -4,12 +4,13 @@ import {
   HEAT_RAMP,
   renderCategorical,
   renderHillshade,
+  renderMask,
   renderRamp,
   sampleRamp,
   SLOPE_RAMP,
   WOOD_COLORS,
 } from './ramps.js';
-import { WoodFeature } from '../analysis/landform.js';
+import { BenchFlag, WoodFeature } from '../analysis/landform.js';
 
 /**
  * These are correctness tests, not cartography tests.
@@ -81,6 +82,33 @@ describe('ramps preserve "unknown" all the way to the pixel', () => {
     // The palette must actually cover the enum; `?? [0,0,0,0]` would mask a
     // missing entry as a correct-looking transparent one.
     expect(WOOD_COLORS.length).toBe(WoodFeature.Unknown + 1);
+  });
+
+  it('paints only a definite match, so a Unknown bench does not become an orange shelf (R69)', () => {
+    // `renderMask` used to test truthiness. The moment `detectBenches` grew a
+    // third state (`Unknown = 2`, also truthy) that would have painted every DEM
+    // void in solid bench colour — a level shelf drawn over ground the engine
+    // never saw, which is the single layer a hunter uses to pick a bed.
+    const flags = Uint8Array.from([
+      BenchFlag.NotBench,
+      BenchFlag.Bench,
+      BenchFlag.Unknown,
+      BenchFlag.NotBench,
+    ]);
+    const buf = renderMask(flags, 4, 1, '#e8a33d', 0.55);
+    expect(buf[3], 'measured, not a bench').toBe(0);
+    expect(buf[7], 'a real bench').toBeGreaterThan(0);
+    expect([buf[8], buf[9], buf[10], buf[11]], 'unmeasurable').toEqual([0, 0, 0, 0]);
+  });
+
+  it('does not outline against an Unknown as if it were a boundary (R69)', () => {
+    // The outline pass has the same truthiness test, so an Unknown neighbour
+    // would have read as "inside the mask" and swallowed the edge of a real
+    // bench — the boundary is the whole point of the outline.
+    const flags = Uint8Array.from([BenchFlag.Bench, BenchFlag.Unknown]);
+    const buf = renderMask(flags, 2, 1, '#000000', 1, true);
+    expect(buf[3], 'a bench with an unmeasured neighbour is still outlined').toBe(255);
+    expect(buf[0], 'and brightened, not left flat').toBe(70);
   });
 
   it('leaves a field of known values byte-identical through renderRamp', () => {

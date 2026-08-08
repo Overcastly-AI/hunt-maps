@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  aspectOctant,
   computeCurvature,
   computeRuggedness,
   computeSurface,
@@ -701,5 +702,34 @@ describe('computeVectorRuggedness — the window quorum (R50)', () => {
         expect(Number.isNaN(vrm[i]), `halo ${halo}, cell ${i}`).toBe(false);
       }
     }
+  });
+});
+
+describe('aspectOctant tells "flat" from "unmeasured" when given slope (R69)', () => {
+  it('reads the eight octants a hunter thinks in', () => {
+    expect(aspectOctant(0)).toBe('N');
+    expect(aspectOctant(135)).toBe('SE');
+    expect(aspectOctant(180)).toBe('S');
+    expect(aspectOctant(359)).toBe('N');
+  });
+
+  it('reports "unknown", not "flat", when the cell has no slope', () => {
+    // This is the point-readout arm of the same conflation the filter layer had.
+    // `aspect === -1` covers a level pad and a DEM void, and the readout is what
+    // a hunter reads before deciding where to walk in.
+    const g = syntheticGrid(plane(0, 0.4), { size: SIZE, halo: 8, cellSize: 10 });
+    g.set(10, 10, NODATA);
+    const s = computeSurface(g);
+    const i = 10 * SIZE + 10;
+    expect(s.aspect[i], 'the sentinel that cannot carry the distinction').toBe(-1);
+    expect(aspectOctant(s.aspect[i], s.slope[i])).toBe('unknown');
+    expect(aspectOctant(s.aspect[i]), 'without slope it can only guess').toBe('flat');
+  });
+
+  it('still says "flat" about genuinely level measured ground', () => {
+    const g = syntheticGrid(() => 500, { size: SIZE, halo: 8, cellSize: 10 });
+    const s = computeSurface(g);
+    expect(s.slope[CENTER]).toBe(0);
+    expect(aspectOctant(s.aspect[CENTER], s.slope[CENTER])).toBe('flat');
   });
 });

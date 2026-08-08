@@ -52,8 +52,7 @@ describe('sunTimes', () => {
   it('gives a shorter day in December than in June at 40°N', () => {
     const dec = sunTimes(new Date('2026-12-21T12:00:00Z'), 40, -84);
     const jun = sunTimes(new Date('2026-06-21T12:00:00Z'), 40, -84);
-    const len = (t: ReturnType<typeof sunTimes>) =>
-      t.sunset!.getTime() - t.sunrise!.getTime();
+    const len = (t: ReturnType<typeof sunTimes>) => t.sunset!.getTime() - t.sunrise!.getTime();
     expect(len(dec)).toBeLessThan(len(jun));
     // Roughly 9h vs 15h at this latitude.
     expect(len(dec) / 3600000).toBeGreaterThan(8);

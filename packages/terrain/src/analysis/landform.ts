@@ -662,6 +662,60 @@ export function classifyWood(
 // Benches
 // ---------------------------------------------------------------------------
 
+/**
+ * The three answers `detectBenches` can give about a cell.
+ *
+ * Three, not two, and the third one is the whole point (`R69`). The array used
+ * to be a plain 0/1 mask, so a cell the engine could not measure carried the
+ * **same byte** as a measured 30° sidehill. `terrainFilter`'s bench branch reads
+ * `(flag[i] === 1) === predicate.isBench`, which made the editor's *"Not on a
+ * bench"* button true on every DEM void in the viewport — in the painted layer
+ * and in the match-share percentage alike. On a uniform 25° plane with a 13x13
+ * void, that predicate claimed **100.0% of the tile**, 6.05 points of which the
+ * engine had never seen.
+ *
+ * **Appended, never renumbered**, exactly as `WoodFeature.Unknown = 6` was.
+ * `0` and `1` keep the meanings they have always had, so every existing
+ * `bench[i] === 1` reader — the point query, the render mask, denormalised
+ * observation rows — stays correct without being touched. Anything that tested
+ * *truthiness* rather than `=== 1` is the thing to find, and there was exactly
+ * one: `renderMask`, fixed in the same commit.
+ *
+ * A `Uint8Array` carries this cleanly; no wider or parallel array is needed.
+ */
+export enum BenchFlag {
+  /** Measured, and it is not a bench. */
+  NotBench = 0,
+  /** Measured, and it is a bench. */
+  Bench = 1,
+  /**
+   * Not measurable — the cell's own 3x3 window had no data, or its surround
+   * ring was mostly void. Not an answer about the ground; the absence of one.
+   */
+  Unknown = 2,
+}
+
+/**
+ * Hoisted out of the enum object for the inner loop.
+ *
+ * A TypeScript enum compiles to a runtime object, so `BenchFlag.Unknown` inside
+ * a per-cell loop is a property load — the identical trap `R30` measured at
+ * 880 ms/tile and `R49` measured at +58% on `computeSurface`. ~65k cells per
+ * tile is not the place to find out again.
+ */
+const BENCH_BENCH = BenchFlag.Bench;
+const BENCH_UNKNOWN = BenchFlag.Unknown;
+
+/**
+ * Ring directions that must answer before the surround is called measured.
+ *
+ * Named because it is now load-bearing twice: it decides `Bench` vs `NotBench`,
+ * and — against `samples + missing` — it decides whether the cell is answerable
+ * at all. See the abstention note on `detectBenches`.
+ */
+const MIN_RING_SAMPLES = 8;
+const RING_DIRECTIONS = 16;
+
 export interface BenchOptions {
   /** A bench cell must itself be gentler than this (degrees). */
   maxBenchSlopeDeg?: number;
@@ -684,6 +738,31 @@ export interface BenchOptions {
  * rejects valley floors (gentle cell, gentle ring) and ridge tops (gentle cell,
  * but the ring is gentle on at least one side too, once `ringRadius` is large
  * enough to reach past the crest).
+ *
+ * Returns a `BenchFlag` per cell — `Bench`, `NotBench` or `Unknown`. Read it
+ * with `=== BenchFlag.Bench`, never as a truthy mask.
+ *
+ * ## When this abstains (`R69`)
+ *
+ * Two cases, and they are different from each other:
+ *
+ *  - **The cell's own slope is `NaN`.** Its 3x3 window was not fully measurable,
+ *    so there is no pad to judge. This used to leave the zero-initialised
+ *    `NotBench`, i.e. the engine reported "we looked, there is no shelf here"
+ *    about ground it had never seen.
+ *  - **Voids ate the surround ring.** Fewer than `MIN_RING_SAMPLES` of the 16
+ *    directions answered *and* the missing ones were inside the grid. A ring
+ *    characterised from three surviving directions is not a measurement of the
+ *    surround.
+ *
+ * And one case that deliberately does **not** abstain: a ring that runs off the
+ * edge of `SurfaceField`. `RingSlopeStats` reports those separately from
+ * `missing` precisely so this decision can be made — the ground is there, it is
+ * just not in this array, and greying it would paint a `ringRadius`-wide seam
+ * grid around every tile in the layer. That is the more visible defect of the
+ * two, and the trade is documented at `TPI_MIN_DATA_FRACTION`: at a tile border
+ * benches fall silent while TPI speaks, because TPI reads the halo and this
+ * cannot.
  */
 export function detectBenches(
   grid: HeightGrid,
@@ -697,6 +776,7 @@ export function detectBenches(
 
   const { width, height } = grid;
   const flag = new Uint8Array(width * height);
+  let anyUnknown = false;
   // One reused stats object: this is a per-cell inner loop in a render budget.
   const r: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
 
@@ -704,16 +784,91 @@ export function detectBenches(
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
       const s = surface.slope[i];
-      if (!Number.isFinite(s) || s > maxBench) continue;
+      if (!Number.isFinite(s)) {
+        // No pad to judge. This is the absence of an answer, not the answer
+        // "no bench" — the two used to be the same byte (`R69`).
+        flag[i] = BENCH_UNKNOWN;
+        anyUnknown = true;
+        continue;
+      }
+      // Measured and too steep to be a shelf: a real, negative answer. Decided
+      // before the ring so the common case still costs nothing.
+      if (s > maxBench) continue;
 
-      ringSlopeStats(surface, x, y, ring, minSurround, 16, r);
-      // At least half the ring must be steep — a shelf is steep above and below
-      // but typically open along the contour.
-      if (r.samples >= 8 && r.steepCount / r.samples >= 0.5) flag[i] = 1;
+      ringSlopeStats(surface, x, y, ring, minSurround, RING_DIRECTIONS, r);
+      if (r.samples >= MIN_RING_SAMPLES) {
+        // At least half the ring must be steep — a shelf is steep above and
+        // below but typically open along the contour.
+        if (r.steepCount / r.samples >= 0.5) flag[i] = BENCH_BENCH;
+      } else if (r.samples + r.missing >= MIN_RING_SAMPLES) {
+        // The ring was there and could not be read: void, lake, 404'd
+        // neighbour. Falling through to `NotBench` here would describe the
+        // surround from whatever handful of directions happened to survive.
+        // (If `samples + missing` is itself short, the ring simply ran off the
+        // tile — a border artefact, not missing ground. See the doc comment.)
+        flag[i] = BENCH_UNKNOWN;
+        anyUnknown = true;
+      }
     }
   }
 
-  return minCells > 1 ? removeSmallBlobs(flag, width, height, minCells) : flag;
+  if (minCells <= 1) return flag;
+  const cleaned = removeSmallBlobs(flag, width, height, minCells);
+  // `removeSmallBlobs` is a strict 0/1 operator writing into a fresh zeroed
+  // array, so the third state has to be restamped or it collapses straight back
+  // into `NotBench` one line after being introduced. Guarded by `anyUnknown`
+  // because a tile whose neighbours all arrived has no unknowns at all, and
+  // that is the overwhelmingly common case in a render loop — it should not pay
+  // a second full pass for a state it does not contain.
+  if (!anyUnknown) return cleaned;
+  for (let i = 0; i < flag.length; i++) {
+    if (flag[i] === BENCH_UNKNOWN) cleaned[i] = BENCH_UNKNOWN;
+  }
+  return cleaned;
+}
+
+/** Cell counts by `BenchFlag`. */
+export interface BenchCounts {
+  bench: number;
+  notBench: number;
+  unknown: number;
+}
+
+/**
+ * Tally a bench field by state.
+ *
+ * Exists because summing the bytes is now wrong in a way that reads as right:
+ * `Unknown` is 2, so `flag.reduce((a, b) => a + b)` counts every void as two
+ * benches and can push a "share" past 100%. Any caller that wants a count must
+ * come through here.
+ */
+export function benchCounts(flag: Uint8Array): BenchCounts {
+  let bench = 0;
+  let notBench = 0;
+  let unknown = 0;
+  for (let i = 0; i < flag.length; i++) {
+    const v = flag[i];
+    if (v === BENCH_BENCH) bench++;
+    else if (v === BENCH_UNKNOWN) unknown++;
+    else notBench++;
+  }
+  return { bench, notBench, unknown };
+}
+
+/**
+ * Bench share of **measured** ground, or `NaN` if nothing was measured.
+ *
+ * The denominator is the availability question the rest of the product already
+ * answers this way: `shareOf` in the analytics module excludes non-finite cells,
+ * and a `TerrainProfile` that reports `benchShare` over every cell in a bounding
+ * box is not comparable with the `slopeShares` sitting beside it. `NaN` rather
+ * than 0 when there is no measured ground, because "no benches" and "no data"
+ * are the distinction this whole function exists to keep.
+ */
+export function benchShareOfMeasured(flag: Uint8Array): number {
+  const { bench, notBench } = benchCounts(flag);
+  const measured = bench + notBench;
+  return measured === 0 ? NaN : bench / measured;
 }
 
 /**
@@ -839,7 +994,16 @@ function ringOffsets(radiusCells: number, directions: number): Int32Array {
   return offsets;
 }
 
-/** Drop connected components smaller than `minCells` (4-connectivity). */
+/**
+ * Drop connected components smaller than `minCells` (4-connectivity).
+ *
+ * **Strictly a 1-means-match operator.** Any other value — including a
+ * `BenchFlag.Unknown` — is background: it does not join a component, it cannot
+ * bridge two sub-threshold blobs into a surviving one, and it does not appear in
+ * the output. Callers carrying a third state must restamp it (`detectBenches`
+ * does). Testing truthiness here would have quietly promoted every DEM void into
+ * whatever blob it touched.
+ */
 export function removeSmallBlobs(
   mask: Uint8Array,
   width: number,
@@ -852,7 +1016,7 @@ export function removeSmallBlobs(
   const component: number[] = [];
 
   for (let start = 0; start < mask.length; start++) {
-    if (!mask[start] || seen[start]) continue;
+    if (mask[start] !== 1 || seen[start]) continue;
     component.length = 0;
     stack.length = 0;
     stack.push(start);
@@ -876,7 +1040,7 @@ export function removeSmallBlobs(
   return out;
 
   function pushIf(j: number): void {
-    if (mask[j] && !seen[j]) {
+    if (mask[j] === 1 && !seen[j]) {
       seen[j] = 1;
       stack.push(j);
     }

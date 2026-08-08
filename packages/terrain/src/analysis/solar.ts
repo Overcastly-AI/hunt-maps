@@ -85,8 +85,7 @@ export function solarPosition(date: Date, latitude: number, longitude: number): 
       1.25 * eccent * eccent * Math.sin(2 * Mrad));
 
   // True solar time → hour angle.
-  const utcMinutes =
-    date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
   const trueSolarTime = mod(utcMinutes + eqTime + 4 * longitude, 1440);
   const hourAngle = trueSolarTime / 4 < 0 ? trueSolarTime / 4 + 180 : trueSolarTime / 4 - 180;
 
@@ -102,8 +101,7 @@ export function solarPosition(date: Date, latitude: number, longitude: number): 
   let azimuth: number;
   const denom = Math.cos(latRad) * Math.sin(zenith * RAD);
   if (Math.abs(denom) > 1e-9) {
-    const cosAz =
-      (Math.sin(latRad) * Math.cos(zenith * RAD) - Math.sin(decRad)) / denom;
+    const cosAz = (Math.sin(latRad) * Math.cos(zenith * RAD) - Math.sin(decRad)) / denom;
     azimuth = Math.acos(Math.max(-1, Math.min(1, cosAz))) * DEG;
     azimuth = hourAngle > 0 ? mod360(azimuth + 180) : mod360(540 - azimuth);
   } else {
@@ -216,11 +214,7 @@ export function castShadows(
       // Anything rising above the sun's altitude pins the answer at shaded.
       scanRay(heightAt, x, y, dx, dy, z0, cellSize, maxRadiusCells, tanAlt, scan);
       out[y * width + x] =
-        scan.maxTan > tanAlt
-          ? SHADOW_SHADED
-          : scan.incomplete
-            ? SHADOW_UNKNOWN
-            : SHADOW_LIT;
+        scan.maxTan > tanAlt ? SHADOW_SHADED : scan.incomplete ? SHADOW_UNKNOWN : SHADOW_LIT;
     }
   }
   return out;

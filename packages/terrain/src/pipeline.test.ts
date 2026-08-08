@@ -263,7 +263,9 @@ describe('analyze with a neighbour tile that never arrived (R49)', () => {
       expect(r.windExposure![west], `exposure west row ${y}`).toBeNaN();
       expect(r.weiss![west], `weiss west row ${y}`).toBe(0); // WeissLandform.Unknown
       expect(r.wood![west], `wood west row ${y}`).toBe(6); // WoodFeature.Unknown
-      expect(r.bench![west], `bench west row ${y}`).toBe(0);
+      // `R69`: was 0, which is also what a measured 30° sidehill gets. The
+      // third state is what lets a filter tell the two apart.
+      expect(r.bench![west], `bench west row ${y}`).toBe(2); // BenchFlag.Unknown
 
       // One column in, everything is measurable and exactly right.
       expect(r.slope![west + 1], `slope col 1 row ${y}`).toBeCloseTo(15, 3);
@@ -293,6 +295,29 @@ describe('analyze with a neighbour tile that never arrived (R49)', () => {
       // The rest of this 15° west-facing plane is exactly what the filter asks
       // for, so the guard must not have eaten the layer.
       expect(mask[y * SIZE + 5], `interior row ${y}`).toBe(1);
+    }
+  });
+
+  it('and not through the two predicates a conjunction does not rescue (R69)', () => {
+    // The test above passes because the slope clause abstains on the fringe.
+    // That is what hid `R69` for a release: a filter is only exposed when every
+    // clause is void-tolerant, which is precisely the case for a *single*
+    // clause. Both of these are one click in the editor.
+    const g = tileWithMissingWestNeighbour();
+    const r = analyze(g, { layers: ['slope', 'aspect', 'bench'] });
+
+    const notABench = evaluateFilter({ kind: 'bench', isBench: false }, r);
+    const alsoFlat = evaluateFilter(
+      { kind: 'aspect', centerDeg: 270, toleranceDeg: 45, includeFlat: true },
+      r,
+    );
+    for (let y = 0; y < SIZE; y++) {
+      expect(notABench[y * SIZE], `"not on a bench", west fringe row ${y}`).toBe(0);
+      expect(alsoFlat[y * SIZE], `"also match flat", west fringe row ${y}`).toBe(0);
+      // Anti-over-correction: this 15° plane is west-facing and benchless, so
+      // both predicates are true of every measured cell on it.
+      expect(notABench[y * SIZE + 5], `not-a-bench interior row ${y}`).toBe(1);
+      expect(alsoFlat[y * SIZE + 5], `also-flat interior row ${y}`).toBe(1);
     }
   });
 });

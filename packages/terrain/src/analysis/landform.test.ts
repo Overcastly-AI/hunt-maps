@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  benchCounts,
+  benchShareOfMeasured,
+  BenchFlag,
   classifyWeiss,
   classifyWood,
   computeTpi,
@@ -799,9 +802,12 @@ describe('detectBenches on unmeasurable ground (R49)', () => {
     g.set(20, 20, 500);
 
     const bench = detectBenches(g, computeSurface(g), { minCells: 1 });
-    expect(bench[20 * SIZE + 20], 'was 1').toBe(0);
+    // `R69` split the old `0` into two states; the cell is unmeasurable, which
+    // is a stronger statement than "not a bench" and still not a bench.
+    expect(bench[20 * SIZE + 20], 'was 1').not.toBe(BenchFlag.Bench);
+    expect(bench[20 * SIZE + 20]).toBe(BenchFlag.Unknown);
     let total = 0;
-    for (const b of bench) total += b;
+    for (const b of bench) total += b === BenchFlag.Bench ? 1 : 0;
     expect(total, 'a uniform 25° plane has no benches').toBe(0);
   });
 
@@ -822,5 +828,171 @@ describe('detectBenches on unmeasurable ground (R49)', () => {
       minCells: 4,
     });
     expect(bench[centerIndex(size)]).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R69 — "we looked and there is no bench" is not "we never looked".
+//
+// `detectBenches` used to `continue` past an unmeasurable cell, leaving the
+// zero-initialised `flag[i] = 0` — the same byte a measured 30° sidehill gets.
+// `terrainFilter`'s bench branch then read `(arr[i] === 1) === isBench`, so the
+// editor's **"Not on a bench"** button matched every DEM void in the viewport,
+// in the painted layer *and* in the match-share percentage. Measured on a
+// uniform 25° plane with a 13x13 void: the predicate matched **100.0% of the
+// tile**, 6.05 points of which the engine had never seen.
+// ---------------------------------------------------------------------------
+describe('detectBenches distinguishes "not a bench" from "not measurable" (R69)', () => {
+  const size = 61;
+  const c = centerIndex(size);
+
+  /** The canonical shelf, with a 13x13 void kept >ringRadius clear of the pad. */
+  function voided() {
+    const g = syntheticGrid(hillsideWithBench(0.6, -40, 40), { size, halo: 12, cellSize: 10 });
+    for (let y = 2; y <= 14; y++) for (let x = 2; x <= 14; x++) g.set(x, y, NODATA);
+    return g;
+  }
+
+  const OPTS = {
+    maxBenchSlopeDeg: 8,
+    minSurroundSlopeDeg: 18,
+    ringRadius: 8,
+    minCells: 4,
+  };
+
+  it('reports three states: Bench on the shelf, NotBench on the sidehill, Unknown in the void', () => {
+    const g = voided();
+    const surface = computeSurface(g);
+    const bench = detectBenches(g, surface, OPTS);
+
+    // The shelf is still found — the whole point of the layer.
+    expect(bench[c], 'the shelf').toBe(BenchFlag.Bench);
+    // A measured cell on the 31° hillside below the shelf: we looked, no bench.
+    const sidehill = 50 * size + 30;
+    expect(Number.isFinite(surface.slope[sidehill]), 'sidehill is measured').toBe(true);
+    expect(bench[sidehill], 'measured sidehill').toBe(BenchFlag.NotBench);
+    // The middle of the void: we never looked.
+    const inVoid = 8 * size + 8;
+    expect(Number.isFinite(surface.slope[inVoid]), 'void is unmeasured').toBe(false);
+    expect(bench[inVoid], 'void').toBe(BenchFlag.Unknown);
+  });
+
+  it('marks every unmeasurable cell Unknown and nothing else', () => {
+    const g = voided();
+    const surface = computeSurface(g);
+    const bench = detectBenches(g, surface, OPTS);
+    for (let i = 0; i < size * size; i++) {
+      if (!Number.isFinite(surface.slope[i])) {
+        expect(bench[i], `cell ${i % size},${(i / size) | 0}`).toBe(BenchFlag.Unknown);
+      }
+    }
+    const counts = benchCounts(bench);
+    expect(counts.unknown, 'the 13x13 void, one cell wider each way for the 3x3 kernel').toBe(225);
+    expect(counts.bench + counts.notBench + counts.unknown).toBe(size * size);
+  });
+
+  it('leaves the measured interior bit-identical to the void-free grid', () => {
+    // `Object.is`, not a tolerance: a sentinel-shaped bug hides inside an
+    // epsilon. Every cell whose own 3x3 window and whose r=8 ring both clear the
+    // void must be byte-for-byte what it was before the void existed.
+    const clean = syntheticGrid(hillsideWithBench(0.6, -40, 40), {
+      size,
+      halo: 12,
+      cellSize: 10,
+    });
+    const before = detectBenches(clean, computeSurface(clean), OPTS);
+    const g = voided();
+    const after = detectBenches(g, computeSurface(g), OPTS);
+
+    const reach = OPTS.ringRadius + 1; // ring radius plus the 3x3 kernel
+    let compared = 0;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        // Chebyshev distance from the void block [2..14]^2.
+        const dx = x < 2 ? 2 - x : x > 14 ? x - 14 : 0;
+        const dy = y < 2 ? 2 - y : y > 14 ? y - 14 : 0;
+        if (Math.max(dx, dy) <= reach) continue;
+        const i = y * size + x;
+        expect(Object.is(after[i], before[i]), `cell ${x},${y}`).toBe(true);
+        compared++;
+      }
+    }
+    expect(compared, 'the invariance sweep must cover most of the tile').toBeGreaterThan(3000);
+  });
+
+  it('abstains when voids eat the ring, but NOT when the ring runs off the tile', () => {
+    // The two look identical to `samples >= 8` and mean opposite things — the
+    // distinction `RingSlopeStats.missing` exists to carry (`R40`). Greying the
+    // tile border would paint a ringRadius-wide seam grid across the whole
+    // layer, which is the more visible defect of the two.
+    const g = syntheticGrid(plane(0, 0.6), { size, halo: 12, cellSize: 10 });
+    // Punch out the ring around one measured cell, leaving its own 3x3 window
+    // intact: r=8, so a hollow annulus from radius 6 to 10 around (30,30).
+    for (let dy = -10; dy <= 10; dy++) {
+      for (let dx = -10; dx <= 10; dx++) {
+        const d = Math.max(Math.abs(dx), Math.abs(dy));
+        if (d >= 6 && d <= 10) g.set(30 + dx, 30 + dy, NODATA);
+      }
+    }
+    const surface = computeSurface(g);
+    const bench = detectBenches(g, surface, { ...OPTS, minCells: 1, maxBenchSlopeDeg: 40 });
+    expect(Number.isFinite(surface.slope[30 * size + 30]), 'centre still measured').toBe(true);
+    expect(bench[30 * size + 30], 'ring eaten by void').toBe(BenchFlag.Unknown);
+
+    // A corner cell of a clean tile loses ring directions to the tile edge, not
+    // to missing data. That is a border artefact, and it stays "not a bench".
+    const cleanGrid = syntheticGrid(plane(0, 0.6), { size, halo: 12, cellSize: 10 });
+    const cleanBench = detectBenches(cleanGrid, computeSurface(cleanGrid), {
+      ...OPTS,
+      minCells: 1,
+      maxBenchSlopeDeg: 40,
+    });
+    expect(cleanBench[0], 'tile corner, no data missing').toBe(BenchFlag.NotBench);
+    for (let i = 0; i < size * size; i++) {
+      expect(cleanBench[i], 'no cell of a clean tile may be Unknown').not.toBe(BenchFlag.Unknown);
+    }
+  });
+
+  it('blob removal neither erases an Unknown nor promotes one into a bench', () => {
+    // `removeSmallBlobs` writes into a fresh zeroed array, so a third state that
+    // is not restamped silently collapses back into "not a bench" — the exact
+    // conflation this row removes, reintroduced one line later.
+    const g = voided();
+    const surface = computeSurface(g);
+    const strict = detectBenches(g, surface, { ...OPTS, minCells: 500 });
+    expect(benchCounts(strict).bench, 'threshold above the real blob size').toBe(0);
+    expect(benchCounts(strict).unknown).toBe(225);
+
+    // And an Unknown adjacent to a sub-threshold bench blob is not swept into it.
+    const mask = Uint8Array.from([
+      BenchFlag.Bench,
+      BenchFlag.Unknown,
+      BenchFlag.Bench,
+      BenchFlag.NotBench,
+    ]);
+    const out = removeSmallBlobs(mask, 4, 1, 2);
+    expect([...out], 'Unknown does not bridge two 1-cell blobs into a 3-cell one').toEqual([
+      0, 0, 0, 0,
+    ]);
+  });
+
+  it('benchShareOfMeasured divides by measured ground, not by every cell', () => {
+    // `F7`: the API's `benchCount / bench.length` counts unmeasurable cells as
+    // "not a bench", which disagrees with `shareOf` twelve lines above it.
+    const flag = Uint8Array.from([
+      BenchFlag.Bench,
+      BenchFlag.Bench,
+      BenchFlag.NotBench,
+      BenchFlag.NotBench,
+      BenchFlag.Unknown,
+      BenchFlag.Unknown,
+      BenchFlag.Unknown,
+      BenchFlag.Unknown,
+    ]);
+    expect(benchCounts(flag)).toEqual({ bench: 2, notBench: 2, unknown: 4 });
+    expect(benchShareOfMeasured(flag), 'half of what was measured').toBe(0.5);
+    // Naively summing the bytes would give (2 + 4*2)/8 = 1.25 — over 100%.
+    expect(benchShareOfMeasured(new Uint8Array(0)), 'nothing measured is not 0%').toBeNaN();
+    expect(benchShareOfMeasured(Uint8Array.from([BenchFlag.Unknown]))).toBeNaN();
   });
 });
