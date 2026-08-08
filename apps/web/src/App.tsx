@@ -33,7 +33,13 @@ import { useOfflineRegions } from './lib/offline/useOfflineRegions';
 import { DEM_TEMPLATE } from './lib/map/demSource';
 import { demSourceZoom, demTileKey, demTilesForBounds } from './lib/map/demTiles';
 import { exposeDevHook } from './lib/devHook';
-import { LoginScreen, RegisterScreen } from './components/auth';
+import { LoginScreen, RegisterScreen, RequireAuth } from './components/auth';
+import {
+  PropertiesListScreen,
+  PropertyCreateScreen,
+  PropertyDetailScreen,
+  PropertyBoundaryEditScreen,
+} from './components/properties';
 import type { BBox } from '@hunt-maps/terrain';
 
 interface FilterEntry extends SavedFilterSummary {
@@ -70,9 +76,7 @@ type Popover = 'wind' | 'time' | null;
  * (`components/auth/RequireAuth.tsx`) around their own routes.
  */
 function MapWorkspace() {
-  const [active, setActive] = useState<Set<string>>(
-    () => new Set(['satellite', 'multiHillshade']),
-  );
+  const [active, setActive] = useState<Set<string>>(() => new Set(['satellite', 'multiHillshade']));
   const [opacities, setOpacities] = useState<Record<string, number>>({});
   const [windFromDeg, setWindFromDeg] = useState<number | null>(null);
   const [atUtc, setAtUtc] = useState(() => new Date());
@@ -400,6 +404,48 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginScreen />} />
       <Route path="/register" element={<RegisterScreen />} />
+      {/*
+       * Property routes (`BACKLOG R1`). Each is wrapped individually rather
+       * than gating the router, because the map itself must stay reachable
+       * with no sign-in and no backend — `ui-invariants.spec.ts` navigates
+       * straight to `/` against a backend-less `vite preview`, and gating
+       * the whole tree would fail that suite at the door.
+       *
+       * Literal segments before `:id` so `/properties/new` cannot be
+       * swallowed by the detail route.
+       */}
+      <Route
+        path="/properties"
+        element={
+          <RequireAuth>
+            <PropertiesListScreen />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/properties/new"
+        element={
+          <RequireAuth>
+            <PropertyCreateScreen />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/properties/:id"
+        element={
+          <RequireAuth>
+            <PropertyDetailScreen />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/properties/:id/boundary"
+        element={
+          <RequireAuth>
+            <PropertyBoundaryEditScreen />
+          </RequireAuth>
+        }
+      />
       <Route path="*" element={<MapWorkspace />} />
     </Routes>
   );

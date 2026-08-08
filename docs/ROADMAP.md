@@ -125,6 +125,26 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **The product has doors — properties, stands, observations and the
+      saved-filter editor.** 163 → **308 tests** in one wave, three agents on
+      disjoint territories. Boundary drawing refuses a self-intersecting or
+      degenerate ring **client-side, by name**, rather than round-tripping into
+      `ST_MakeValid`'s silent repair — a repaired boundary is a different piece
+      of ground than the one that was drawn. Redrawing one requires an explicit
+      acknowledgement every time, because `PropertiesService.update`
+      unconditionally drops the cached `TerrainProfile` and every availability
+      denominator is keyed to it. `BlankSitQuickLog` is one button, because if
+      logging a zero-sighting sit takes a form nobody logs one and every
+      sightings-per-sit number downstream measures how often somebody went out
+      instead. The filter editor's `MatchShare` refuses to call its endpoint at
+      all rather than show a number it cannot stand behind.
+
+      Property routes are wired; the stands, observations and filter panels are
+      built and tested but **not yet reachable** — the `CommandBar` documents
+      that a fourth and fifth cell is the wrong answer and they belong as tabs
+      in the single drawer slot, which is a design decision rather than
+      plumbing. Tracked, not forgotten.
+
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
       no query layer**: 39 backend routes across properties, waypoints,
