@@ -25,6 +25,8 @@ function renderSheet(active: Set<string>, windFromDeg: number | null): string {
       onOpacity={() => undefined}
       onToggleFilter={() => undefined}
       onClose={() => undefined}
+      onNewFilter={() => undefined}
+      onEditFilter={() => undefined}
     />,
   );
 }

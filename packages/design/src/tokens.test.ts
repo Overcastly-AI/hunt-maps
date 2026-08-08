@@ -1,15 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  color,
-  cssVar,
-  mapColor,
-  renderTokensCss,
-  space,
-  token,
-  TOKEN_GROUPS,
-} from './tokens';
+import { color, cssVar, mapColor, renderTokensCss, space, token, TOKEN_GROUPS } from './tokens';
 
 describe('token → CSS generation', () => {
   it('the committed tokens.css matches what tokens.ts produces', () => {
@@ -113,11 +105,7 @@ describe('token values honour the field constraints', () => {
 
 function rgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
 function srgbToLinear(c: number): number {

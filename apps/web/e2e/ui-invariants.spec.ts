@@ -6,7 +6,12 @@ import {
   measureGlassSurplus,
   rectsOverlap,
 } from './helpers/dom-audit';
-import { contrastRatio, estimateBackground, parseCssColor, requiredContrastRatio } from './helpers/contrast';
+import {
+  contrastRatio,
+  estimateBackground,
+  parseCssColor,
+  requiredContrastRatio,
+} from './helpers/contrast';
 import { canvasSaturationCoverage, gridPoints, samplePixels } from './helpers/pixels';
 import {
   boxDelta,
@@ -14,6 +19,7 @@ import {
   gotoAndSettle,
   MOBILE,
   NARROW,
+  VIEW,
   waitForRectStable,
   waitForTiles,
   type Box,
@@ -104,16 +110,19 @@ test.describe('0. Regression guard — clipped-ancestor hit-testing', () => {
     const clipped = results.find((r) => r.name === 'Clipped');
     const unreachable = results.find((r) => r.name === 'Unreachable');
     if (!clipped || !unreachable) {
-      throw new Error('Fixture setup failed — expected both a "Clipped" and an "Unreachable" button in the audit.');
+      throw new Error(
+        'Fixture setup failed — expected both a "Clipped" and an "Unreachable" button in the audit.',
+      );
     }
 
     // The button's raw flow position (scroller top 10px + 600px down = 610px)
     // is well inside the 700px window, but the scroller only shows its first
     // 200px (10-210px) before clipping. `reachable` must come from scrolling
     // it into its *own* clipping ancestor, not from a window-bounds check.
-    expect(clipped.reachable, 'a control past a scrolling ancestor clip should be reachable via scrollIntoView').toBe(
-      true,
-    );
+    expect(
+      clipped.reachable,
+      'a control past a scrolling ancestor clip should be reachable via scrollIntoView',
+    ).toBe(true);
     expect(
       clipped.hitOk,
       "a control scrolled into its clipping ancestor's view should hit-test to itself, not a stale position",
@@ -211,7 +220,10 @@ test.describe('1. Hit-testability', () => {
         await state.setup(page);
 
         const elements = await auditInteractiveElements(page, ['.map-chrome', '.rl-sheet']);
-        expect(elements.length, 'expected at least some interactive chrome to audit').toBeGreaterThan(0);
+        expect(
+          elements.length,
+          'expected at least some interactive chrome to audit',
+        ).toBeGreaterThan(0);
 
         const candidates = elements.filter((el) => !el.coveredByOpenOverlay);
 
@@ -271,11 +283,16 @@ test.describe('2. Trigger stability', () => {
       await trigger.click();
       await waitForRectStable(trigger);
       const after = await measureBox(trigger);
-      expect(boxDelta(before, after), `"${name}" moved ${boxDelta(before, after).toFixed(1)}px on click`).toBeLessThanOrEqual(4);
+      expect(
+        boxDelta(before, after),
+        `"${name}" moved ${boxDelta(before, after).toFixed(1)}px on click`,
+      ).toBeLessThanOrEqual(4);
     }
   });
 
-  test('opening the wind popover from a closed panel does not move the trigger', async ({ page }) => {
+  test('opening the wind popover from a closed panel does not move the trigger', async ({
+    page,
+  }) => {
     // This is the case the Popover redesign was built for: no sheet is open,
     // so nothing needs to slide out of the way, and the popover is sized to
     // its own content and anchored in place (`packages/design/src/components
@@ -289,7 +306,10 @@ test.describe('2. Trigger stability', () => {
     await trigger.click();
     await waitForRectStable(trigger);
     const after = await measureBox(trigger);
-    expect(boxDelta(before, after), `Wind trigger moved ${boxDelta(before, after).toFixed(1)}px on click`).toBeLessThanOrEqual(4);
+    expect(
+      boxDelta(before, after),
+      `Wind trigger moved ${boxDelta(before, after).toFixed(1)}px on click`,
+    ).toBeLessThanOrEqual(4);
   });
 
   // --- Regression guards for a real defect this suite caught. `.chrome-
@@ -322,7 +342,9 @@ test.describe('2. Trigger stability', () => {
     ).toBeLessThanOrEqual(4);
   });
 
-  test('opening the wind popover while the Layers sheet is open must not move the Wind trigger', async ({ page }) => {
+  test('opening the wind popover while the Layers sheet is open must not move the Wind trigger', async ({
+    page,
+  }) => {
     // Default load state: sheet already open. Opening the wind popover no
     // longer force-closes it (App.tsx tracks them independently), and both
     // should now end up open at once — the flagship "sweep the wind while
@@ -370,33 +392,33 @@ test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
   for (const viewport of [DESKTOP, MOBILE]) {
     for (const panel of panels) {
       test(`${viewport.width}px — ${panel.name}`, async ({ page }) => {
-      await gotoAndSettle(page, viewport);
-      await panel.setup(page);
-      const elements = await auditInteractiveElements(page, ['.map-chrome', '.rl-sheet']);
-      expect(elements.length).toBeGreaterThan(0);
+        await gotoAndSettle(page, viewport);
+        await panel.setup(page);
+        const elements = await auditInteractiveElements(page, ['.map-chrome', '.rl-sheet']);
+        expect(elements.length).toBeGreaterThan(0);
 
-      const violations = elements
-        .filter((el) => !el.disabled) // a disabled control's footprint still matters, but keep the signal to controls a user can actually act on right now
-        .map((el) => {
-          const isRange = el.tag === 'INPUT' && el.type === 'range';
-          const minHeight = isRange ? 28 : 44;
-          const minWidth = 44;
-          const ok = el.effectiveRect.width >= minWidth && el.effectiveRect.height >= minHeight;
-          return { el, ok, minWidth, minHeight };
-        })
-        .filter((r) => !r.ok);
+        const violations = elements
+          .filter((el) => !el.disabled) // a disabled control's footprint still matters, but keep the signal to controls a user can actually act on right now
+          .map((el) => {
+            const isRange = el.tag === 'INPUT' && el.type === 'range';
+            const minHeight = isRange ? 28 : 44;
+            const minWidth = 44;
+            const ok = el.effectiveRect.width >= minWidth && el.effectiveRect.height >= minHeight;
+            return { el, ok, minWidth, minHeight };
+          })
+          .filter((r) => !r.ok);
 
-      expect(
-        violations,
-        violations
-          .map(
-            (v) =>
-              `"${v.el.name}" (${v.el.tag}${v.el.type ? `[type=${v.el.type}]` : ''}) is ` +
-              `${Math.round(v.el.effectiveRect.width)}x${Math.round(v.el.effectiveRect.height)}px, ` +
-              `needs >= ${v.minWidth}x${v.minHeight}px.`,
-          )
-          .join('\n'),
-      ).toEqual([]);
+        expect(
+          violations,
+          violations
+            .map(
+              (v) =>
+                `"${v.el.name}" (${v.el.tag}${v.el.type ? `[type=${v.el.type}]` : ''}) is ` +
+                `${Math.round(v.el.effectiveRect.width)}x${Math.round(v.el.effectiveRect.height)}px, ` +
+                `needs >= ${v.minWidth}x${v.minHeight}px.`,
+            )
+            .join('\n'),
+        ).toEqual([]);
       });
     }
   }
@@ -427,7 +449,12 @@ test.describe('4. No chrome collisions', () => {
   // The four persistent groups exist in every one of these states — passing
   // their names here means a rect that comes back `null` (its selector
   // matched nothing) is a loud failure, not a silent "nothing to overlap".
-  const PERSISTENT = ['rail (top-right)', 'command bar', 'conditions bar', 'chrome-bottomleft group'];
+  const PERSISTENT = [
+    'rail (top-right)',
+    'command bar',
+    'conditions bar',
+    'chrome-bottomleft group',
+  ];
 
   for (const viewport of [DESKTOP, MOBILE]) {
     test(`${viewport.width}px — nothing open`, async ({ page }) => {
@@ -619,7 +646,10 @@ async function assertNoCollisions(
   // is asserted present before the loop runs at all.
   for (const requiredName of opts.expectPresent ?? []) {
     const entry = presence.find(([name]) => name === requiredName);
-    if (!entry) throw new Error(`assertNoCollisions: no rect named "${requiredName}" — check the caller's spelling.`);
+    if (!entry)
+      throw new Error(
+        `assertNoCollisions: no rect named "${requiredName}" — check the caller's spelling.`,
+      );
     expect(
       entry[1],
       `expected to find "${requiredName}" in this state, but its selector matched nothing — ` +
@@ -679,7 +709,9 @@ test.describe('5. Focus visibility', () => {
     const unmarked = stops.filter((s) => !s.ok);
     expect(
       unmarked,
-      unmarked.map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`).join('\n'),
+      unmarked
+        .map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`)
+        .join('\n'),
     ).toEqual([]);
   });
 
@@ -695,7 +727,9 @@ test.describe('5. Focus visibility', () => {
     const unmarked = stops.filter((s) => !s.ok);
     expect(
       unmarked,
-      unmarked.map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`).join('\n'),
+      unmarked
+        .map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`)
+        .join('\n'),
     ).toEqual([]);
   });
 });
@@ -857,7 +891,10 @@ test.describe('8. Panel density (>= 40% of chassis)', () => {
     await gotoAndSettle(page, DESKTOP);
     await waitForRectStable(page.locator('.rl-sheet'));
     const density = await measureDensity(page, '.rl-sheet', '.rl-sheet__body');
-    expect(density, `Layers sheet content fills only ${(density * 100).toFixed(0)}% of its chassis`).toBeGreaterThanOrEqual(0.4);
+    expect(
+      density,
+      `Layers sheet content fills only ${(density * 100).toFixed(0)}% of its chassis`,
+    ).toBeGreaterThanOrEqual(0.4);
   });
 
   test('wind popover — sized to its own content, not an oversized chassis', async ({ page }) => {
@@ -866,16 +903,24 @@ test.describe('8. Panel density (>= 40% of chassis)', () => {
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
     const density = await measureDensity(page, '.rl-popover', '.rl-popover__body');
-    expect(density, `Wind popover content fills only ${(density * 100).toFixed(0)}% of its chassis`).toBeGreaterThanOrEqual(0.4);
+    expect(
+      density,
+      `Wind popover content fills only ${(density * 100).toFixed(0)}% of its chassis`,
+    ).toBeGreaterThanOrEqual(0.4);
   });
 });
 
-async function measureDensity(page: Page, panelSelector: string, bodySelector: string): Promise<number> {
+async function measureDensity(
+  page: Page,
+  panelSelector: string,
+  bodySelector: string,
+): Promise<number> {
   return page.evaluate(
     ({ panelSelector, bodySelector }: { panelSelector: string; bodySelector: string }) => {
       const panel = document.querySelector(panelSelector);
       const body = document.querySelector(bodySelector);
-      if (!panel || !body) throw new Error(`Panel or body not found: ${panelSelector} / ${bodySelector}`);
+      if (!panel || !body)
+        throw new Error(`Panel or body not found: ${panelSelector} / ${bodySelector}`);
       const chassisHeight = panel.getBoundingClientRect().height;
       // scrollHeight already accounts for content taller than the visible
       // body (it needs to scroll, i.e. it is at least as dense as its
@@ -934,9 +979,7 @@ test.describe('9. Offline coverage describes the view on screen', () => {
       expect(seeded.written, 'fixture should have written tiles').toBeGreaterThan(0);
       await remeasure(page);
 
-      await expect
-        .poll(() => chipText(page), { timeout: 15_000 })
-        .toBe(COVERED);
+      await expect.poll(() => chipText(page), { timeout: 15_000 }).toBe(COVERED);
 
       // Rendered state, not DOM state: the chip must actually be painted in the
       // "ok" token colour. A class name proves what we asked for; the computed
@@ -1083,7 +1126,9 @@ test.describe('10. Layer paint coverage — a layer that paints nothing must fai
       const mapBox = await measureBox(page.getByTestId('map-canvas'));
       const coveragePct = await canvasSaturationCoverage(page, mapBox);
       // eslint-disable-next-line no-console
-      console.log(`[R32 invariant] bedding saturated-pixel coverage at ${viewport.width}px: ${coveragePct.toFixed(2)}%`);
+      console.log(
+        `[R32 invariant] bedding saturated-pixel coverage at ${viewport.width}px: ${coveragePct.toFixed(2)}%`,
+      );
 
       // The regression this guards: 0.00%, measured the same way, on the
       // build this ticket was filed against. 1% is well below what the fixed
@@ -1273,9 +1318,7 @@ test.describe('11. Offline region picker (R4)', () => {
     await page.reload();
     await page.waitForSelector('.rl-sheet', { timeout: 120_000 });
 
-    await expect
-      .poll(() => chipText(page), { timeout: 120_000 })
-      .toBe('COVERED');
+    await expect.poll(() => chipText(page), { timeout: 120_000 }).toBe('COVERED');
     await expect(page.getByTestId('coverage-detail')).toContainText('no signal');
 
     // And the saved-areas list is readable with no signal, because it is a
@@ -1418,7 +1461,11 @@ test.describe('12. Glass container painted surface matches its interactive child
   const TOLERANCE_PX = 12;
 
   const containers: Array<{ name: string; container: string; children: string }> = [
-    { name: 'command bar', container: '.chrome-bottomleft .rl-command', children: '.rl-command__cell' },
+    {
+      name: 'command bar',
+      container: '.chrome-bottomleft .rl-command',
+      children: '.rl-command__cell',
+    },
     { name: 'top-right rail', container: '.chrome-topright .rl-rail', children: '.rl-rail__btn' },
     { name: 'conditions bar', container: '.rl-conditions', children: '.rl-conditions__cell' },
   ];
@@ -1431,7 +1478,10 @@ test.describe('12. Glass container painted surface matches its interactive child
         await waitForRectStable(page.locator(c.container));
 
         const { container, childUnion } = await measureGlassSurplus(page, c.container, c.children);
-        expect(container, `${c.name}: container selector "${c.container}" matched nothing`).not.toBeNull();
+        expect(
+          container,
+          `${c.name}: container selector "${c.container}" matched nothing`,
+        ).not.toBeNull();
         expect(
           childUnion,
           `${c.name}: no visible children matched "${c.children}" to compare against`,
@@ -1453,4 +1503,281 @@ test.describe('12. Glass container painted surface matches its interactive child
       });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// 13. Tabbed drawer — Layers / Stands / Sightings share the one drawer slot
+// ---------------------------------------------------------------------------
+//
+// The Layers cell now opens a drawer with a `TabBar` (`@hunt-maps/design`)
+// switching between three panels — `docs/AUDIT-PRODUCT.md` rec 20, and the
+// mount point `WaypointsSheet`/`ObservationsSheet`/`FilterLibrary`/
+// `FilterEditor` were built for but nothing wired up until this pass. Every
+// invariant this file already holds the Layers sheet to applies just as
+// hard here: one panel in the slot at a time, a full unmount on switch (not
+// a second `.rl-sheet` hidden underneath), 44px tab targets, and —
+// non-negotiably — the wind/date/thermals row (`R42`) staying reachable no
+// matter which tab is open. Bedding is a leeward model; if Stands or
+// Sightings could cover the wind control the way the pre-R42 sheet once did,
+// the flagship "sweep the wind, watch bedding repaint" move would be
+// impossible on a phone again, just reached from a new tab instead of the
+// old single sheet.
+//
+// This sandbox's egress proxy blocks `services.arcgisonline.com` (the
+// default satellite layer's host), so `waitForTiles` — which polls
+// `map.areTilesLoaded()` — never resolves; a real run stalled past two
+// minutes on a single case. `gotoDrawer` below is this group's own
+// settle helper: it waits for the chrome to mount and quiet down, never for
+// map pixels, which is honest for what every assertion here actually reads
+// (DOM geometry and hit-testing, not the basemap).
+test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
+  async function gotoDrawer(
+    page: Page,
+    viewport: { width: number; height: number } = DESKTOP,
+  ): Promise<void> {
+    await page.setViewportSize(viewport);
+    await page.goto(`/${VIEW}`);
+    await page.getByTestId('map-canvas').waitFor({ state: 'visible' });
+    await page.getByRole('tab', { name: 'Layers' }).waitFor({ state: 'visible' });
+    await waitForRectStable(page.locator('.rl-drawer'));
+  }
+
+  const TAB_NAMES = ['Layers', 'Stands', 'Sightings'] as const;
+
+  for (const viewport of [DESKTOP, MOBILE]) {
+    test(`${viewport.width}px — all three tabs are reachable, and switching fully unmounts the previous panel`, async ({
+      page,
+    }) => {
+      await gotoDrawer(page, viewport);
+
+      // Opens on Layers by default (unchanged from the pre-tab behaviour).
+      await expect(page.getByRole('tab', { name: 'Layers', selected: true })).toBeVisible();
+      await expect(page.getByText('Saved filters')).toBeVisible();
+
+      for (const name of TAB_NAMES) {
+        await page.getByRole('tab', { name }).click();
+        await waitForRectStable(page.locator('.rl-drawer'));
+        await expect(page.getByRole('tab', { name, selected: true })).toBeVisible();
+
+        // The direct proof the previous tab's panel was unmounted, not
+        // merely hidden underneath — exactly the shape of the
+        // `elementFromPoint` trap `CommandBar`'s own doc comment names.
+        // Two stacked `.rl-sheet`s at this drawer's coordinates would both
+        // match this selector.
+        await expect(page.locator('.rl-drawer .rl-sheet')).toHaveCount(1);
+      }
+
+      // Content unique to Layers must be gone once we have left it.
+      await expect(page.getByText('Saved filters')).toHaveCount(0);
+    });
+
+    test(`${viewport.width}px — R42: wind, date and thermals stay reachable on every tab`, async ({
+      page,
+    }) => {
+      await gotoDrawer(page, viewport);
+
+      for (const name of TAB_NAMES) {
+        await page.getByRole('tab', { name }).click();
+        await waitForRectStable(page.locator('.rl-drawer'));
+
+        // Present and geometrically clear of the drawer...
+        await assertNoCollisions(page, {
+          expectPresent: [
+            'rail (top-right)',
+            'command bar',
+            'conditions bar',
+            'chrome-bottomleft group',
+            'layers sheet',
+          ],
+        });
+
+        // ...and a real tap on each actually lands on the control, not on
+        // the drawer painted over it — the two-stage check `docs/AUDIT-
+        // PRODUCT.md`'s "bounding box ignores a clip, elementFromPoint does
+        // not" lesson exists for. `.rl-sheet` is excluded from `roots`
+        // deliberately: this asserts the *conditions row*, which is a
+        // sibling of the drawer, not a descendant of it.
+        const elements = await auditInteractiveElements(page, ['.rl-conditions']);
+        expect(
+          elements.length,
+          'expected the wind/date/thermals cells to be auditable',
+        ).toBeGreaterThan(0);
+        const broken = elements.filter((el) => !el.reachable || !el.hitOk);
+        expect(
+          broken,
+          broken
+            .map(
+              (f) =>
+                `"${f.name}" in the conditions row is not cleanly hit-testable while the "${name}" tab is open`,
+            )
+            .join('\n'),
+        ).toEqual([]);
+
+        // The flagship move itself: opening the wind popover from this tab
+        // must actually work, not just look present.
+        await page.getByRole('button', { name: /Wind from/ }).click();
+        await waitForRectStable(page.locator('.rl-popover'));
+        await expect(page.locator('.rl-popover')).toBeVisible();
+        // `exact: true` — the drawer's own "Close panel" button is also on
+        // screen at the same time and its accessible name contains "Close"
+        // as a substring, which Playwright's default `name` match would
+        // otherwise treat as a hit too.
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(page.locator('.rl-popover')).toHaveCount(0);
+      }
+    });
+
+    test(`${viewport.width}px — hit-testability holds on every tab`, async ({ page }) => {
+      await gotoDrawer(page, viewport);
+
+      for (const name of TAB_NAMES) {
+        await page.getByRole('tab', { name }).click();
+        await waitForRectStable(page.locator('.rl-drawer'));
+
+        const elements = await auditInteractiveElements(page, ['.map-chrome', '.rl-drawer']);
+        expect(elements.length, `expected interactive chrome on the "${name}" tab`).toBeGreaterThan(
+          0,
+        );
+
+        const unreachable = elements.filter((el) => !el.reachable);
+        expect(
+          unreachable,
+          unreachable
+            .map(
+              (f) =>
+                `"${name}" tab: "${f.name}" is unreachable (no scrollable ancestor can reach it).`,
+            )
+            .join('\n'),
+        ).toEqual([]);
+
+        const clipped = elements.filter(
+          (el) => el.reachable && !el.hitOk && !el.coveredByOpenOverlay,
+        );
+        expect(
+          clipped,
+          clipped
+            .map(
+              (f) =>
+                `"${name}" tab: "${f.name}" paints but elementFromPoint resolves elsewhere — visible and unclickable.`,
+            )
+            .join('\n'),
+        ).toEqual([]);
+      }
+    });
+
+    test(`${viewport.width}px — every control on every tab meets the 44x44 gloved-tap floor`, async ({
+      page,
+    }) => {
+      await gotoDrawer(page, viewport);
+
+      for (const name of TAB_NAMES) {
+        await page.getByRole('tab', { name }).click();
+        await waitForRectStable(page.locator('.rl-drawer'));
+
+        const elements = await auditInteractiveElements(page, ['.rl-drawer']);
+        expect(
+          elements.length,
+          `expected interactive controls on the "${name}" tab`,
+        ).toBeGreaterThan(0);
+
+        const violations = elements
+          .filter((el) => !el.disabled)
+          .map((el) => {
+            const isRange = el.tag === 'INPUT' && el.type === 'range';
+            const minHeight = isRange ? 28 : 44;
+            const ok = el.effectiveRect.width >= 44 && el.effectiveRect.height >= minHeight;
+            return { el, ok, minHeight };
+          })
+          .filter((r) => !r.ok);
+
+        expect(
+          violations,
+          violations
+            .map(
+              (v) =>
+                `"${name}" tab: "${v.el.name}" (${v.el.tag}) is ` +
+                `${Math.round(v.el.effectiveRect.width)}x${Math.round(v.el.effectiveRect.height)}px, needs >= 44x${v.minHeight}px.`,
+            )
+            .join('\n'),
+        ).toEqual([]);
+      }
+    });
+  }
+
+  test('desktop — the Stands and Sightings tabs state a property is required rather than guessing one, while signed out', async ({
+    page,
+  }) => {
+    // This sandbox has no backend at all, so "signed out" is the only
+    // reachable state here — but it is also the one CLAUDE.md is strictest
+    // about: nothing may be assumed about *whose ground* a stand or sighting
+    // belongs to. `useCurrentProperty` (`apps/web/src/lib/currentProperty.ts`)
+    // never fabricates a property id, and these two tabs must say so rather
+    // than silently rendering against one.
+    await gotoDrawer(page, DESKTOP);
+
+    await page.getByRole('tab', { name: 'Stands' }).click();
+    await waitForRectStable(page.locator('.rl-drawer'));
+    await expect(page.getByRole('heading', { name: 'Stands & markers' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await waitForRectStable(page.locator('.rl-drawer'));
+    await expect(page.getByRole('heading', { name: 'Sightings & sits' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+
+    // And the rest of the chrome — Layers, Offline, wind/time — must still
+    // work from here; being signed out must never strand the map itself.
+    await page.getByRole('tab', { name: 'Layers' }).click();
+    await waitForRectStable(page.locator('.rl-drawer'));
+    await expect(page.getByText('Saved filters')).toBeVisible();
+  });
+
+  // This sandbox has no backend, so every case in this file runs signed out
+  // — there is no reachable path here to actually authenticate and open
+  // `FilterLibrary`, which is exactly why `LayersSheet.tsx`'s `canCreateFilters`
+  // gate matters: "New filter" calling an endpoint that will just 401 is the
+  // control CLAUDE.md's "say when an input is missing" rule exists to
+  // prevent, applied to auth instead of terrain. What *is* verifiable here is
+  // that the gate itself renders — the control is replaced by a stated reason
+  // rather than left clickable-but-doomed.
+  test('desktop — "New filter" is replaced by a stated reason while signed out, not a doomed control', async ({
+    page,
+  }) => {
+    await gotoDrawer(page, DESKTOP);
+
+    await expect(page.getByRole('button', { name: 'New filter' })).toHaveCount(0);
+    await expect(page.getByText('Sign in to build and save your own filters')).toBeVisible();
+    // The built-in presets are the point of the degrade — still usable with
+    // no account at all.
+    await expect(page.getByText('Bedding benches')).toBeVisible();
+  });
+
+  test('desktop — the drawer slot itself never holds two panels at once, across every reachable transition', async ({
+    page,
+  }) => {
+    // The mechanism `FilterLibrary`/`FilterEditor` rely on when they do take
+    // over the slot (`App.tsx`: `{drawerTab && !filterEditorTarget && …}`,
+    // `{filterEditorTarget && …}`, mutually exclusive by construction) is the
+    // same one already proven by every tab switch above: exactly one
+    // `.rl-sheet` on screen, ever. Restated here against the Offline picker,
+    // which *is* reachable with no backend, as the end-to-end proof for that
+    // mechanism rather than trusting the JSX condition by inspection alone.
+    await gotoDrawer(page, DESKTOP);
+    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Save this area for offline use' }).click();
+    await waitForRectStable(page.locator('.rl-sheet'));
+    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+    // Opening Offline closes the drawer outright (`App.tsx`), which
+    // unmounts `TabBar` along with it — there is nothing to switch tabs
+    // *within* while a sibling panel owns the slot.
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+
+    // Re-opened via the command-bar cell, not a tab — the tab strip does not
+    // exist again until the drawer itself is back.
+    await page.getByRole('button', { name: 'Layers, stands and sightings' }).click();
+    await waitForRectStable(page.locator('.rl-drawer'));
+    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+    await expect(page.getByRole('tablist')).toBeVisible();
+  });
 });

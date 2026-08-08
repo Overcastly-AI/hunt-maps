@@ -67,7 +67,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-
 }
 
 .chrome-bottomright {
@@ -230,9 +229,8 @@
     /* map-chrome's own bottom padding/safe-area, the command bar, the gap
        above it, ConditionsBar's measured height, and a breathing gap. */
     --rl-mobile-bottom-clearance: calc(
-      max(var(--space-3), env(safe-area-inset-bottom)) +
-        var(--layout-command-bar-height) + var(--space-3) +
-        var(--layout-conditions-bar-height) + var(--space-3)
+      max(var(--space-3), env(safe-area-inset-bottom)) + var(--layout-command-bar-height) +
+        var(--space-3) + var(--layout-conditions-bar-height) + var(--space-3)
     );
     top: var(--rl-mobile-top-clearance);
     bottom: var(--rl-mobile-bottom-clearance);
@@ -252,6 +250,199 @@
   .chrome-bottomright {
     display: none;
   }
+}
+
+/* --------------------------------------------------------------------------
+ * Tabbed drawer — Layers / Stands / Sightings share the one drawer slot
+ * (`docs/AUDIT-PRODUCT.md` rec 20; `CommandBar`'s own doc comment already
+ * reserved this: "adding Filters or Property later means adding a tab
+ * inside the one drawer slot, not a third cell here").
+ *
+ * `LayersSheet`, `WaypointsSheet` and `ObservationsSheet` each render their
+ * own `<Sheet>` (`packages/design`) independently and correctly — that is
+ * unchanged, and two of those three components are outside this agent's
+ * territory (`components/waypoints|observations`), so this does not try to
+ * teach any of them a "tabbed" mode. Instead `App.tsx` mounts exactly one of
+ * them at a time (same one-panel-at-a-time contract the Layers/Offline
+ * toggle already had) inside `.rl-drawer`, with a `TabBar`
+ * (`@hunt-maps/design`) as a sibling above it. `.rl-drawer` claims the exact
+ * screen position `.rl-sheet--drawer` used to own outright; the block below
+ * that neutralises `.rl-sheet--drawer` puts the nested panel back to filling
+ * whatever `.rl-drawer__body` gives it, so the two absolute-position
+ * systems never stack.
+ * -------------------------------------------------------------------------- */
+
+.rl-drawer {
+  position: absolute;
+  /* Same layer `.rl-sheet` itself painted at — the nested panel below is
+     neutralised to `position: static` and no longer contributes its own
+     stacking context, so this is now the one figure that has to win against
+     `.map-chrome`'s 30 the same way the plain sheet always did (see that
+     rule's own comment for why `.map-chrome` sits above it on purpose). */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  top: var(--space-3);
+  left: var(--space-3);
+  bottom: calc(var(--space-touch) + var(--space-6));
+  width: var(--layout-sheet-width);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sheet);
+  animation: rl-drawer-in var(--motion-sheet) var(--motion-ease);
+}
+
+@keyframes rl-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Desktop clearance above the command bar — identical figure to
+   `.rl-sheet--drawer`'s own override above, duplicated because this is a
+   different element occupying the same slot. */
+@media (min-width: 861px) {
+  .rl-drawer {
+    bottom: calc(var(--layout-command-bar-height) + var(--space-6));
+  }
+}
+
+@media (max-width: 860px) {
+  .rl-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation-name: rl-drawer-up;
+  }
+
+  @keyframes rl-drawer-up {
+    from {
+      transform: translateY(16px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  /*
+   * R42, duplicated for the tabbed drawer. See `.rl-sheet--drawer`'s
+   * identical block above for the derivation of every term — kept as a
+   * second copy rather than shared, the same call `.rl-readout` already
+   * made above it: a CSS custom property does not inherit across DOM
+   * siblings, and `.rl-drawer`/`.rl-sheet--drawer`/`.rl-readout` are three
+   * siblings under `.app-shell`, not ancestor and descendant. Keep the three
+   * figures in sync if any one row's height token changes.
+   */
+  .rl-drawer {
+    --rl-mobile-top-clearance: calc(
+      var(--space-3) + (var(--space-touch) * 3 + 4px) + var(--space-3)
+    );
+    --rl-mobile-bottom-clearance: calc(
+      max(var(--space-3), env(safe-area-inset-bottom)) + var(--layout-command-bar-height) +
+        var(--space-3) + var(--layout-conditions-bar-height) + var(--space-3)
+    );
+    top: var(--rl-mobile-top-clearance);
+    bottom: var(--rl-mobile-bottom-clearance);
+  }
+}
+
+.rl-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/*
+ * Neutralises the nested panel's own `.rl-sheet--drawer` positioning.
+ *
+ * `LayersSheet`/`WaypointsSheet`/`ObservationsSheet` each render a `<Sheet>`
+ * that is correctly self-positioned in isolation — but `Sheet` claims the
+ * exact coordinates `.rl-drawer` above already reserves, and stacking two
+ * independent `position: absolute` boxes at the same coordinates would
+ * double the offset rather than nest cleanly. Rather than teach three
+ * components (two of them outside this agent's territory) a "tabbed" mode,
+ * the nested `<Sheet>` is left alone entirely and simply told to fill
+ * whatever box `.rl-drawer__body` gives it: `position: static`, full
+ * width/flex-height, and a border-radius that only rounds its *bottom*
+ * corners now that `TabBar` owns the top ones.
+ *
+ * Three classes of specificity (`.rl-drawer__body > .rl-sheet.rl-sheet--
+ * drawer`) beat every other rule matching `.rl-sheet--drawer` — the base
+ * rule in `packages/design`, both of its own media-query variants, and this
+ * file's R42 override — regardless of viewport or source order, which is
+ * why one unconditional rule is enough here instead of a media-query pair.
+ */
+.rl-drawer__body > .rl-sheet.rl-sheet--drawer {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  border-top: none;
+  /* `.rl-drawer` already carries the one shadow for the whole assembly —
+     a second shadow here would draw a seam at the tab-bar/panel join. */
+  box-shadow: none;
+  /* `.rl-drawer` already animates in as a unit; animating the inner panel
+     too on every tab switch would read as a flicker, not a transition. */
+  animation: none;
+}
+
+/*
+ * A hunter must never be left guessing whose ground a stand or sighting is
+ * about to be filed against (`CLAUDE.md`, "never be confidently wrong about
+ * identity"), so this is the one row that persists above whichever panel is
+ * showing, whenever a property has actually been chosen — see
+ * `lib/currentProperty.ts` for why nothing here is ever picked *for* the
+ * user.
+ */
+.rl-property-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+
+.rl-property-banner__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-dim);
+}
+
+.rl-property-banner__name strong {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+/* Picker shown in place of Stands/Sightings until a property is chosen. */
+.rl-property-picker {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 /*
@@ -668,8 +859,9 @@
   justify-content: center;
   overflow-y: auto;
   background: var(--color-ground);
-  padding: max(var(--space-6), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right))
-    max(var(--space-6), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
+  padding: max(var(--space-6), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right)) max(var(--space-6), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
 }
 
 .auth-card {

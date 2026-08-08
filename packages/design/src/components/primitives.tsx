@@ -137,6 +137,50 @@ export function CommandBar({ children }: { children: ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
+// TabBar — switches which panel occupies the one drawer slot
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of tabs deciding which panel currently occupies the drawer slot
+ * (Layers / Stands / Sightings — `docs/AUDIT-PRODUCT.md` rec 20).
+ *
+ * Not a fourth `CommandBarCell`: the command bar's whole point is that its
+ * height never depends on how many controls it has, and a persistent panel
+ * (as opposed to the drawer, an offline download, or a conditions reading)
+ * is meant to live *inside* the one drawer slot rather than add a new bar.
+ * `TabBar` is that inside-the-drawer control — visually smaller and text-only
+ * (no icon column) so it reads as a sub-navigation strip belonging to the
+ * panel beneath it, not a second command bar competing with the real one.
+ */
+export function TabBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="rl-tabbar rl-glass" role="tablist">
+      {children}
+    </div>
+  );
+}
+
+export interface TabBarButtonProps {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}
+
+export function TabBarButton({ active, onClick, children }: TabBarButtonProps) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={cx('rl-tabbar__tab', active && 'rl-tabbar__tab--active')}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sheet
 // ---------------------------------------------------------------------------
 
@@ -419,6 +463,14 @@ export interface ToggleRowProps {
    * how the design system enforces it rather than hoping each screen remembers.
    */
   blockedReason?: string;
+  /**
+   * An action rendered beside the label, always visible regardless of
+   * checked state — e.g. an "Edit" link on a saved filter row. Deliberately
+   * separate from `children`, which only appears once the row is switched
+   * on: an edit affordance has to work on a filter the user has *not* turned
+   * on yet, so it cannot share that gate.
+   */
+  action?: ReactNode;
   children?: ReactNode;
 }
 
@@ -430,6 +482,7 @@ export function ToggleRow({
   blurb,
   swatch,
   blockedReason,
+  action,
   children,
 }: ToggleRowProps) {
   const blocked = Boolean(blockedReason);
@@ -437,18 +490,23 @@ export function ToggleRow({
 
   return (
     <div className={cx('rl-toggle', checked && 'rl-toggle--on', blocked && 'rl-toggle--blocked')}>
-      <label className="rl-toggle__main" htmlFor={id}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          disabled={blocked}
-          onChange={onToggle}
-          aria-describedby={describedBy}
-        />
-        {swatch && <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />}
-        <span className="rl-toggle__label">{label}</span>
-      </label>
+      <div className="rl-toggle__head">
+        <label className="rl-toggle__main" htmlFor={id}>
+          <input
+            id={id}
+            type="checkbox"
+            checked={checked}
+            disabled={blocked}
+            onChange={onToggle}
+            aria-describedby={describedBy}
+          />
+          {swatch && (
+            <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />
+          )}
+          <span className="rl-toggle__label">{label}</span>
+        </label>
+        {action && <span className="rl-toggle__action">{action}</span>}
+      </div>
       {(blurb || blockedReason) && (
         <p id={describedBy} className={cx('rl-toggle__blurb', blocked && 'rl-toggle__blurb--warn')}>
           {blockedReason ?? blurb}

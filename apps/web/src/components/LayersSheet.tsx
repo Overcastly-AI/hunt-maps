@@ -11,6 +11,7 @@ import {
 import { LAYER_GROUPS, LAYERS, missingInputs } from '../lib/layers';
 import type { CoverageState } from '../lib/offline/coverage';
 import { describeCoverage } from '../lib/offline/coverageLabel';
+import type { SavedFilterDto } from '../lib/api';
 
 export interface SavedFilterSummary {
   id: string;
@@ -18,6 +19,16 @@ export interface SavedFilterSummary {
   description?: string;
   color: string;
   enabled: boolean;
+  /**
+   * Present only for a real, persisted filter — a built-in preset (or a
+   * filter fetched while signed out/offline, which never happens, but the
+   * type stays honest either way) has none. Its presence is what decides
+   * whether the row offers "Edit": `FilterEditor` needs the full DTO
+   * (predicate, colour, opacity…), not the trimmed summary this sheet
+   * renders from, and a preset was never meant to be opened there directly
+   * (`FilterEditor` already refuses to show Delete for one).
+   */
+  editable?: SavedFilterDto;
 }
 
 export interface LayersSheetProps {
@@ -35,6 +46,21 @@ export interface LayersSheetProps {
   onOpacity: (id: string, value: number) => void;
   onToggleFilter: (id: string) => void;
   onClose: () => void;
+  /** Opens the "start a new filter" picker (`components/filters`' `FilterLibrary`) in the drawer slot. */
+  onNewFilter: () => void;
+  /** Opens `FilterEditor` on an existing saved filter. Never offered for a preset — see `SavedFilterSummary.editable`. */
+  onEditFilter: (filter: SavedFilterDto) => void;
+  /**
+   * Whether saving a new filter could actually succeed right now.
+   *
+   * `FilterEditor`/`FilterLibrary` (`components/filters`) call an
+   * authenticated endpoint with no sign-in prompt of their own — creating one
+   * while signed out fails silently at Save with a generic error, which is
+   * exactly the kind of control CLAUDE.md's "say when an input is missing"
+   * rule exists for. Defaults `true` so existing callers/tests are
+   * unaffected; `App.tsx` passes the real `useAuth()` status.
+   */
+  canCreateFilters?: boolean;
 }
 
 /**
@@ -65,6 +91,9 @@ export function LayersSheet({
   onOpacity,
   onToggleFilter,
   onClose,
+  onNewFilter,
+  onEditFilter,
+  canCreateFilters = true,
 }: LayersSheetProps) {
   const warnings = missingInputs(active, windFromDeg);
   const offline = describeCoverage(coverage);
@@ -156,13 +185,21 @@ export function LayersSheet({
       <section className="rl-group">
         <SectionHeading
           action={
-            <Button variant="link" onClick={() => undefined}>
-              New filter
-            </Button>
+            canCreateFilters ? (
+              <Button variant="link" onClick={onNewFilter}>
+                New filter
+              </Button>
+            ) : undefined
           }
         >
           Saved filters
         </SectionHeading>
+        {!canCreateFilters && (
+          <p className="rl-hint">
+            Sign in to build and save your own filters — they travel with you offline once you have.
+            The built-in ones below still work with no account.
+          </p>
+        )}
         {savedFilters.length === 0 ? (
           <p className="rl-hint">
             No saved filters yet. A filter is a terrain query you name and keep — “12–25°, facing
@@ -178,6 +215,13 @@ export function LayersSheet({
               onToggle={() => onToggleFilter(f.id)}
               blurb={f.description}
               swatch={f.color}
+              action={
+                f.editable && (
+                  <Button variant="link" onClick={() => onEditFilter(f.editable as SavedFilterDto)}>
+                    Edit
+                  </Button>
+                )
+              }
             />
           ))
         )}

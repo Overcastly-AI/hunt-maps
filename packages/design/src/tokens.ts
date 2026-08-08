@@ -313,6 +313,18 @@ export const layout = {
    * of building it as a row instead of a stack.
    */
   'command-bar-height': '48px',
+  /**
+   * The tab strip switching between panels in the one drawer slot (Layers /
+   * Stands / Sightings — `docs/AUDIT-PRODUCT.md` rec 20). Same construction
+   * as `command-bar-height`: `.rl-tabbar__tab`'s `--space-touch` floor plus
+   * the bar's own 1px bottom hairline, so it is one fixed figure the drawer's
+   * clearance math can add regardless of how the tab labels themselves are
+   * styled. Kept distinct from `command-bar-height` rather than reused,
+   * because the two bars are visually different weights (icon+label vs.
+   * label-only) and a future restyle of one must not silently resize the
+   * other's reserved clearance.
+   */
+  'tabbar-height': '45px',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */

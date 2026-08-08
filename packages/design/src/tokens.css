@@ -115,6 +115,7 @@
   --layout-breakpoint-compact: 860px;
   --layout-conditions-bar-height: 56px;
   --layout-command-bar-height: 48px;
+  --layout-tabbar-height: 45px;
 
   /* motion */
   --motion-fast: 120ms;
