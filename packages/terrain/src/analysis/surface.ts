@@ -18,21 +18,77 @@
  *  - `dzdx` is east-positive; `dzdy` is south-positive.
  *  - Aspect is the **downslope azimuth**, degrees clockwise from true north,
  *    in [0, 360). Flat cells get `-1`.
+ *
+ * ## No-data: the whole window, not just the centre (`R49`)
+ *
+ * Every operator in this file is a 3x3 kernel, so every one of them needs all
+ * nine cells. Guarding only the centre with `hasData` and then differencing over
+ * a window that may contain the `-32768` sentinel is not a near-miss, it is a
+ * 33 km cliff: on a 15° plane, punching out a single west neighbour made Horn
+ * report **89.93° slope facing 270°**, and punching out all eight made the
+ * sentinel difference against itself so the terms cancelled and the cell
+ * reported **0.00° — a perfect flat pad**, which is the *maximum* of the bedding
+ * pad term, for ground with no measurable surroundings at all.
+ *
+ * Neither crashed. The fringe of fake cliffs and fake pads simply appeared one
+ * cell deep around every DEM void and along every edge where a neighbour tile
+ * 404'd, and `slope`, `aspect`, `hillshade`, Weiss, Wood and `detectBenches` all
+ * consumed it as measurement. So all three operators here take the window
+ * through `loadWindow3`, which is the same all-nine rule
+ * `computeVectorRuggedness` has always used.
  */
 
 import { NODATA } from '../dem/encoding.js';
 import { HeightGrid } from '../dem/grid.js';
 
+/**
+ * The no-data threshold, hoisted to a module-local constant.
+ *
+ * Not cosmetic — **measured**. `NODATA` is an imported binding, and every
+ * neighbourhood test in this file evaluates `NODATA + 1` nine times per cell,
+ * i.e. ~585,000 times per 256² tile per operator. Left as the import, the module
+ * boundary is a property load V8 will not fold, and the R49 guard cost **+58%**
+ * on `computeSurface` (11.7 → 18.4 ms/tile) and **+102%** on
+ * `computeRuggedness`. As a module constant with the nine comparisons unrolled,
+ * the same guard runs **36% faster than the unguarded code it replaced**
+ * (11.7 → 7.4 ms). This is the identical trap `R30` measured at 880 ms/tile,
+ * which is why `grid.ts`, `horizon.ts` and `shading.ts` all keep a local alias —
+ * this file was the one that did not.
+ *
+ * The `> NODATA + 1` margin itself is `isElevation`'s: elevations round-trip
+ * through Float32 and bilinear resampling, so the sentinel arrives as
+ * `-32768.000004` about as often as it arrives exact.
+ */
+const NODATA_FLOOR = NODATA + 1;
+
 export interface SurfaceField {
   width: number;
   height: number;
-  /** Slope in degrees, 0..90. */
+  /**
+   * Slope in degrees, 0..90, or `NaN` where the 3x3 window was not fully
+   * measurable.
+   *
+   * **This is the field's authoritative "unknown" flag.** Every consumer should
+   * test `Number.isFinite(slope)` before trusting any of the other four arrays,
+   * because `aspect` cannot carry the distinction (see below).
+   */
   slope: Float32Array;
-  /** Downslope azimuth in degrees clockwise from north; -1 where flat. */
+  /**
+   * Downslope azimuth in degrees clockwise from north; `-1` where the cell has
+   * no aspect.
+   *
+   * `-1` deliberately covers **two** cases — a genuinely flat cell, and a cell
+   * whose window was not measurable — because `NaN` here would silently pass the
+   * `aspect < 0` tests that six call sites in this package and both apps use to
+   * mean "no aspect" (`NaN < 0` is `false`), turning a guard into a fall-through.
+   * Distinguishing the two is `slope`'s job: flat → `slope === 0`, unknown →
+   * `slope` is `NaN`. Never branch on `aspect` alone to decide whether a cell was
+   * measured.
+   */
   aspect: Float32Array;
-  /** East-positive gradient (rise/run, dimensionless). */
+  /** East-positive gradient (rise/run, dimensionless); `NaN` where unknown. */
   dzdx: Float32Array;
-  /** South-positive gradient. */
+  /** South-positive gradient; `NaN` where unknown. */
   dzdy: Float32Array;
 }
 
@@ -79,12 +135,17 @@ export function computeSurface(grid: HeightGrid): SurfaceField {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
-      if (!grid.hasData(x, y)) {
+      // All nine, not just the centre. `dzdx`/`dzdy` go to NaN rather than being
+      // left at their zero-initialised value, because `hillshade` and `stepCost`
+      // read the gradients directly and a zero gradient is "level ground", not
+      // "no ground" — an unknown cell used to shade as a lit flat.
+      if (!loadWindow3(grid, x, y, w)) {
         slope[i] = NaN;
         aspect[i] = -1;
+        dzdxOut[i] = NaN;
+        dzdyOut[i] = NaN;
         continue;
       }
-      grid.window3(x, y, w);
       // w = [a b c / d e f / g h i] with row 0 = north.
       const dzdx = (w[2] + 2 * w[5] + w[8] - (w[0] + 2 * w[3] + w[6])) / (8 * cellSize);
       const dzdy = (w[6] + 2 * w[7] + w[8] - (w[0] + 2 * w[1] + w[2])) / (8 * cellSize);
@@ -134,7 +195,14 @@ export function computeCurvature(grid: HeightGrid): CurvatureField {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
-      if (!grid.hasData(x, y)) {
+      // A quadratic fitted through the sentinel is not a noisy fit, it is a fit
+      // to a 33 km spike: measured on a 15° plane, one missing neighbour gave
+      // crossSectional 27.7 (Wood: "Channel / draw" — a fabricated travel
+      // corridor) and eight missing gave maxCurvature 221.9 with minCurvature
+      // negative, which Wood reads as the peak/pass family. Saddles are the
+      // loudest colour on this map and the highest-value feature on it; a ring
+      // of fake ones around every void is the worst possible failure here.
+      if (!loadWindow3(grid, x, y, w)) {
         profile[i] = NaN;
         plan[i] = NaN;
         longitudinal[i] = NaN;
@@ -143,7 +211,6 @@ export function computeCurvature(grid: HeightGrid): CurvatureField {
         minCurvature[i] = NaN;
         continue;
       }
-      grid.window3(x, y, w);
       const [z1, z2, z3, z4, z5, z6, z7, z8, z9] = w;
 
       const a = ((z1 + z3 + z4 + z6 + z7 + z9) / 6 - (z2 + z5 + z8) / 3) / g2;
@@ -225,11 +292,16 @@ export function computeRuggedness(grid: HeightGrid): Float32Array {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
-      if (!grid.hasData(x, y)) {
+      // TRI is *reported to the user in metres* and denormalised onto every
+      // observation row, so a partial window cannot be quietly averaged: the RMS
+      // of eight differences over the three neighbours that happen to exist is
+      // not "local relief". Against the sentinel it is not even wrong — the same
+      // 15°-plane cell that reads 6.6 m of relief read **33,251.9 m** with one
+      // neighbour missing and **94,126.4 m** with eight.
+      if (!loadWindow3(grid, x, y, w)) {
         out[i] = NaN;
         continue;
       }
-      grid.window3(x, y, w);
       const c = w[4];
       let sum = 0;
       for (let k = 0; k < 9; k++) {
@@ -355,15 +427,20 @@ export function computeVectorRuggedness(
         w[6] = data[o + stride - 1];
         w[7] = data[o + stride];
         w[8] = data[o + stride + 1];
-        ok = true;
-        for (let k = 0; k < 9; k++) {
-          if (!(w[k] > NODATA + 1)) {
-            ok = false;
-            break;
-          }
-        }
+        // Same unrolled, module-constant test as `loadWindow3` — this loop runs
+        // over the padded region, so at r=4 it is ~1.4 M evaluations per tile.
+        ok =
+          w[0] > NODATA_FLOOR &&
+          w[1] > NODATA_FLOOR &&
+          w[2] > NODATA_FLOOR &&
+          w[3] > NODATA_FLOOR &&
+          w[4] > NODATA_FLOOR &&
+          w[5] > NODATA_FLOOR &&
+          w[6] > NODATA_FLOOR &&
+          w[7] > NODATA_FLOOR &&
+          w[8] > NODATA_FLOOR;
       } else {
-        ok = gridWindowHasData(grid, gx, gy, w);
+        ok = loadWindow3(grid, gx, gy, w);
       }
       if (ok) {
         const dzdx = (w[2] + 2 * w[5] + w[8] - (w[0] + 2 * w[3] + w[6])) / (8 * cellSize);
@@ -421,18 +498,71 @@ export function computeVectorRuggedness(
   return out;
 }
 
-/** Load the 3x3 window at (x, y) and report whether every cell in it has data. */
-function gridWindowHasData(
-  grid: HeightGrid,
-  x: number,
-  y: number,
-  out: Float32Array,
-): boolean {
-  grid.window3(x, y, out);
-  for (let k = 0; k < 9; k++) {
-    if (!(out[k] > NODATA + 1)) return false;
+/**
+ * Load the 3x3 window at interior (x, y) into `out` and report whether every one
+ * of the nine cells carries a real elevation.
+ *
+ * The single no-data rule for every kernel in this file, so the layers cannot
+ * disagree about which cells they can speak for. Two things it is deliberately
+ * NOT doing:
+ *
+ *  - It does not invent a second notion of "absent". `> NODATA + 1` is the same
+ *    predicate as `isElevation`, matching the margin `grid.ts` uses because
+ *    elevations round-trip through Float32 and bilinear resampling, so the
+ *    sentinel arrives as `-32768.000004` about as often as it arrives exact.
+ *    (`>` also rejects `NaN` and `-Infinity`; no decoder can produce `+Infinity`.)
+ *  - It does not grey the tile border. `HeightGrid.get` edge-replicates only
+ *    *outside* the padded buffer, so on a grid whose halo is short the outermost
+ *    interior cells still see real elevations. That is a grid-edge artefact, not
+ *    missing data, and abstaining on it would paint a frame around every tile —
+ *    exactly the distinction `RingSlopeStats.missing` had to draw in `R40`.
+ *    Inside the buffer, `NODATA` means genuinely unseen ground and does grey.
+ *
+ * ## Performance
+ *
+ * This is the hottest loop in the engine — three operators x 65k cells x 9 reads
+ * per tile, inside a render loop on a phone. The fast path reads the padded
+ * buffer directly because `grid.get` clamps both axes on every one of those
+ * reads, and inside the allocated buffer the clamps provably cannot fire. It is
+ * module-local on purpose: the `R30` measurement was that a *cross-module* call
+ * here compiles to a property load V8 will not inline, which cost 880 ms/tile.
+ */
+function loadWindow3(grid: HeightGrid, x: number, y: number, out: Float32Array): boolean {
+  const halo = grid.halo;
+  const stride = grid.stride;
+  const bx = x + halo;
+  const by = y + halo;
+  if (bx >= 1 && by >= 1 && bx < stride - 1 && by < grid.height + 2 * halo - 1) {
+    const data = grid.data;
+    const o = by * stride + bx;
+    out[0] = data[o - stride - 1];
+    out[1] = data[o - stride];
+    out[2] = data[o - stride + 1];
+    out[3] = data[o - 1];
+    out[4] = data[o];
+    out[5] = data[o + 1];
+    out[6] = data[o + stride - 1];
+    out[7] = data[o + stride];
+    out[8] = data[o + stride + 1];
+  } else {
+    // Outside the buffer: `get` clamps, i.e. edge-replication, which is the
+    // documented degradation for a grid assembled without neighbours.
+    grid.window3(x, y, out);
   }
-  return true;
+  // Unrolled rather than a `for k` loop, and against a module constant: see
+  // `NODATA_FLOOR`. The two together are the difference between this guard
+  // costing +58% and it paying for itself twice over.
+  return (
+    out[0] > NODATA_FLOOR &&
+    out[1] > NODATA_FLOOR &&
+    out[2] > NODATA_FLOOR &&
+    out[3] > NODATA_FLOOR &&
+    out[4] > NODATA_FLOOR &&
+    out[5] > NODATA_FLOOR &&
+    out[6] > NODATA_FLOOR &&
+    out[7] > NODATA_FLOOR &&
+    out[8] > NODATA_FLOOR
+  );
 }
 
 /** Aspect in degrees → the compass octant a hunter actually thinks in. */

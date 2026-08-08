@@ -41,19 +41,11 @@ import {
   terrainShelter,
 } from './wind.js';
 import { computeSurface, computeVectorRuggedness } from './surface.js';
-import {
-  DEFAULT_RING_RADIUS_CELLS,
-  ringSlopeStats,
-  type RingSlopeStats,
-} from './landform.js';
+import { DEFAULT_RING_RADIUS_CELLS, ringSlopeStats, type RingSlopeStats } from './landform.js';
 import { emptyRingScan, emptyScan, scanHorizon, scanHorizonRing } from './horizon.js';
 import { isElevation, NODATA } from '../dem/encoding.js';
 import { assembleGrid, HeightGrid } from '../dem/grid.js';
-import {
-  INSUFFICIENT_HALO,
-  InsufficientHaloError,
-  isInsufficientHaloError,
-} from '../dem/halo.js';
+import { INSUFFICIENT_HALO, InsufficientHaloError, isInsufficientHaloError } from '../dem/halo.js';
 import { analyze, requiredHalo } from '../pipeline.js';
 import { plane, syntheticGrid } from '../testing/synthetic.js';
 
@@ -136,13 +128,7 @@ describe('terrainShelter with a no-data halo (R30)', () => {
   it('does NOT report "fully exposed" when the upwind halo is NODATA', () => {
     // Old code: 0.000 — a confident claim that nothing upwind shelters this
     // cell, on ground it never actually looked at.
-    const s = terrainShelter(
-      reader(setHalo(FIFTEEN(), NODATA)),
-      SIZE,
-      SIZE,
-      CELL,
-      0,
-    )[NORTH_EDGE];
+    const s = terrainShelter(reader(setHalo(FIFTEEN(), NODATA)), SIZE, SIZE, CELL, 0)[NORTH_EDGE];
     expect(s).not.toBe(0);
     expect(Number.isNaN(s)).toBe(true);
   });
@@ -173,7 +159,12 @@ describe('skyViewFactor with a no-data halo (R30)', () => {
   it('sees the rim when the halo carries it', () => {
     // Flat interior inside a 200 m rim: measurably enclosed.
     const svf = skyViewFactor(
-      reader(setHalo(build(() => 500), 700)),
+      reader(
+        setHalo(
+          build(() => 500),
+          700,
+        ),
+      ),
       SIZE,
       SIZE,
       CELL,
@@ -187,7 +178,12 @@ describe('skyViewFactor with a no-data halo (R30)', () => {
     // proxy, so the error runs in the worst direction: an enclosed draw reads
     // as an open flat.
     const svf = skyViewFactor(
-      reader(setHalo(build(() => 500), NODATA)),
+      reader(
+        setHalo(
+          build(() => 500),
+          NODATA,
+        ),
+      ),
       SIZE,
       SIZE,
       CELL,
@@ -225,16 +221,20 @@ describe('castShadows with a no-data halo (R30)', () => {
   const SUN = { altitude: 20, azimuth: 180 };
 
   it('shades a cell behind a wall the halo carries', () => {
-    const wall = setHalo(build(() => 500), 700);
-    expect(castShadows(reader(wall), SIZE, SIZE, CELL, SUN, HALO)[SOUTH_EDGE]).toBe(
-      SHADOW_SHADED,
+    const wall = setHalo(
+      build(() => 500),
+      700,
     );
+    expect(castShadows(reader(wall), SIZE, SIZE, CELL, SUN, HALO)[SOUTH_EDGE]).toBe(SHADOW_SHADED);
   });
 
   it('does NOT report full sun when the halo is NODATA', () => {
     // Old code: 1 (lit). The identical cell, with the identical unknown
     // surroundings, was reported as being in full sun.
-    const blank = setHalo(build(() => 500), NODATA);
+    const blank = setHalo(
+      build(() => 500),
+      NODATA,
+    );
     const v = castShadows(reader(blank), SIZE, SIZE, CELL, SUN, HALO)[SOUTH_EDGE];
     expect(v).not.toBe(SHADOW_LIT);
     expect(v).toBe(SHADOW_UNKNOWN);
@@ -246,7 +246,10 @@ describe('castShadows with a no-data halo (R30)', () => {
     // gap comes FIRST — a hole at r=2, the blocker at r=5 — because the cheap
     // implementation (bail out on the first gap) would wrongly abstain here and
     // grey out ground that is definitively in shade.
-    const g = setHalo(build(() => 500), NODATA);
+    const g = setHalo(
+      build(() => 500),
+      NODATA,
+    );
     g.set(15, 22, NODATA);
     for (let x = 0; x < SIZE; x++) g.set(x, 25, 900);
     const v = castShadows(reader(g), SIZE, SIZE, CELL, SUN, HALO)[20 * SIZE + 15];
@@ -256,15 +259,16 @@ describe('castShadows with a no-data halo (R30)', () => {
   it('treats a cell with no elevation of its own as unknown, not shaded', () => {
     const g = build(() => 500);
     g.set(15, 15, NODATA);
-    expect(castShadows(reader(g), SIZE, SIZE, CELL, SUN, HALO)[CENTRE]).toBe(
-      SHADOW_UNKNOWN,
-    );
+    expect(castShadows(reader(g), SIZE, SIZE, CELL, SUN, HALO)[CENTRE]).toBe(SHADOW_UNKNOWN);
   });
 
   it('still reports a known, total shade when the sun is below the horizon', () => {
     // "The sun is down" needs no DEM at all, so a no-data halo must not turn it
     // into a question.
-    const blank = setHalo(build(() => 500), NODATA);
+    const blank = setHalo(
+      build(() => 500),
+      NODATA,
+    );
     const night = castShadows(reader(blank), SIZE, SIZE, CELL, { altitude: -6, azimuth: 90 });
     for (const v of night) expect(v).toBe(SHADOW_SHADED);
   });
@@ -278,9 +282,7 @@ describe('castShadows with a no-data halo (R30)', () => {
     // `castShadows` is not wired into `analyze()` (R27), so nothing sizes a halo
     // for it. Pinned here so whoever wires it cannot miss the accounting.
     expect(DEFAULT_SHADOW_RADIUS_CELLS).toBe(64);
-    expect(requiredHalo({ layers: ['insolation'] })).toBeLessThan(
-      DEFAULT_SHADOW_RADIUS_CELLS,
-    );
+    expect(requiredHalo({ layers: ['insolation'] })).toBeLessThan(DEFAULT_SHADOW_RADIUS_CELLS);
   });
 });
 
@@ -294,19 +296,17 @@ describe('the three horizon operators agree about missing data (R30)', () => {
     // answered here while the others abstained would be its own defect — the
     // insolation layer would claim sun on ground the shelter layer had already
     // admitted it could not see.
-    const g = setHalo(build(() => 500), NODATA);
+    const g = setHalo(
+      build(() => 500),
+      NODATA,
+    );
     const heights = reader(g);
 
     const svf = skyViewFactor(heights, SIZE, SIZE, CELL)[NORTH_EDGE];
     const shelter = terrainShelter(heights, SIZE, SIZE, CELL, 0)[NORTH_EDGE];
-    const shadow = castShadows(
-      heights,
-      SIZE,
-      SIZE,
-      CELL,
-      { altitude: 20, azimuth: 0 },
-      HALO,
-    )[NORTH_EDGE];
+    const shadow = castShadows(heights, SIZE, SIZE, CELL, { altitude: 20, azimuth: 0 }, HALO)[
+      NORTH_EDGE
+    ];
 
     expect(Number.isNaN(svf), 'skyViewFactor').toBe(true);
     expect(Number.isNaN(shelter), 'terrainShelter').toBe(true);
@@ -401,7 +401,18 @@ describe('scanHorizonRing agrees with scanHorizon', () => {
         let anyGap = false;
         const reference: number[] = [];
         for (const [dx, dy] of dirs) {
-          scanHorizon(heights, x, y, dx, dy, z0, CELL, DEFAULT_SKY_VIEW_RADIUS_CELLS, Infinity, single);
+          scanHorizon(
+            heights,
+            x,
+            y,
+            dx,
+            dy,
+            z0,
+            CELL,
+            DEFAULT_SKY_VIEW_RADIUS_CELLS,
+            Infinity,
+            single,
+          );
           if (single.incomplete) anyGap = true;
           reference.push(single.maxTan);
         }
@@ -486,9 +497,9 @@ describe('assembleGrid refuses a halo a 3x3 fetch cannot supply (R30)', () => {
   it('throws when the halo exceeds one tile', () => {
     // The z≥16 / 500 m case in miniature: 273 cells of halo asked of a fetch
     // that can supply 256. `R23` raises the shelter radius to exactly there.
-    expect(() =>
-      assembleGrid(tile, new Float32Array(TS * TS), new Map(), TS, TS + 1),
-    ).toThrow(InsufficientHaloError);
+    expect(() => assembleGrid(tile, new Float32Array(TS * TS), new Map(), TS, TS + 1)).toThrow(
+      InsufficientHaloError,
+    );
   });
 
   it('allows a halo of exactly one tile, which the 8 neighbours do fill', () => {
@@ -588,14 +599,22 @@ describe('beddingLikelihood does not fold unknown cover into "no cover" (R40)', 
     expect(b).toBeGreaterThan(0);
   });
 
-  it('fires on a grid where computeVectorRuggedness really does return NaN', () => {
-    // Not a hand-fed array: a checkerboard of no-data, which is what a decimated
-    // or partially-corrupt LiDAR return looks like. No 3x3 window anywhere is
-    // complete, so VRM has nothing to integrate and reports NaN — while the
-    // 16 ring directions at r=8 all have even (dx+dy), so they land on the same
-    // parity as the centre and the ring is fully sampled. That combination is
-    // what isolates the cover guard from the ring guard below; no natural void
-    // shape separates them as cleanly.
+  it('on a checkerboard of no-data, greys at the slope gate — VRM can no longer be the only casualty', () => {
+    // A checkerboard of no-data, which is what a decimated or partially-corrupt
+    // LiDAR return looks like. No 3x3 window anywhere is complete.
+    //
+    // **This test was rewritten by `R49`, and the rewrite is the finding.** It
+    // used to assert that `slope` stayed *definite* here while VRM went NaN, so
+    // that it isolated the cover guard from the ring guard. That isolation only
+    // existed because `computeSurface` was fabricating: the same incomplete
+    // windows VRM refused to integrate, Horn happily differenced against the
+    // sentinel. Now both abstain, and the relationship below is a structural
+    // invariant rather than a coincidence — VRM's window contains the cell
+    // itself, so a cell whose own 3x3 is complete always contributes at least
+    // one normal and can never come back NaN. Hence: **`slope` finite ⟹ VRM
+    // finite**, and no *natural* void shape can isolate the cover guard any
+    // more. It is exercised with an injected field in the two tests above,
+    // which is now the honest way to reach it.
     const g = build(plane(0, grade(15)));
     for (let y = -HALO; y < SIZE + HALO; y++) {
       for (let x = -HALO; x < SIZE + HALO; x++) {
@@ -605,26 +624,33 @@ describe('beddingLikelihood does not fold unknown cover into "no cover" (R40)', 
     const surface = computeSurface(g);
     const vrm = computeVectorRuggedness(g);
 
-    // Preconditions: the cell has a slope, its ring is intact, its cover is not.
-    expect(Number.isFinite(surface.slope[CENTRE]), 'slope is definite').toBe(true);
+    expect(Number.isNaN(surface.slope[CENTRE]), 'was 15.0° — half its window is void').toBe(true);
     expect(Number.isNaN(vrm[CENTRE]), 'VRM is unknown').toBe(true);
-    const ring: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
-    ringSlopeStats(surface, 15, 15, DEFAULT_RING_RADIUS_CELLS, 15, 16, ring);
-    expect(ring.missing, 'ring is fully sampled, so only cover can be to blame').toBe(0);
+
+    // The invariant, over the whole tile and not just the centre.
+    for (let i = 0; i < vrm.length; i++) {
+      if (Number.isFinite(surface.slope[i])) {
+        expect(Number.isNaN(vrm[i]), `cell ${i}: slope definite but cover unknown`).toBe(false);
+      }
+    }
 
     const bed = beddingLikelihood(surface, { windFromDeg: 180, vectorRuggedness: vrm });
     expect(Number.isNaN(bed[CENTRE])).toBe(true);
   });
 
   it('greys a cell whose only elevation is its own, rather than calling it a flat pad', () => {
-    // A lone data cell in a sea of NODATA. Horn's kernel differences the
-    // sentinel against itself, so the terms cancel and the cell reports slope
-    // **0.0°** — a perfect pad, the maximum of the pad term — on a cell with no
-    // measurable surroundings at all. Old code scored it; it must not.
+    // A lone data cell in a sea of NODATA — reproduction #2 of `R49`. Horn's
+    // kernel differences the sentinel against itself, so the terms cancel and
+    // the cell used to report slope **exactly 0.0°** — a perfect pad, the
+    // maximum of the pad term — on a cell with no measurable surroundings at
+    // all. `R40` caught the consequence in `beddingLikelihood`; the fabricated
+    // 0 itself survived until `R49` and was still being served to `slope`,
+    // `hillshade`, Weiss and Wood.
     const g = HeightGrid.empty(SIZE, SIZE, HALO, CELL, 40, -83);
     g.set(15, 15, 500);
     const surface = computeSurface(g);
-    expect(surface.slope[CENTRE], 'the trap: NODATA differenced against itself').toBe(0);
+    expect(surface.slope[CENTRE], 'the trap: NODATA differenced against itself, was 0').toBeNaN();
+    expect(surface.aspect[CENTRE], 'no aspect, same sentinel as a flat cell').toBe(-1);
 
     const bed = beddingLikelihood(surface, {
       windFromDeg: 0,
@@ -636,13 +662,25 @@ describe('beddingLikelihood does not fold unknown cover into "no cover" (R40)', 
 
 describe('beddingLikelihood does not guess the surround from a mostly-void ring (R40)', () => {
   /**
-   * A one-cell-wide strip of real terrain in a sea of no-data — the shape a
-   * partially written tile, or the edge of a half-downloaded offline region,
-   * actually leaves behind. Two of the sixteen ring directions have data.
+   * A narrow strip of real terrain in a sea of no-data — the shape a partially
+   * written tile, or the edge of a half-downloaded offline region, actually
+   * leaves behind. Two of the sixteen ring directions have data, because at
+   * r=8 only the due-north and due-south offsets land within one cell of the
+   * strip's axis.
+   *
+   * **Three columns wide, not one, since `R49`.** A one-cell strip has no
+   * complete 3x3 window anywhere in it, so every cell in it now correctly has
+   * no slope at all and `beddingLikelihood` would grey it at the *slope* gate —
+   * passing the test for the wrong reason and leaving the ring quorum
+   * untested. Widening the strip restores the isolation the test was written
+   * for. (Before `R49` the one-cell strip did produce definite slopes: they
+   * were differenced against the sentinel and were nonsense.)
    */
   function strip(): HeightGrid {
     const g = HeightGrid.empty(SIZE, SIZE, HALO, CELL, 40, -83);
-    for (let y = -HALO; y < SIZE + HALO; y++) g.set(15, y, 500 + y * 2);
+    for (let y = -HALO; y < SIZE + HALO; y++) {
+      for (let x = 14; x <= 16; x++) g.set(x, y, 500 + y * 2);
+    }
     return g;
   }
 
@@ -697,7 +735,9 @@ describe('beddingLikelihood does not guess the surround from a mostly-void ring 
 
   it('still falls back to the cell slope when the whole ring is off a tiny grid', () => {
     // `available === 0` is the documented border case, not an unknown one.
-    const tiny = computeSurface(syntheticGrid(plane(0, grade(20)), { size: 5, halo: 2, cellSize: CELL }));
+    const tiny = computeSurface(
+      syntheticGrid(plane(0, grade(20)), { size: 5, halo: 2, cellSize: CELL }),
+    );
     const bed = beddingLikelihood(tiny, { windFromDeg: 180, ringRadiusCells: 8 });
     for (const v of bed) expect(Number.isNaN(v)).toBe(false);
   });
@@ -827,9 +867,9 @@ describe('every term of beddingLikelihood treats unknown the same way (R40)', ()
     unknownShelter[CENTRE] = NaN;
     const unknownCover = new Float32Array(N);
     unknownCover[CENTRE] = NaN;
-    expect(
-      beddingLikelihood(s, { windFromDeg: 0, shelter: unknownShelter })[CENTRE],
-    ).not.toBe(shelterFloor);
+    expect(beddingLikelihood(s, { windFromDeg: 0, shelter: unknownShelter })[CENTRE]).not.toBe(
+      shelterFloor,
+    );
     expect(
       beddingLikelihood(s, { windFromDeg: 0, vectorRuggedness: unknownCover })[CENTRE],
     ).not.toBe(coverFloor);

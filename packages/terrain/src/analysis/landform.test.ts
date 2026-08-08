@@ -7,10 +7,12 @@ import {
   removeSmallBlobs,
   resolveCurvatureTolerance,
   standardize,
+  TPI_MIN_DATA_FRACTION,
   WeissLandform,
+  WOOD_LABELS,
   WoodFeature,
 } from './landform.js';
-import { computeCurvature, computeSurface } from './surface.js';
+import { computeCurvature, computeSurface, NODATA } from './surface.js';
 import {
   centerIndex,
   channel,
@@ -272,5 +274,241 @@ describe('classifyWood — planar majority on realistic terrain', () => {
     const grid = syntheticGrid(saddle(0.004), { size, halo: 4, cellSize });
     const cls = classifyWood(computeSurface(grid), computeCurvature(grid), { cellSize });
     expect(cls[centerIndex(size)]).toBe(WoodFeature.Pass);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R49 — what the landform layers did with a fabricated slope, and with the
+// sentinel in their own neighbourhoods
+// ---------------------------------------------------------------------------
+
+const GRADE_15 = Math.tan((15 * Math.PI) / 180);
+const GRADE_25 = Math.tan((25 * Math.PI) / 180);
+
+describe('computeTpi — no-data in the neighbourhood (R49)', () => {
+  /**
+   * TPI had by far the widest blast radius in the package, and it was the
+   * quietest. The mean was taken over the raw buffer, sentinels included, so a
+   * single unreadable cell dragged the mean of its whole window down by
+   * `32768 / n` metres — and *every* cell within `radius` of the void was
+   * shifted, not just its immediate neighbours. One missing 3x3 patch therefore
+   * corrupted a 41-cell-wide disc (≈400 m at z13) of Weiss classification
+   * around it, and the classes it produced were ordinary ones, so nothing
+   * looked wrong.
+   */
+  const R = 8;
+  const N = (2 * R + 1) * (2 * R + 1);
+
+  function tpiGrid() {
+    // halo 24 > radius 8, so no window here is ever clipped and every number
+    // below is a pure closed form rather than a border effect.
+    return syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 24 });
+  }
+
+  it('is exactly 0 on a plane — the closed form the sentinel used to swamp', () => {
+    // A plane is antisymmetric about the cell, so the mean over a symmetric
+    // window is the cell's own elevation and TPI is identically 0.
+    const tpi = computeTpi(tpiGrid(), { radius: R });
+    expect(tpi[CENTER]).toBeCloseTo(0, 6);
+  });
+
+  it('excludes one void from the mean instead of averaging −32768 into it', () => {
+    // Closed form with the void excluded: dropping cell k from a symmetric
+    // window leaves mean' = z_c + (z_c − z_k)/(n−1), so TPI = (z_k − z_c)/(n−1).
+    // Here k is 3 cells east on a 15° plane at 10 m cells:
+    //   z_k − z_c = 3 · 10 · tan15° = 8.0385 m,  n = 289
+    //   → TPI = 8.0385 / 288 = 0.02791 m
+    // Before, the sentinel was averaged in and TPI was (z_k + 32768)/289 =
+    // **115.14 m** — four thousand times the honest answer, on a cell three
+    // cells from a void that a hunter would never associate with it.
+    const g = tpiGrid();
+    const zk = 500 + 3 * 10 * GRADE_15;
+    g.set((CENTER % SIZE) + 3, Math.floor(CENTER / SIZE), NODATA);
+    const tpi = computeTpi(g, { radius: R });
+
+    const expected = (zk - 500) / (N - 1);
+    expect(expected).toBeCloseTo(0.027911, 6);
+    expect(tpi[CENTER], 'was 115.14 m').toBeCloseTo(expected, 4);
+    expect(Math.abs(tpi[CENTER])).toBeLessThan(1);
+  });
+
+  it('abstains once most of the window is void, rather than meaning two corners', () => {
+    // The `R40` rule, at the same 0.5 quorum: a mean over the fraction of a
+    // window that happens to have answered is not a description of landscape
+    // position, and reporting it as one is how unknown becomes a number.
+    expect(TPI_MIN_DATA_FRACTION).toBe(0.5);
+    const cx = CENTER % SIZE;
+    const cy = Math.floor(CENTER / SIZE);
+
+    // Half-plane void — the shape a missing neighbour tile leaves. The first
+    // surviving row keeps 9 of its 17 window rows = 0.529, just above quorum,
+    // and must still answer: over-correcting here would grey the entire edge of
+    // every partially downloaded region.
+    const half = tpiGrid();
+    for (let y = -24; y < cy; y++) {
+      for (let x = -24; x < SIZE + 24; x++) half.set(x, y, NODATA);
+    }
+    expect(Number.isNaN(computeTpi(half, { radius: R })[CENTER]), '9/17 rows').toBe(false);
+
+    // Quadrant void — two neighbour tiles missing. The cell itself still has
+    // data, but only 81 of the 289 cells in its window do (0.28), and a mean
+    // over one corner of a window is not a statement about landscape position.
+    const quad = tpiGrid();
+    for (let y = -24; y < SIZE + 24; y++) {
+      for (let x = -24; x < SIZE + 24; x++) {
+        if (y < cy || x < cx) quad.set(x, y, NODATA);
+      }
+    }
+    expect(quad.hasData(cx, cy), 'the cell itself is measurable').toBe(true);
+    expect(
+      Number.isNaN(computeTpi(quad, { radius: R })[CENTER]),
+      '81/289 of the window: below quorum, was a confident number',
+    ).toBe(true);
+  });
+
+  it('does NOT grey the tile border, where the window is merely clipped', () => {
+    // Cells within `radius` of a tile edge have always had a truncated window;
+    // that is a border artefact of the readable region, not missing ground.
+    // Counting it as missing would grey a radius-wide frame around every tile.
+    // Checked at r=20 on a grid whose halo is only 4, which is the harshest
+    // clipping the shipped callers can produce.
+    const g = syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 4 });
+    for (const radius of [3, 8, 20]) {
+      const tpi = computeTpi(g, { radius });
+      for (let i = 0; i < tpi.length; i++) {
+        expect(Number.isNaN(tpi[i]), `r=${radius}, cell ${i % SIZE},${Math.floor(i / SIZE)}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it('leaves cells beyond the window radius bit-identical', () => {
+    // The blast radius is now exactly the window, and nothing wider.
+    const clean = computeTpi(tpiGrid(), { radius: R });
+    const g = tpiGrid();
+    g.set(10, 10, NODATA);
+    const holed = computeTpi(g, { radius: R });
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        if (Math.max(Math.abs(x - 10), Math.abs(y - 10)) <= R) continue;
+        const i = y * SIZE + x;
+        expect(Object.is(holed[i], clean[i]), `cell ${x},${y}`).toBe(true);
+      }
+    }
+  });
+
+  it('keeps the annulus variant honest too', () => {
+    const g = tpiGrid();
+    const clean = computeTpi(g, { radius: R, annulusInner: 3 });
+    expect(clean[CENTER]).toBeCloseTo(0, 6);
+    // Void the whole inner disc *and* most of the ring: no quorum, no answer.
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        g.set((CENTER % SIZE) + dx, Math.floor(CENTER / SIZE) + dy, NODATA);
+      }
+    }
+    expect(Number.isNaN(computeTpi(g, { radius: R, annulusInner: 3 })[CENTER])).toBe(true);
+  });
+});
+
+describe('classifyWeiss and classifyWood on unmeasurable ground (R49)', () => {
+  it('Wood reports Unknown, not Planar, where the surface could not be measured', () => {
+    // `Planar` renders transparent, so the old fallback looked harmless — but
+    // it is also what the point query returns as "Planar slope" and what a
+    // saved filter `wood ∈ {Planar}` selects on. The engine was answering a
+    // question about ground it had never seen.
+    const g = syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 8 });
+    g.set(20, 20, NODATA);
+    const cls = classifyWood(computeSurface(g), computeCurvature(g), { cellSize: 10 });
+    expect(cls[20 * SIZE + 20]).toBe(WoodFeature.Unknown);
+    expect(cls[20 * SIZE + 20]).not.toBe(WoodFeature.Planar);
+    expect(WOOD_LABELS[WoodFeature.Unknown]).toBe('Not measurable');
+  });
+
+  it('no longer invents a draw and a knob at the edge of a void', () => {
+    // Measured on the 15° plane, whose every cell is truly `Planar`:
+    //   one neighbour missing  →  "Channel / draw"  (crossSectional 27.7)
+    //   all eight missing      →  "Peak / knob"     (maxCurvature 221.9)
+    // Draws are the classic whitetail travel corridor and the peak/pass family
+    // is where saddles come from, so a void rendered as exactly the two
+    // features a hunter is hunting for.
+    const g = syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 8 });
+    g.set(9, 10, NODATA);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) if (dx || dy) g.set(20 + dx, 20 + dy, NODATA);
+    }
+    const cls = classifyWood(computeSurface(g), computeCurvature(g), { cellSize: 10 });
+    expect(cls[10 * SIZE + 10], 'was Channel / draw').toBe(WoodFeature.Unknown);
+    expect(cls[20 * SIZE + 20], 'was Peak / knob').toBe(WoodFeature.Unknown);
+    // And the rest of the plane is still read as what it is.
+    expect(cls[30 * SIZE + 30]).toBe(WoodFeature.Planar);
+  });
+
+  it('Weiss reports Unknown across the void, and is unchanged beyond the window', () => {
+    const clean = syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 24 });
+    const before = classifyWeiss(clean, computeSurface(clean), {
+      smallRadius: 3,
+      largeRadius: 16,
+    });
+    const g = syntheticGrid(plane(GRADE_15, 0), { size: SIZE, halo: 24 });
+    g.set(8, 8, NODATA);
+    const after = classifyWeiss(g, computeSurface(g), { smallRadius: 3, largeRadius: 16 });
+
+    expect(after[8 * SIZE + 8]).toBe(WeissLandform.Unknown);
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        // The large TPI radius is the reach; beyond it nothing may move.
+        if (Math.max(Math.abs(x - 8), Math.abs(y - 8)) <= 16) continue;
+        expect(after[y * SIZE + x], `cell ${x},${y}`).toBe(before[y * SIZE + x]);
+      }
+    }
+  });
+});
+
+describe('detectBenches on unmeasurable ground (R49)', () => {
+  it('no longer flags a lone return inside a void as a bedding shelf', () => {
+    // The sharpest downstream consequence, and a real DEM shape: one surviving
+    // return (a tower, a building, a partially written tile) inside a void, on
+    // a uniform 25° sidehill with no shelf anywhere on it.
+    //
+    // The lone cell's eight neighbours were all sentinel, so Horn's terms
+    // cancelled and it reported **slope 0.0°** — inside the ≤8° pad window —
+    // while its r=8 ring landed on clean 25° ground and passed the ≥18°
+    // surround test. Result: exactly **1 bench cell** on a hillside that has
+    // none. Benches are where bucks bed and the standard speed-scouting
+    // technique is to mark every one and connect them, so this is a stand
+    // location the map invented out of missing data.
+    const g = syntheticGrid(plane(GRADE_25, 0), { size: SIZE, halo: 12 });
+    for (let dy = -4; dy <= 4; dy++) {
+      for (let dx = -4; dx <= 4; dx++) g.set(20 + dx, 20 + dy, NODATA);
+    }
+    g.set(20, 20, 500);
+
+    const bench = detectBenches(g, computeSurface(g), { minCells: 1 });
+    expect(bench[20 * SIZE + 20], 'was 1').toBe(0);
+    let total = 0;
+    for (const b of bench) total += b;
+    expect(total, 'a uniform 25° plane has no benches').toBe(0);
+  });
+
+  it('still finds a real shelf next to a void — the guard must not eat the layer', () => {
+    // Anti-over-correction. A genuine bench with a void 15 cells away is still
+    // a bench; only the cells whose own measurement is missing may drop out.
+    const size = 61;
+    const g = syntheticGrid(hillsideWithBench(0.6, -40, 40), {
+      size,
+      halo: 12,
+      cellSize: 10,
+    });
+    g.set(5, 5, NODATA);
+    const bench = detectBenches(g, computeSurface(g), {
+      maxBenchSlopeDeg: 8,
+      minSurroundSlopeDeg: 18,
+      ringRadius: 8,
+      minCells: 4,
+    });
+    expect(bench[centerIndex(size)]).toBe(1);
   });
 });

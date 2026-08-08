@@ -20,8 +20,21 @@
  * cell-for-cell, and both are exposed as toggleable map layers.
  */
 
+import { NODATA } from '../dem/encoding.js';
 import { HeightGrid } from '../dem/grid.js';
 import type { CurvatureField, SurfaceField } from './surface.js';
+
+/**
+ * No-data threshold as a module-local constant — the `R30`/`R49` lesson.
+ *
+ * The TPI table evaluates this once per padded cell (~87k per tile at r=20,
+ * twice over for the two Weiss scales). Reaching across the module boundary for
+ * either `isElevation` or `NODATA` in that loop is a property load V8 will not
+ * fold; measured on `computeSurface`, the identical mistake cost +58%. Same
+ * predicate as `isElevation` — `>` already rejects `NaN` and `-Infinity`, and no
+ * decoder in this package can produce `+Infinity`.
+ */
+const NODATA_FLOOR = NODATA + 1;
 
 // ---------------------------------------------------------------------------
 // Topographic Position Index
@@ -38,6 +51,18 @@ export interface TpiOptions {
 }
 
 /**
+ * Fraction of a TPI neighbourhood that must carry data before the cell gets an
+ * answer instead of `NaN`.
+ *
+ * Pinned to the same 0.5 as `BEDDING_RING_MIN_DATA_FRACTION` and
+ * `detectBenches`' 8-of-16 ring, so the three layers a hunter reads side by side
+ * cannot disagree about how much of a neighbourhood has to answer before the map
+ * is allowed to speak. The denominator is the *in-grid* part of the window, not
+ * the geometric window — see `computeTpi`.
+ */
+export const TPI_MIN_DATA_FRACTION = 0.5;
+
+/**
  * TPI = z(cell) − mean(z) over the neighbourhood.
  *
  * Implemented with a summed-area table so cost is O(n) regardless of radius —
@@ -48,39 +73,106 @@ export interface TpiOptions {
  * which approximates a ring with squares. That approximation is standard
  * practice (Jenness' TPI toolbox does the same) and the classification
  * thresholds are z-scored afterwards, so the shape bias washes out.
+ *
+ * ## No-data, and why this one has the widest blast radius in the package
+ *
+ * The mean used to be taken over the raw buffer, sentinels included. `NODATA` is
+ * −32768, so a single unreadable cell drags the mean of a 41x41 window down by
+ * ~19 m and a 3x3 void drags it down by ~178 m. Measured on a 15° plane, one
+ * void 3 cells away moved TPI at r=8 from its closed-form **0.028 m** to
+ * **115 m** — and *every* cell within `radius` of the void was shifted, so one
+ * missing 3x3 patch corrupted a 41-cell-wide (≈400 m at z13) disc of Weiss
+ * classification around it. Unlike the 1-cell fringe the Horn kernels produced,
+ * that is a landscape-scale error, and it was invisible because the classes it
+ * produces are ordinary ones.
+ *
+ * Now the sentinel is excluded from both the numerator and the count, and the
+ * cell abstains below `TPI_MIN_DATA_FRACTION` of the window. Two counts are kept
+ * apart on purpose, exactly as `RingSlopeStats` does (`R40`):
+ *
+ *  - the window is **clipped** to the padded region, and clipped-away cells are
+ *    outside the denominator entirely. That is a border artefact — every cell
+ *    within `radius` of a tile edge has a truncated window and always has — and
+ *    counting it as missing would grey a `radius`-wide frame around every tile.
+ *  - cells **inside** the region carrying `NODATA` are counted in the
+ *    denominator and not the numerator. That is ground the engine cannot see,
+ *    and it is what drives the abstention.
  */
 export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array {
   const { width, height } = grid;
   const r = Math.max(1, Math.round(options.radius));
   const inner = Math.max(0, Math.round(options.annulusInner ?? 0));
 
-  // Summed-area table over the padded region we can legally read.
+  // Two summed-area tables over the padded region we can legally read: one of
+  // elevations (no-data contributing zero) and one of data counts. A single SAT
+  // cannot express "mean over the cells that answered" — that is the bug.
+  //
+  // The count table is only built when it can matter. Scanning the padded buffer
+  // once for a sentinel is a contiguous read costing well under a tenth of a
+  // millisecond, and it buys back the whole cost of the fix on the overwhelmingly
+  // common case of a fully covered tile: a second Float64 table at r=20 is
+  // ~700 kB of extra allocation and write bandwidth per call, and `classifyWeiss`
+  // calls this twice per tile. Without the fast path TPI ran +50%; with it, a
+  // clean tile is unchanged and only tiles that actually contain a void pay.
   const pad = r;
   const sw = width + 2 * pad;
   const sh = height + 2 * pad;
-  const sat = new Float64Array((sw + 1) * (sh + 1));
-  for (let y = 0; y < sh; y++) {
-    let rowSum = 0;
-    for (let x = 0; x < sw; x++) {
-      rowSum += grid.get(x - pad, y - pad);
-      sat[(y + 1) * (sw + 1) + (x + 1)] = sat[y * (sw + 1) + (x + 1)] + rowSum;
+  const rowStride = sw + 1;
+  const satZ = new Float64Array(rowStride * (sh + 1));
+  const buf = grid.data;
+  let anyVoid = false;
+  for (let k = 0; k < buf.length; k++) {
+    if (!(buf[k] > NODATA_FLOOR)) {
+      anyVoid = true;
+      break;
+    }
+  }
+  // A grid with no sentinel anywhere in it cannot produce one through `get`,
+  // which either indexes the buffer or clamps to a cell of it.
+  const satN = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
+
+  if (satN === null) {
+    for (let y = 0; y < sh; y++) {
+      let rowZ = 0;
+      for (let x = 0; x < sw; x++) {
+        rowZ += grid.get(x - pad, y - pad);
+        const o = (y + 1) * rowStride + (x + 1);
+        satZ[o] = satZ[y * rowStride + (x + 1)] + rowZ;
+      }
+    }
+  } else {
+    for (let y = 0; y < sh; y++) {
+      let rowZ = 0;
+      let rowN = 0;
+      for (let x = 0; x < sw; x++) {
+        const v = grid.get(x - pad, y - pad);
+        if (v > NODATA_FLOOR) {
+          rowZ += v;
+          rowN += 1;
+        }
+        const o = (y + 1) * rowStride + (x + 1);
+        const u = y * rowStride + (x + 1);
+        satZ[o] = satZ[u] + rowZ;
+        satN[o] = satN[u] + rowN;
+      }
     }
   }
 
-  const boxSum = (x0: number, y0: number, x1: number, y1: number): number => {
+  const box = (sat: Float64Array, x0: number, y0: number, x1: number, y1: number): number => {
     // Inclusive interior coords → SAT coords.
     const ax = clampInt(x0 + pad, 0, sw);
     const ay = clampInt(y0 + pad, 0, sh);
     const bx = clampInt(x1 + pad + 1, 0, sw);
     const by = clampInt(y1 + pad + 1, 0, sh);
     return (
-      sat[by * (sw + 1) + bx] -
-      sat[ay * (sw + 1) + bx] -
-      sat[by * (sw + 1) + ax] +
-      sat[ay * (sw + 1) + ax]
+      sat[by * rowStride + bx] -
+      sat[ay * rowStride + bx] -
+      sat[by * rowStride + ax] +
+      sat[ay * rowStride + ax]
     );
   };
-  const boxCount = (x0: number, y0: number, x1: number, y1: number): number => {
+  /** Cells of the window that lie inside the readable region — the denominator. */
+  const boxArea = (x0: number, y0: number, x1: number, y1: number): number => {
     const ax = clampInt(x0 + pad, 0, sw);
     const ay = clampInt(y0 + pad, 0, sh);
     const bx = clampInt(x1 + pad + 1, 0, sw);
@@ -96,13 +188,21 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
         out[i] = NaN;
         continue;
       }
-      let sum = boxSum(x - r, y - r, x + r, y + r);
-      let count = boxCount(x - r, y - r, x + r, y + r);
+      let sum = box(satZ, x - r, y - r, x + r, y + r);
+      let area = boxArea(x - r, y - r, x + r, y + r);
+      // With no sentinel in the grid, every in-region cell answered, so the
+      // count *is* the area and the quorum test below is trivially satisfied.
+      let count = satN === null ? area : box(satN, x - r, y - r, x + r, y + r);
       if (inner > 0) {
-        sum -= boxSum(x - inner, y - inner, x + inner, y + inner);
-        count -= boxCount(x - inner, y - inner, x + inner, y + inner);
+        sum -= box(satZ, x - inner, y - inner, x + inner, y + inner);
+        const innerArea = boxArea(x - inner, y - inner, x + inner, y + inner);
+        count -= satN === null ? innerArea : box(satN, x - inner, y - inner, x + inner, y + inner);
+        area -= innerArea;
       }
-      out[i] = count > 0 ? grid.get(x, y) - sum / count : 0;
+      // `count > 0` is not enough: a mean over the two corners of a window that
+      // is otherwise a lake is not a description of landscape position.
+      out[i] =
+        count > 0 && count >= area * TPI_MIN_DATA_FRACTION ? grid.get(x, y) - sum / count : NaN;
     }
   }
   return out;
@@ -227,7 +327,17 @@ export function classifyWeiss(
   for (let i = 0; i < sn.length; i++) {
     const s = sn[i];
     const l = ln[i];
-    if (!Number.isFinite(s) || !Number.isFinite(l)) {
+    // Slope is checked here even though only one branch below reads it, for two
+    // reasons (`R49`). The narrow one: `NaN <= plainSlope` is `false`, so an
+    // unmeasurable cell in the middle band used to fall through to "Open slope"
+    // — a definite class produced by a comparison against NaN. The broader one:
+    // this file's contract is that Weiss and Wood are "directly comparable
+    // cell-for-cell", and they only are if they abstain on the same cells.
+    // Without this, a fringe cell whose own 3x3 window is void could still
+    // reach TPI quorum from the half of its neighbourhood that survived, and
+    // the map grew a one-cell band of *Canyon / incised drainage* along every
+    // missing-tile edge — a thermal sink and travel route, invented.
+    if (!Number.isFinite(s) || !Number.isFinite(l) || !Number.isFinite(surface.slope[i])) {
       out[i] = WeissLandform.Unknown;
       continue;
     }
@@ -262,6 +372,17 @@ export enum WoodFeature {
   Pass = 3,
   Ridge = 4,
   Peak = 5,
+  /**
+   * The window could not be measured — a DEM void, a lake, a neighbour tile that
+   * 404'd. Distinct from `Planar`, which is a *finding*: "we looked, and this
+   * cell is an unremarkable slope".
+   *
+   * Appended as 6 rather than renumbered to 0, because these ids are persisted
+   * on observation rows (`morphometry`) and shifting them would silently
+   * relabel every record ever written. `WeissLandform` has had its own
+   * `Unknown` since it was written; this is Wood catching up.
+   */
+  Unknown = 6,
 }
 
 export const WOOD_LABELS: Record<WoodFeature, string> = {
@@ -271,6 +392,7 @@ export const WOOD_LABELS: Record<WoodFeature, string> = {
   [WoodFeature.Pass]: 'Saddle (pass)',
   [WoodFeature.Ridge]: 'Ridge / spur',
   [WoodFeature.Peak]: 'Peak / knob',
+  [WoodFeature.Unknown]: 'Not measurable',
 };
 
 export interface WoodOptions {
@@ -354,13 +476,20 @@ export function classifyWood(
 
   for (let i = 0; i < n; i++) {
     const slope = surface.slope[i];
-    if (!Number.isFinite(slope)) {
-      out[i] = WoodFeature.Planar;
-      continue;
-    }
     const cross = curvature.crossSectional[i];
     const maxC = curvature.maxCurvature[i];
     const minC = curvature.minCurvature[i];
+    // Unknown is its own class, not `Planar`. `Planar` renders transparent, so
+    // the old fallback looked harmless on the map — but it is also the value the
+    // point-query returns as "Planar slope" and the value a saved filter
+    // `wood ∈ {Planar}` selects on, so the engine was answering a question about
+    // ground it had never seen. Curvature is checked alongside slope because the
+    // two operators can disagree at a window's edge only if one of them is
+    // broken, and if they ever do, abstaining is the safe direction.
+    if (!Number.isFinite(slope) || !Number.isFinite(cross) || !Number.isFinite(maxC)) {
+      out[i] = WoodFeature.Unknown;
+      continue;
+    }
 
     if (slope > slopeTol) {
       // On a real slope, the across-slope curvature decides: convex across the

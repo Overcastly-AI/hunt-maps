@@ -59,11 +59,25 @@ export interface WindOptions {
  * Computed purely from aspect, so it is instantaneous for any wind the user
  * scrubs to. `terrainShelter` adds the part aspect cannot see: whether there is
  * actually anything upwind tall enough to be in the lee *of*.
+ *
+ * ## Flat is 0; unmeasurable is `NaN` (`R49`)
+ *
+ * Both used to be 0 — "neither windward nor leeward" — and only one of them
+ * deserves it. On a genuinely flat cell that is a real answer about real ground:
+ * there is no face, so no face is in the lee. On a cell whose window could not
+ * be measured it is a claim about ground the engine never saw, rendered in the
+ * middle of the exposure ramp where it reads as ordinary crosswind terrain. The
+ * two are told apart by `slope`, which is `SurfaceField`'s authoritative unknown
+ * flag — `aspect` alone cannot, because it uses `-1` for both.
  */
 export function windExposure(surface: SurfaceField, windFromDeg: number): Float32Array {
   const n = surface.aspect.length;
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(surface.slope[i])) {
+      out[i] = NaN;
+      continue;
+    }
     const aspect = surface.aspect[i];
     if (aspect < 0 || !Number.isFinite(aspect)) {
       out[i] = 0;
@@ -200,8 +214,7 @@ export function computeThermals(
       continue;
     }
 
-    scentAzimuth[i] =
-      phase === ThermalPhase.Rising ? (aspect + 180) % 360 : aspect;
+    scentAzimuth[i] = phase === ThermalPhase.Rising ? (aspect + 180) % 360 : aspect;
 
     // Slope drives the pressure gradient; saturate around 30°, past which
     // steeper ground does not meaningfully strengthen the thermal.
@@ -244,9 +257,7 @@ export function thermalPhaseAt(
   const w = transitionMinutes * 60000;
   if (Math.abs(t - sunrise.getTime()) <= w) return ThermalPhase.Transition;
   if (Math.abs(t - sunset.getTime()) <= w) return ThermalPhase.Transition;
-  return t > sunrise.getTime() && t < sunset.getTime()
-    ? ThermalPhase.Rising
-    : ThermalPhase.Sinking;
+  return t > sunrise.getTime() && t < sunset.getTime() ? ThermalPhase.Rising : ThermalPhase.Sinking;
 }
 
 // ---------------------------------------------------------------------------
@@ -477,10 +488,7 @@ export interface BeddingOptions {
  * it onto a floor, which is the same failure wearing a caller-error hat: it
  * would have painted a confident low score across an entire tile.
  */
-export function beddingLikelihood(
-  surface: SurfaceField,
-  options: BeddingOptions,
-): Float32Array {
+export function beddingLikelihood(surface: SurfaceField, options: BeddingOptions): Float32Array {
   // Degenerate parameters are clamped rather than trusted: a half-max of 0 would
   // divide by zero and paint the entire tile as unbeddable without erroring.
   const padHalfMax = Math.max(0.1, options.padHalfMaxSlopeDeg ?? BEDDING_PAD_HALF_MAX_SLOPE_DEG);
@@ -601,10 +609,7 @@ export function beddingLikelihood(
       // `ring.missing > 0` is tested first so a fully-sampled ring — every cell
       // of a well-covered tile — pays one compare and nothing else. This loop
       // runs 65k times per tile inside a render budget.
-      if (
-        ring.missing > 0 &&
-        ring.samples < (ring.samples + ring.missing) * ringMinData
-      ) {
+      if (ring.missing > 0 && ring.samples < (ring.samples + ring.missing) * ringMinData) {
         out[i] = NaN;
         continue;
       }

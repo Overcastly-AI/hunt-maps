@@ -8,6 +8,23 @@
 
 The analytics engine, validated against analytically-known surfaces.
 
+- [x] **Unknown ground now reads as unknown — `BACKLOG R49`, six operators.**
+      The 3×3 kernels guarded only the centre cell, then ran Horn's kernel over
+      a window that could contain the `-32768` sentinel. One missing neighbour
+      produced **slope 89.93°** where the truth was 15°; all eight produced
+      **slope 0.00°** — a perfect flat pad, the _maximum_ of the bedding pad
+      term — for ground with no measurable surroundings. `computeTpi` was worse
+      and quieter: it averaged the sentinel into its mean, so the error spanned
+      the **whole radius window** (~400 m at z13) and produced
+      ordinary-looking Weiss classes. And `ASPECT_RAMP` clamped the no-aspect
+      sentinel onto its first stop, so **every flat field, lake and void
+      rendered as solid north-facing blue** — visible, shipped, unnoticed.
+      All six now abstain. 215 → 244 tests, 12 of the new ones failing against
+      the old code, the interior proven bit-identical with `Object.is` rather
+      than a tolerance. **The fix is faster than the bug** — `computeSurface`
+      −36%, `computeRuggedness` −47% — after a first attempt that was +58%,
+      because `NODATA + 1` as an imported binding is evaluated ~585k times per
+      tile, the same trap `R30` measured at 880 ms.
 - [x] Terrarium + Terrain-RGB decoding; haloed tile grids with neighbour stitching
 - [x] Horn slope/aspect; Evans–Young curvature (ESRI + Wood sign conventions)
 - [x] Weiss multi-scale TPI landform classification (summed-area, O(n))
@@ -24,21 +41,18 @@ The analytics engine, validated against analytically-known surfaces.
 - [x] 140 unit tests against closed-form synthetic surfaces
 - [x] **Bedding model corrected — `BACKLOG R21`, `R11`, `R22`, 166 tests.**
       Three defects in `beddingLikelihood`, all of which rendered a confident
-      colour a hunter would act on:
-      - the cover term was Riley TRI, which correlates with slope *by
-        construction*, so every steep cell was rewarded twice — once by the
-        slope term and again by "cover". Replaced with Sappington VRM over a
-        9×9 window (summed-area, O(n), radius-independent), which is the
-        alternative Sappington et al. 2007 built for exactly this reason.
-      - the slope term was a Gaussian peaking at 22°, which contradicted
-        `detectBenches`' own geometry and told a user a 10° shelf was worse
-        bedding than a 22° sidehill. Now monotone, half-max at 12°, sharing
-        `ringSlopeStats` with `detectBenches` so the two cannot drift again.
-      - the only aspect term was leeward geometry, season-blind, so on a south
-        wind in January it pointed at north-facing ground — the deepest snow
-        and coldest aspect on the property. Now blended with a solar-aspect
-        term weighted by temperature, and a **no-op when temperature is
-        unset**, asserted bit-identical rather than approximately equal.
+      colour a hunter would act on: - the cover term was Riley TRI, which correlates with slope _by
+      construction_, so every steep cell was rewarded twice — once by the
+      slope term and again by "cover". Replaced with Sappington VRM over a
+      9×9 window (summed-area, O(n), radius-independent), which is the
+      alternative Sappington et al. 2007 built for exactly this reason. - the slope term was a Gaussian peaking at 22°, which contradicted
+      `detectBenches`' own geometry and told a user a 10° shelf was worse
+      bedding than a 22° sidehill. Now monotone, half-max at 12°, sharing
+      `ringSlopeStats` with `detectBenches` so the two cannot drift again. - the only aspect term was leeward geometry, season-blind, so on a south
+      wind in January it pointed at north-facing ground — the deepest snow
+      and coldest aspect on the property. Now blended with a solar-aspect
+      term weighted by temperature, and a **no-op when temperature is
+      unset**, asserted bit-identical rather than approximately equal.
       Not closed by this: shelter still dominates the cold-season answer
       (`BACKLOG R31`), and the layer renders dimmer because `HEAT_RAMP` is
       absolute while the model is ordinal (`R32`).
@@ -84,36 +98,31 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       slack — 34 of 35 is Partial), `Partial — n%` with a hatched extent on the
       map, `Detail missing` (covered at this zoom, gaps at z15 — works now,
       blank when you zoom in), `Not downloaded`, and `Storage unreadable`
-      (deliberately *not* collapsed into "0% covered" — those call for
-      different actions).
-      - The needed-tile set is derived **once**, in `lib/map/demTiles.ts`, and
-        `demTileKey()` is shared with `terrainProtocol.fetchDem`, so the
-        coverage probe and the actual fetch cannot look in different places.
-        A disagreement there would have replaced R8's lie with a subtler one.
-      - Exact when it can be (~8–35 tiles for a real viewport, every one
-        probed); stride-sampled above 256, and then the label *says* so with
-        an `≈` prefix rather than presenting an estimate as a count.
-      - Five e2e invariants at 1440px **and** 390px, asserted on rendered
-        state. Verified to fail against the defect: with the mount-sampled
-        boolean restored, the recorded chip sequence after a 500-mile offline
-        pan was `["COVERED"]`; with the fix, `["CHECKING…","NOT DOWNLOADED"]`.
-      - Three further defects found and fixed en route, all invisible to the
-        unit suite: the overlay **never installed offline at all** (it gated on
-        `isStyleLoaded()`, which is false while any source has tiles in flight
-        — permanently, with no signal — then retried on an event that had
-        already fired); `syncLayers` deleted the overlay on any layer toggle
-        because it shares the `rl-*` prefix; and the probe cap could overrun
-        itself, which is not a cap on a phone mid-pan.
-      - Verified by hand through a real browser on the path that actually
-        matters: download, **close the page**, go offline, **cold load**.
-        Not `navigator.onLine`, and not a warm context.
+      (deliberately _not_ collapsed into "0% covered" — those call for
+      different actions). - The needed-tile set is derived **once**, in `lib/map/demTiles.ts`, and
+      `demTileKey()` is shared with `terrainProtocol.fetchDem`, so the
+      coverage probe and the actual fetch cannot look in different places.
+      A disagreement there would have replaced R8's lie with a subtler one. - Exact when it can be (~8–35 tiles for a real viewport, every one
+      probed); stride-sampled above 256, and then the label _says_ so with
+      an `≈` prefix rather than presenting an estimate as a count. - Five e2e invariants at 1440px **and** 390px, asserted on rendered
+      state. Verified to fail against the defect: with the mount-sampled
+      boolean restored, the recorded chip sequence after a 500-mile offline
+      pan was `["COVERED"]`; with the fix, `["CHECKING…","NOT DOWNLOADED"]`. - Three further defects found and fixed en route, all invisible to the
+      unit suite: the overlay **never installed offline at all** (it gated on
+      `isStyleLoaded()`, which is false while any source has tiles in flight
+      — permanently, with no signal — then retried on an event that had
+      already fired); `syncLayers` deleted the overlay on any layer toggle
+      because it shares the `rl-*` prefix; and the probe cap could overrun
+      itself, which is not a cap on a phone mid-pan. - Verified by hand through a real browser on the path that actually
+      matters: download, **close the page**, go offline, **cold load**.
+      Not `navigator.onLine`, and not a warm context.
       Still open: neighbour tiles outside the view are not counted, so a hunter
       standing exactly on a download boundary can see a seam the badge did not
       warn about (`BACKLOG R34`). `R4`, the region picker that lets a hunter act
       on any of this, shipped in the same phase — see below.
 - [x] **Map chrome fixed at the root — `BACKLOG R42`/`R43`/`R45`.** The
       founder reported the left rail as "really hard to work with"; two
-      independent audits found *different* causes and both are closed.
+      independent audits found _different_ causes and both are closed.
       Opening Layers on a phone had been hiding the wind control, so the
       wind-sweep — the interaction no competitor has — could not be performed
       on the device this product is for; it took eight steps with a mandatory
@@ -128,7 +137,7 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
 - [x] **The rail is gone — `CommandBar`, `BACKLOG R44`.** The structural half
       of the founder's "left side bar is really hard to work with": the P0
       symptoms shipped first, this removes why they were possible. The drawer's
-      clearance used to be `calc(var(--space-touch) * N + ...)` where N *was*
+      clearance used to be `calc(var(--space-touch) * N + ...)` where N _was_
       the button count, hand-written in a file that did not contain the
       buttons — so a fourth button silently overlapped, and `R42` had to
       duplicate that arithmetic into three places. It is now one token,
@@ -137,27 +146,23 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       rather than merely fixed, and every control now carries a visible word
       instead of an icon and a `title` that touch devices never show. Bottom
       chrome at 390px: 216px → ~128px, ~88px of map back.
-- [ ] Property boundary drawing and editing on the map *(🔴 scorecard gap)*
+- [ ] Property boundary drawing and editing on the map _(🔴 scorecard gap)_
 - [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
 - [ ] Observation capture optimised for gloved, one-handed, in-the-field use
 - [ ] Saved-filter editor: build a predicate visually, see match share live
 - [x] **Offline region picker — `BACKLOG R4`, the front door `R8` was missing.**
       `R8` shipped honest coverage reporting and the button to act on it was
       `onClick={() => undefined}`. Pick an area, see the estimate, download
-      resumably, watch the badge go `Covered`.
-      - The picker, `R8`'s coverage probe and the analysis fetch path all
-        enumerate tiles through **one** function, so what you download and what
-        the badge counts cannot diverge.
-      - Sends `layers: ['elevation']` — the truth — and therefore exposes that
-        our own API has no elevation byte cost and reports 10× low. Size comes
-        from a figure **measured off 114 real tiles**; a 361-tile region
-        estimated 36.1 MB and stored 36,835,835 bytes.
-      - Resume re-probes every planned tile rather than trusting a cursor: a
-        dead battery and a browser eviction look identical from outside and
-        both must be repaired.
-      - Cold-started **offline**, from nothing, over downloaded ground —
-        hillshade rendered from cached elevation. Persistent storage was
-        refused here and the chip says so rather than assuming.
+      resumably, watch the badge go `Covered`. - The picker, `R8`'s coverage probe and the analysis fetch path all
+      enumerate tiles through **one** function, so what you download and what
+      the badge counts cannot diverge. - Sends `layers: ['elevation']` — the truth — and therefore exposes that
+      our own API has no elevation byte cost and reports 10× low. Size comes
+      from a figure **measured off 114 real tiles**; a 361-tile region
+      estimated 36.1 MB and stored 36,835,835 bytes. - Resume re-probes every planned tile rather than trusting a cursor: a
+      dead battery and a browser eviction look identical from outside and
+      both must be repaired. - Cold-started **offline**, from nothing, over downloaded ground —
+      hillshade rendered from cached elevation. Persistent storage was
+      refused here and the chip says so rather than assuming.
       Web tests 63 → 115, invariants 34 → 49. Its own invariants caught three
       real defects, including a download button that hit-tested to `null`
       below the fold and an action bar that was visible and unclickable.
@@ -173,31 +178,32 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-      hit-testability against the viewport alone, so a row scrolled just past
-      the *sheet's* clipped edge was hit-tested at its unpainted position and
-      reported as visible-but-unclickable — a false failure indistinguishable
-      from the real clipping bug the suite is named after; it now intersects
-      against every clipping ancestor and hit-tests the centre of the visible
-      region. Ground truth was measured before accepting the greener result:
-      `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-      and no painted control fails a hit test. Then (`7ff42cee`) two more
-      guards on the helper itself: a synthetic fixture pinning both branches
-      of the clipped-ancestor fix so neither can regress silently, and a check
-      that the collision matrix's "no collision" result means a selector
-      matched and did not overlap, not that a renamed selector stopped
-      matching anything.
+          hit-testability against the viewport alone, so a row scrolled just past
+          the *sheet's* clipped edge was hit-tested at its unpainted position and
+          reported as visible-but-unclickable — a false failure indistinguishable
+          from the real clipping bug the suite is named after; it now intersects
+          against every clipping ancestor and hit-tests the centre of the visible
+          region. Ground truth was measured before accepting the greener result:
+          `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+          and no painted control fails a hit test. Then (`7ff42cee`) two more
+          guards on the helper itself: a synthetic fixture pinning both branches
+          of the clipped-ancestor fix so neither can regress silently, and a check
+          that the collision matrix's "no collision" result means a selector
+          matched and did not overlap, not that a renamed selector stopped
+          matching anything.
+
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
       `apps/web` (`BACKLOG R10`)
 
 ## ⬜ Phase 3 — Closing the scorecard gaps
 
-- [ ] Public-land boundaries (PAD-US) *(🔴)*
-- [ ] Parcel / ownership layer *(🔴)*
-- [ ] Weather integration — auto-populate conditions on observations *(🔴)*
+- [ ] Public-land boundaries (PAD-US) _(🔴)_
+- [ ] Parcel / ownership layer _(🔴)_
+- [ ] Weather integration — auto-populate conditions on observations _(🔴)_
 - [ ] NLCD land-cover layer wired into corridor resistance
 - [ ] Contour generation from the DEM
-- [ ] Hunting-party sharing UI (roles exist server-side) *(🟡)*
+- [ ] Hunting-party sharing UI (roles exist server-side) _(🟡)_
 
 ## ⬜ Phase 4 — Deep analytics
 
@@ -206,12 +212,12 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
 - [ ] Access-route scent analysis — walk-in exposure scoring
 - [ ] Season-over-season comparison
 - [ ] Rut calibration surfaced from the user's own observation history
-- [ ] Trail-camera import and photo-derived observations *(🔴)*
+- [ ] Trail-camera import and photo-derived observations _(🔴)_
 
 ## ⬜ Phase 5 — Depth and reach
 
 - [ ] 3D terrain view with vertical exaggeration
 - [ ] Viewshed analysis from a stand position
-- [ ] Native mobile wrappers *(🟡)*
+- [ ] Native mobile wrappers _(🟡)_
 - [ ] Filter sharing marketplace
 - [ ] GPS-collar dataset validation of the bedding and corridor models

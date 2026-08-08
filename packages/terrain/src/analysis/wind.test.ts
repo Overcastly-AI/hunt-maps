@@ -9,7 +9,7 @@ import {
   windExposure,
   BEDDING_MAX_SOLAR_ASPECT_WEIGHT,
 } from './wind.js';
-import { computeSurface, computeCurvature, type SurfaceField } from './surface.js';
+import { computeSurface, computeCurvature, NODATA, type SurfaceField } from './surface.js';
 import { slopeInsolation, solarPosition } from './solar.js';
 import { analyze } from '../pipeline.js';
 import {
@@ -44,6 +44,19 @@ describe('windExposure', () => {
   it('scores a cross-wind face as neutral', () => {
     const surface = computeSurface(syntheticGrid(plane(0, 0.4), { size: SIZE }));
     expect(Math.abs(windExposure(surface, 90)[CENTER])).toBeLessThan(0.05);
+  });
+
+  it('returns NaN where the surface could not be measured, not crosswind 0 (R49)', () => {
+    // Flat and unmeasurable both used to be 0, and only one of them earns it.
+    // A void landed in the middle of the exposure ramp, where it reads as
+    // ordinary crosswind ground rather than as ground nobody has seen.
+    const g = syntheticGrid(plane(0, 0.4), { size: SIZE, halo: 4 });
+    g.set(10, 10, NODATA);
+    const surface = computeSurface(g);
+    const exposure = windExposure(surface, 180);
+    expect(exposure[10 * SIZE + 10], 'was 0 — "crosswind"').toBeNaN();
+    expect(exposure[11 * SIZE + 11], 'the margin cell, also unmeasurable').toBeNaN();
+    expect(exposure[CENTER], 'clean ground is untouched').toBeCloseTo(1, 2);
   });
 
   it('returns 0 on flat ground, which has no aspect', () => {
