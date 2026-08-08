@@ -314,11 +314,15 @@ button:focus-visible, [tabindex]:focus-visible{
 
 /* ---- summoned: the legend sheet ---- */
 .db-sheet{
-  position:absolute; left:0; right:0; bottom:0; background:var(--bone); color:var(--ink);
+  /* bottom:22px, not 0 — stops short of the attribution line on
+     purpose. Attribution is a legal requirement and the collar's own
+     permanent mark; a summoned sheet is allowed to displace the map,
+     never the one thing on screen that must always be readable. */
+  position:absolute; left:0; right:0; bottom:22px; background:var(--bone); color:var(--ink);
   display:flex; flex-direction:column; box-shadow:0 -8px 28px -6px rgba(0,0,0,.55);
 }
 .desktop .db-sheet{ height:520px; }
-.mobile .db-sheet{ height:612px; }
+.mobile .db-sheet{ height:590px; }
 .db-sheet__head{
   position:sticky; top:0; z-index:2; background:var(--bone);
   display:flex; align-items:center; justify-content:space-between;
