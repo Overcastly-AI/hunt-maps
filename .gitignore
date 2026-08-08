@@ -29,3 +29,4 @@ test-results/
 
 # Agent scratch harnesses — measurement scripts written mid-task, never deliverables
 **/__scratch*
+**/__bench*
