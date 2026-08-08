@@ -201,10 +201,11 @@ latest. Three GA counties are confirmed, out of 159.
 
 ## Process debt
 
-| #   | Item                                                            | Pri | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| --- | --------------------------------------------------------------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | Orchestrator must delegate rather than implement                | P0  | The fifteen-agent org was bypassed on every task of the initial build. One perspective, no independent review, no adversarial QA — every UI defect so far was found by the founder looking at a screenshot. Now written into CLAUDE.md and `.claude/README.md`; needs to actually hold.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| P2  | Rename the agent tooling off the `CLAUDE.md` / `.claude/` names | P3  | The repo is a paid product, not a vendor showcase, and the tool name should not be the most visible thing in its root. Purely mechanical but wide: `CLAUDE.md` and `.claude/**` are referenced from `README.md`, `CONTRIBUTING.md`, `docs/EVIDENCE.md`, `docs/BACKLOG.md`, `packages/design/src/components/primitives.tsx`, `.dockerignore` and every agent, skill and workflow file that cross-references a sibling. **Check whether the tooling still discovers its agents after a rename before committing to it** — the directory name may be load-bearing for the runner, in which case the honest outcome is a documented decision to keep it rather than a half-rename that breaks agent discovery. Deferred deliberately: no functional impact, and it touches enough files to conflict with anything else in flight. |
+| #   | Item                                                                                                  | Pri | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P3  | `ui-invariants` can silently run against a stale bundle, and the failure looks like a real regression | P1  | **Cost real time twice tonight, in both directions.** `vite preview` serves `dist/`, and Playwright reuses an already-listening server on 4173. So if anything rebuilds `dist/` mid-suite — or a preview from an earlier run survives a failed `pkill` — the tests exercise a bundle that does not match the source, and **every failure looks like a genuine regression**. It bit the `frontend-builder` agent (a rebuild during its own run) and then bit the orchestrator from the other side (a stale server surviving a kill), and in the orchestrator's case it produced a confident, wrong 'the slice regressed Groups 2/3/4' conclusion that took a full bisect to retract. **The tell is timing, and it should not require a human to notice it:** the bogus failures take 0.3–1.3 s where a real pass takes ~1.3 min. A test that fails a hundred times faster than it passes is not measuring the same thing. **Fix: stamp the build and assert it.** Emit a build id into `dist/` at build time, expose it on `window`, and have the suite's global setup fail loudly if the served bundle's id does not match the current source tree. Also make the run own its server (`reuseExistingServer: false`) so a survivor from a previous run cannot be silently adopted. Cheap, and it converts a class of confidently-wrong conclusions into an immediate, unmissable error. |
+| P1  | Orchestrator must delegate rather than implement                                                      | P0  | The fifteen-agent org was bypassed on every task of the initial build. One perspective, no independent review, no adversarial QA — every UI defect so far was found by the founder looking at a screenshot. Now written into CLAUDE.md and `.claude/README.md`; needs to actually hold.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| P2  | Rename the agent tooling off the `CLAUDE.md` / `.claude/` names                                       | P3  | The repo is a paid product, not a vendor showcase, and the tool name should not be the most visible thing in its root. Purely mechanical but wide: `CLAUDE.md` and `.claude/**` are referenced from `README.md`, `CONTRIBUTING.md`, `docs/EVIDENCE.md`, `docs/BACKLOG.md`, `packages/design/src/components/primitives.tsx`, `.dockerignore` and every agent, skill and workflow file that cross-references a sibling. **Check whether the tooling still discovers its agents after a rename before committing to it** — the directory name may be load-bearing for the runner, in which case the honest outcome is a documented decision to keep it rather than a half-rename that breaks agent discovery. Deferred deliberately: no functional impact, and it touches enough files to conflict with anything else in flight.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10` this pass; it is now urgent enough to belong in Ready, not process debt.)_
 
@@ -239,86 +240,86 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       reads, and source still carried the retraction.
 
       The Lang & Gates snow figure — *"18.1 cm on the SE face against 42.0 cm on
-                                      the NE face"* — compares the study's **deepest single reading** against a
-                                      **mean**. The actual means are bottomland 11.2 / SE 18.1 / NE 21.7 cm, an
-                                      aspect effect of **1.20×, not 2.32×**. It survived in `wind.ts`,
-                                      `pipeline.ts`, `wind.test.ts` and `pipeline.test.ts`.
+                                          the NE face"* — compares the study's **deepest single reading** against a
+                                          **mean**. The actual means are bottomland 11.2 / SE 18.1 / NE 21.7 cm, an
+                                          aspect effect of **1.20×, not 2.32×**. It survived in `wind.ts`,
+                                          `pipeline.ts`, `wind.test.ts` and `pipeline.test.ts`.
 
-                                      **And the corrected reading cuts against the term it was cited to
-                                      justify.** The *sheltered bottomland was shallowest of all three* — a
-                                      10.5 cm advantage over the NE face, roughly three times the aspect
-                                      effect. The paper quoted as the reason to send a cold-weather bedding
-                                      model toward the sun slope actually measured topographic position beating
-                                      aspect. `BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75` is therefore **not**
-                                      calibrated to a measured 2.32× mechanism and must not be defended as if
-                                      it were; the comment now says so and points at `R31`, which argues the
-                                      shelter floor is the term to move.
+                                          **And the corrected reading cuts against the term it was cited to
+                                          justify.** The *sheltered bottomland was shallowest of all three* — a
+                                          10.5 cm advantage over the NE face, roughly three times the aspect
+                                          effect. The paper quoted as the reason to send a cold-weather bedding
+                                          model toward the sun slope actually measured topographic position beating
+                                          aspect. `BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75` is therefore **not**
+                                          calibrated to a measured 2.32× mechanism and must not be defended as if
+                                          it were; the comment now says so and points at `R31`, which argues the
+                                          shelter floor is the term to move.
 
-                                      Two more: `BEDDING_RING_MIN_SLOPE_DEG`'s comment called 15° *"the bottom
-                                      of the BC WHR band"* when the band is 10–45% slope — 5.7–24.2° — so 15°
-                                      is its **centre**; anyone "restoring" it to 5.7° would saturate the ring
-                                      term on rolling farm ground and call it embedded in steep country, the
-                                      one thing the term exists to rule out. And `BEDDING_SEVERE_COLD_C`
-                                      carried no citation at all, so the **best-grounded constant in the set**
-                                      (measured LCT −11.2 °C for fed whitetail fawns, *Can. J. Zool.* 1999)
-                                      read as a round number and would have been tuned as freely as the 🔴
-                                      endpoints beside it.
+                                          Two more: `BEDDING_RING_MIN_SLOPE_DEG`'s comment called 15° *"the bottom
+                                          of the BC WHR band"* when the band is 10–45% slope — 5.7–24.2° — so 15°
+                                          is its **centre**; anyone "restoring" it to 5.7° would saturate the ring
+                                          term on rolling farm ground and call it embedded in steep country, the
+                                          one thing the term exists to rule out. And `BEDDING_SEVERE_COLD_C`
+                                          carried no citation at all, so the **best-grounded constant in the set**
+                                          (measured LCT −11.2 °C for fed whitetail fawns, *Can. J. Zool.* 1999)
+                                          read as a round number and would have been tuned as freely as the 🔴
+                                          endpoints beside it.
 
-                                      `R55`: the claim that `BEDDING_RING_MIN_DATA_FRACTION` is pinned to
-                                      `detectBenches` *"so the two layers cannot disagree about what a shelf
-                                      is"* is false exactly at the tile border it protects. Verified at both
-                                      call sites — `landform.ts:570` tests `samples >= 8` **absolute**,
-                                      `wind.ts:666` tests against an **in-grid-only** denominator, so five
-                                      in-grid directions all carrying data means benches abstain while bedding
-                                      speaks. The divergence is deliberate and correct (`R40` chose not to grey
-                                      a ring-radius frame around every tile); only the justification was wrong.
+                                          `R55`: the claim that `BEDDING_RING_MIN_DATA_FRACTION` is pinned to
+                                          `detectBenches` *"so the two layers cannot disagree about what a shelf
+                                          is"* is false exactly at the tile border it protects. Verified at both
+                                          call sites — `landform.ts:570` tests `samples >= 8` **absolute**,
+                                          `wind.ts:666` tests against an **in-grid-only** denominator, so five
+                                          in-grid directions all carrying data means benches abstain while bedding
+                                          speaks. The divergence is deliberate and correct (`R40` chose not to grey
+                                          a ring-radius frame around every tile); only the justification was wrong.
 
-                                      Comment-only, mechanically verified: `git diff -U0` filtered to
-                                      non-comment lines returns empty. 244 tests unchanged. A fifth instance in
-                                      `halo.test.ts` was fixed in passing; a sixth is filed as `R60` rather than
-                                      swept in, because TPI's window is a clipped square and needs its own
-                                      sentence, not a copy of this one.
+                                          Comment-only, mechanically verified: `git diff -U0` filtered to
+                                          non-comment lines returns empty. 244 tests unchanged. A fifth instance in
+                                          `halo.test.ts` was fixed in passing; a sixth is filed as `R60` rather than
+                                          swept in, because TPI's window is a clipped square and needs its own
+                                          sentence, not a copy of this one.
 
 - [x] **`R49` (P0) — `computeSurface` fabricated slope next to no-data, and so
       did five more operators.** The row named one; following the blast radius
       found six, and one had been visibly wrong on the map since launch.
 
       | reproduction | before | after |
-                                          | --- | --- | --- |
-                                          | one NODATA neighbour | slope **89.9311°** | `NaN` |
-                                          | all eight NODATA | slope **0.00°** — the flat-pad *maximum* | `NaN` |
-                                          | curvature, one missing | crossSectional 27.7 → **"Channel / draw"** | `Unknown` |
-                                          | curvature, eight missing | maxCurvature 221.9 → **"Peak / knob"** | `Unknown` |
-                                          | TRI | **33,251.9 m** of "local relief" | `NaN` |
-                                          | TPI r=8, void 3 cells away | **115.14 m** vs closed form 0.02791 m | 0.02791 m |
-                                          | `detectBenches`, lone return on a 25° plane | **1 bench cell** | 0 |
+                                              | --- | --- | --- |
+                                              | one NODATA neighbour | slope **89.9311°** | `NaN` |
+                                              | all eight NODATA | slope **0.00°** — the flat-pad *maximum* | `NaN` |
+                                              | curvature, one missing | crossSectional 27.7 → **"Channel / draw"** | `Unknown` |
+                                              | curvature, eight missing | maxCurvature 221.9 → **"Peak / knob"** | `Unknown` |
+                                              | TRI | **33,251.9 m** of "local relief" | `NaN` |
+                                              | TPI r=8, void 3 cells away | **115.14 m** vs closed form 0.02791 m | 0.02791 m |
+                                              | `detectBenches`, lone return on a 25° plane | **1 bench cell** | 0 |
 
-                                          - **`ASPECT_RAMP` clamped the `-1` no-aspect sentinel onto its first
-                                            stop, so every flat field, lake and void rendered as solid
-                                            north-facing blue.** Product-visible, shipped, and nobody had noticed.
-                                            `renderHillshade` was likewise about to paint every void opaque black.
-                                          - **`computeTpi` was the widest and quietest**: it averaged the sentinel
-                                            into its mean, so the error was not a one-cell fringe but the *whole
-                                            radius window* — a ≈400 m disc at z13 — producing ordinary-looking
-                                            Weiss classes. `classifyWeiss` separately compared `NaN <= plainSlope`,
-                                            which is `false`, so voids fell through to `OpenSlope`.
-                                          - `classifyWood` returned `Planar` for unmeasurable ground;
-                                            `WoodFeature.Unknown` was **appended, not renumbered**, because the ids
-                                            are persisted on observation rows.
-                                          - **The fix is faster than the bug.** `computeSurface` −36%,
-                                            `computeRuggedness` −47%, `analyze()` −1.2% overall. The first attempt
-                                            was **+58% and +102%** — `NODATA + 1` is an *imported binding*
-                                            evaluated nine times per cell, ~585k per tile, the identical trap `R30`
-                                            measured at 880 ms. `grid.ts`, `horizon.ts` and `shading.ts` all keep a
-                                            module-local alias; `surface.ts` was the one that did not.
-                                          215 → **244 tests**, 12 of 20 new ones failing against the old code.
-                                          **Interior proven untouched with `Object.is`, not a tolerance** — every
-                                          cell at Chebyshev distance ≥2 from a void is bit-identical across all
-                                          four `SurfaceField` arrays, and the greyed count is exactly the 3×3
-                                          margins. Borders do not grey at halo 0, 1 or 4.
-                                          **Expect visible map changes, all intended** — a transparent fringe at
-                                          every void edge, and flat ground now transparent on the aspect layer
-                                          instead of north-blue.
+                                              - **`ASPECT_RAMP` clamped the `-1` no-aspect sentinel onto its first
+                                                stop, so every flat field, lake and void rendered as solid
+                                                north-facing blue.** Product-visible, shipped, and nobody had noticed.
+                                                `renderHillshade` was likewise about to paint every void opaque black.
+                                              - **`computeTpi` was the widest and quietest**: it averaged the sentinel
+                                                into its mean, so the error was not a one-cell fringe but the *whole
+                                                radius window* — a ≈400 m disc at z13 — producing ordinary-looking
+                                                Weiss classes. `classifyWeiss` separately compared `NaN <= plainSlope`,
+                                                which is `false`, so voids fell through to `OpenSlope`.
+                                              - `classifyWood` returned `Planar` for unmeasurable ground;
+                                                `WoodFeature.Unknown` was **appended, not renumbered**, because the ids
+                                                are persisted on observation rows.
+                                              - **The fix is faster than the bug.** `computeSurface` −36%,
+                                                `computeRuggedness` −47%, `analyze()` −1.2% overall. The first attempt
+                                                was **+58% and +102%** — `NODATA + 1` is an *imported binding*
+                                                evaluated nine times per cell, ~585k per tile, the identical trap `R30`
+                                                measured at 880 ms. `grid.ts`, `horizon.ts` and `shading.ts` all keep a
+                                                module-local alias; `surface.ts` was the one that did not.
+                                              215 → **244 tests**, 12 of 20 new ones failing against the old code.
+                                              **Interior proven untouched with `Object.is`, not a tolerance** — every
+                                              cell at Chebyshev distance ≥2 from a void is bit-identical across all
+                                              four `SurfaceField` arrays, and the greyed count is exactly the 3×3
+                                              margins. Borders do not grey at halo 0, 1 or 4.
+                                              **Expect visible map changes, all intended** — a transparent fringe at
+                                              every void edge, and flat ground now transparent on the aspect layer
+                                              instead of north-blue.
 
 - [x] **`R44` — the rail is gone; `CommandBar` replaces it, and the container
       is what changed.** `.rl-command__cell` is `flex: 1 1 0` with a
@@ -350,31 +351,31 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       ring too, and one hole that was not a guard at all.
 
       | term | verdict | what it did with unknown |
-                                          | --- | --- | --- |
-                                          | aspect / lee | clean | flat cell → lee 0.5, a real answer about real ground |
-                                          | aspect / solar | **dirty** | `clamp01(NaN)` → 0 — *"this face gets no sun"*, the strongest downweight the composite has, applied hardest exactly when the solar term carries most weight |
-                                          | pad | clean here | guarded — but its **input** is fabricated (`R49`) |
-                                          | ring | **dirty** | non-finite ring slopes dropped silently, so a cell whose ring was 14/16 void reported a definite surround measured from the two directions that answered |
-                                          | shelter | clean since `R30` | but a wrong-length array indexed to `undefined`, survived `Number.isNaN`, and landed every cell on the 0.25 floor **silently**. Now throws. |
-                                          | cover | **dirty** | `clamp01(NaN)` → 0 → the 0.4 floor |
+                                              | --- | --- | --- |
+                                              | aspect / lee | clean | flat cell → lee 0.5, a real answer about real ground |
+                                              | aspect / solar | **dirty** | `clamp01(NaN)` → 0 — *"this face gets no sun"*, the strongest downweight the composite has, applied hardest exactly when the solar term carries most weight |
+                                              | pad | clean here | guarded — but its **input** is fabricated (`R49`) |
+                                              | ring | **dirty** | non-finite ring slopes dropped silently, so a cell whose ring was 14/16 void reported a definite surround measured from the two directions that answered |
+                                              | shelter | clean since `R30` | but a wrong-length array indexed to `undefined`, survived `Number.isNaN`, and landed every cell on the 0.25 floor **silently**. Now throws. |
+                                              | cover | **dirty** | `clamp01(NaN)` → 0 → the 0.4 floor |
 
-                                          The load-bearing piece was in `landform.ts`: `RingSlopeStats` gains a
-                                          `missing` counter, because the ring drops samples for two *opposite*
-                                          reasons and the old struct conflated them — outside-the-grid is a border
-                                          artefact (greying on it would paint a grey frame around every tile),
-                                          inside-the-grid-with-no-data is genuinely unseen ground.
-                                          `BEDDING_RING_MIN_DATA_FRACTION = 0.5` is pinned to `detectBenches`'
-                                          existing `samples >= 8 of 16` so the two layers cannot disagree about
-                                          what a shelf is at the edge of a void.
-                                          **10 of 16 new tests fail against the old code**; the other 6 are
-                                          deliberate anti-over-correction guards that must pass both ways. The
-                                          sharpest: unknown VRM and *measured* VRM = 0 previously produced
-                                          **bit-identical** output — nothing downstream could tell "no data" from
-                                          "billiard-table sidehill". 199 → 215 tests.
-                                          Performance measured **interleaved** after a first non-interleaved batch
-                                          showed a +0.8 ms difference that did not reproduce: ~+0.5 ms (3%) on a
-                                          full tile, none on a half-void tile, where the guards short-circuit ahead
-                                          of the dominant ring scan.
+                                              The load-bearing piece was in `landform.ts`: `RingSlopeStats` gains a
+                                              `missing` counter, because the ring drops samples for two *opposite*
+                                              reasons and the old struct conflated them — outside-the-grid is a border
+                                              artefact (greying on it would paint a grey frame around every tile),
+                                              inside-the-grid-with-no-data is genuinely unseen ground.
+                                              `BEDDING_RING_MIN_DATA_FRACTION = 0.5` is pinned to `detectBenches`'
+                                              existing `samples >= 8 of 16` so the two layers cannot disagree about
+                                              what a shelf is at the edge of a void.
+                                              **10 of 16 new tests fail against the old code**; the other 6 are
+                                              deliberate anti-over-correction guards that must pass both ways. The
+                                              sharpest: unknown VRM and *measured* VRM = 0 previously produced
+                                              **bit-identical** output — nothing downstream could tell "no data" from
+                                              "billiard-table sidehill". 199 → 215 tests.
+                                              Performance measured **interleaved** after a first non-interleaved batch
+                                              showed a +0.8 ms difference that did not reproduce: ~+0.5 ms (3%) on a
+                                              full tile, none on a half-void tile, where the guards short-circuit ahead
+                                              of the dominant ring scan.
 
 - [x] **`R41` — the API allocated a halo it never filled, and the guard that
       should have caught it did not exist.** `gridForBBox` blitted only the
@@ -397,20 +398,20 @@ _(Former `P2` — "deploy the `Confidence` chip in the UI" — merged into `R10`
       Measured against the unmodified code on a synthetic flat DEM:
 
       | | before | after |
-                                          | --- | --- | --- |
-                                          | DEM fetches, 1-tile mosaic, halo 20 | 1 | 9 |
-                                          | halo cells passing `isElevation()` | fails at the first | 100% |
-                                          | `terrainShelter` NaN cells (24×24, halo 20) | **288 / 576** | **0 / 576** |
-                                          | `gridForBBox(halo = tileSize+6)` | resolved, no guard | throws `{required:30, available:24}` |
+                                              | --- | --- | --- |
+                                              | DEM fetches, 1-tile mosaic, halo 20 | 1 | 9 |
+                                              | halo cells passing `isElevation()` | fails at the first | 100% |
+                                              | `terrainShelter` NaN cells (24×24, halo 20) | **288 / 576** | **0 / 576** |
+                                              | `gridForBBox(halo = tileSize+6)` | resolved, no guard | throws `{required:30, available:24}` |
 
-                                          `InsufficientHaloError` was unhandled anywhere in `apps/api` and would
-                                          have surfaced as a raw 500. Now a global filter returns **422** with
-                                          `requiredHaloCells` / `availableHaloCells` / `layers`, so a client can
-                                          grey the layer and say why. API tests 14 → 19.
-                                          Verified rather than trusted: `buildCostSurface` skips non-finite
-                                          attraction (`cost.ts:86-89`) so corridors were never exposed, and
-                                          `samplePoint` pads ~450 m around the point so readouts read from near the
-                                          mosaic centre — both confirmed by reading the source, not assumed.
+                                              `InsufficientHaloError` was unhandled anywhere in `apps/api` and would
+                                              have surfaced as a raw 500. Now a global filter returns **422** with
+                                              `requiredHaloCells` / `availableHaloCells` / `layers`, so a client can
+                                              grey the layer and say why. API tests 14 → 19.
+                                              Verified rather than trusted: `buildCostSurface` skips non-finite
+                                              attraction (`cost.ts:86-89`) so corridors were never exposed, and
+                                              `samplePoint` pads ~450 m around the point so readouts read from near the
+                                              mosaic centre — both confirmed by reading the source, not assumed.
 
 - [x] **`R32` (P0) — the bedding layer painted nothing.** Measured on the built
       app: **0.00%** of map-canvas pixels carried colour with bedding enabled
@@ -504,28 +505,28 @@ sticky` action bar painted over the Detail buttons — visible and
       in a no-data halo:
 
       | operator | halo has terrain | halo is NODATA (old) | now |
-                                          | --- | --- | --- | --- |
-                                          | `terrainShelter` | 0.500 | **0.000** "fully exposed" | `NaN` |
-                                          | `skyViewFactor` | 0.467 | **1.000** "open sky" | `NaN` |
-                                          | `castShadows` | 0 shaded | **1 lit** "full sun" | `SHADOW_UNKNOWN` |
+                                              | --- | --- | --- | --- |
+                                              | `terrainShelter` | 0.500 | **0.000** "fully exposed" | `NaN` |
+                                              | `skyViewFactor` | 0.467 | **1.000** "open sky" | `NaN` |
+                                              | `castShadows` | 0 shaded | **1 lit** "full sun" | `SHADOW_UNKNOWN` |
 
-                                          Fixed with one `isElevation(z) = Number.isFinite(z) && z > NODATA + 1`,
-                                          matching the pattern `grid.ts` already used, routed through every
-                                          sentinel test in the package. `analyze()` now throws
-                                          `InsufficientHaloError` rather than truncating, and `requiredHalo()`
-                                          reads the operators' own radius constants instead of restating them as
-                                          independent literals. 166 → 199 tests; **11 of 33 new tests fail against
-                                          the old guard**. Two of those tests failed on first run and both were the
-                                          test's fault — diagnosed, not tuned green.
-                                          **Performance was the trap.** The obvious implementation cost sky-view
-                                          460 ms/tile against a 326 ms baseline, and a naive cross-module
-                                          `isElevation` call cost 880 ms — CommonJS emits a property load V8 will
-                                          not inline, 25 M times per tile. Final: 300–320 ms, no regression.
-                                          Also fixed one layer downstream: `beddingLikelihood` no longer folds a
-                                          `NaN` shelter onto its 0.25 floor, which handed back a confident *low*
-                                          score for ground the engine cannot see. The **cover** term still does
-                                          exactly that — filed as `R40` rather than fixed, to avoid colliding with
-                                          the in-flight `R32` work.
+                                              Fixed with one `isElevation(z) = Number.isFinite(z) && z > NODATA + 1`,
+                                              matching the pattern `grid.ts` already used, routed through every
+                                              sentinel test in the package. `analyze()` now throws
+                                              `InsufficientHaloError` rather than truncating, and `requiredHalo()`
+                                              reads the operators' own radius constants instead of restating them as
+                                              independent literals. 166 → 199 tests; **11 of 33 new tests fail against
+                                              the old guard**. Two of those tests failed on first run and both were the
+                                              test's fault — diagnosed, not tuned green.
+                                              **Performance was the trap.** The obvious implementation cost sky-view
+                                              460 ms/tile against a 326 ms baseline, and a naive cross-module
+                                              `isElevation` call cost 880 ms — CommonJS emits a property load V8 will
+                                              not inline, 25 M times per tile. Final: 300–320 ms, no regression.
+                                              Also fixed one layer downstream: `beddingLikelihood` no longer folds a
+                                              `NaN` shelter onto its 0.25 floor, which handed back a confident *low*
+                                              score for ground the engine cannot see. The **cover** term still does
+                                              exactly that — filed as `R40` rather than fixed, to avoid colliding with
+                                              the in-flight `R32` work.
 
 - [x] **`R8` (P0) — `offlineReady` replaced with per-viewport coverage truth.**
       Six states with one claim each, an `≈` prefix whenever a figure came from
