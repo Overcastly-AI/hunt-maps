@@ -470,7 +470,7 @@ h1.report-title{
   overflow: hidden;
 }
 .dock-header{
-  padding: 18px 20px 14px;
+  padding: 14px 20px 12px;
   border-bottom: 1px solid var(--hairline);
 }
 .dock-header .wordmark{ font-size: 19px; margin-bottom:4px; }
@@ -480,7 +480,7 @@ h1.report-title{
 .dock-body{ flex:1; overflow:hidden; position:relative; }
 .dock-scroll{ height:100%; overflow:hidden; padding-bottom: 4px; }
 
-.dock-section{ border-bottom: 1px solid var(--hairline); padding: 14px 20px 16px; }
+.dock-section{ border-bottom: 1px solid var(--hairline); padding: 11px 20px 13px; }
 .dock-section .eyebrow{ margin-bottom: 10px; display:block; }
 
 .segmented{ display:flex; border:1px solid var(--hairline-hi); }
@@ -534,21 +534,22 @@ h1.report-title{
 .coverage-status .pct{ font-family: var(--font-mono); font-size: var(--text-lg); font-weight:700; color: var(--caution); }
 .coverage-detail{ font-family: var(--font-sans); font-size: var(--text-2xs); color: var(--ink-tertiary); margin-bottom:10px; }
 .tile-grid{ display:grid; grid-template-columns: repeat(10, 1fr); gap:2px; margin-bottom: 6px; }
+.tile-grid--15{ grid-template-columns: repeat(15, 1fr); }
 .tile{ aspect-ratio: 1; border: 1px solid var(--hairline-hi); }
 .tile--cached{ background: rgba(var(--good-rgb), 0.55); border-color: var(--good); }
 .tile--partial{ background-image: repeating-linear-gradient(45deg, rgba(var(--caution-rgb),0.55) 0 2px, transparent 2px 4px); border-color: var(--caution); }
 .tile--missing{ background: transparent; }
 .tile-cap{ font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-tertiary); }
 
-.dock-footer{ padding: 14px 20px 16px; }
-.legend-row{ display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.dock-footer{ padding: 10px 20px 12px; }
+.legend-row{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }
 .legend-row .sq{ width:9px; height:9px; flex-shrink:0; }
 .legend-row .lg-label{ font-family: var(--font-sans); font-weight:700; font-size: var(--text-2xs); letter-spacing:0.06em; text-transform:uppercase; width:70px; flex-shrink:0; }
 .legend-row .lg-gloss{ font-family: var(--font-sans); font-size: var(--text-2xs); color: var(--ink-tertiary); }
 
 .collapse-ctl{
   display:flex; align-items:center; gap:6px;
-  margin-top:14px; padding-top:12px; border-top:1px solid var(--hairline);
+  margin-top:10px; padding-top:10px; border-top:1px solid var(--hairline);
   font-family: var(--font-sans); font-weight:700; font-size: var(--text-2xs); letter-spacing:0.1em; text-transform:uppercase;
   color: var(--ink-secondary); cursor:pointer; background:none; border-left:none; border-right:none; border-bottom:none;
 }
@@ -765,9 +766,8 @@ h1.report-title{
 
                 <div class="dock-section">
                   <span class="eyebrow">Terrain analysis</span>
-                  <div class="row-blurb" style="margin-bottom:9px;">Only the layer you're on keeps its sentence — the rest collapse to label + swatch. Tap one to read it.</div>
 
-                  <div class="toggle-row toggle-row--tight">
+                  <div class="toggle-row toggle-row--tight" style="margin-top:2px;">
                     <div class="toggle-box is-on"><svg viewBox="0 0 10 10"><polyline points="1,5 4,8 9,1" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
                     <div class="toggle-main toggle-main--inline">
                       <span class="row-label">Slope</span>
@@ -799,19 +799,17 @@ h1.report-title{
 
                 </div>
 
-                <div class="dock-section">
+                <div class="dock-section" style="padding-bottom:12px;">
                   <span class="eyebrow">Offline coverage</span>
                   <div class="coverage-status">
                     <span class="plate-title" style="font-size:13px;">Partial</span>
                     <span class="pct mono">62%</span>
                   </div>
-                  <div class="coverage-detail">Checked all 30 tiles at zoom 15.</div>
-                  <div class="tile-grid" aria-hidden="true">
-                    <div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--partial"></div><div class="tile tile--missing"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div>
-                    <div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--partial"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div>
-                    <div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--partial"></div><div class="tile tile--cached"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div>
+                  <div class="coverage-detail" style="margin-bottom:6px;">Checked all 30 tiles at zoom 15.</div>
+                  <div class="tile-grid tile-grid--15" aria-hidden="true">
+                    <div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--partial"></div><div class="tile tile--missing"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--partial"></div><div class="tile tile--missing"></div><div class="tile tile--cached"></div>
+                    <div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--partial"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div><div class="tile tile--missing"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--cached"></div><div class="tile tile--missing"></div><div class="tile tile--cached"></div>
                   </div>
-                  <div class="tile-cap mono">30 tiles · zoom 15</div>
                 </div>
 
               </div>
