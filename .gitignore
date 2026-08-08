@@ -26,3 +26,6 @@ test-results/
 
 .DS_Store
 *.log
+
+# Agent scratch harnesses — measurement scripts written mid-task, never deliverables
+**/__scratch*
