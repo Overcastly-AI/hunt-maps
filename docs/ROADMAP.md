@@ -101,6 +101,27 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
+      The brief was that the UI "looks generic" and "doesn't feel considered" —
+      identity and craft, not information architecture. Three concepts were
+      built blind and a fourth explored as a hybrid; the founder chose A
+      unmodified. `docs/design/direction-a-instrument.html` is the spec,
+      `docs/design/PLAN-direction-a.md` the plan.
+
+      Worth recording that **B and C converged independently** on chrome drawn
+          as if printed on the map sheet, inside a neatline — which is what made A,
+          the dark instrument panel, the genuinely different option rather than one
+          of three variations.
+
+          The exploration paid for itself in two findings that outlive it. Both
+          sibling files shipped a defect invisible to every DOM query: B painted
+          every layer row's name on top of its description, from a `line-height: 0`
+          that inherited into every text box; D rendered on-map text in paper ink
+          over a mid-grey raster. Both are now new invariant classes in the plan.
+          And D established that a light theme over a frozen map has **two grounds,
+          not one** — the panel's and the raster's — so one ink token cannot serve
+          both. Anyone attempting a day mode later inherits that.
+
 - [x] **P0 SHIPPED — `offlineReady` replaced with per-viewport coverage truth**
       (`BACKLOG R8`). The boolean was sampled once at mount and rendered behind
       "elevation for **this area** is stored on this device"; it stayed green
@@ -190,19 +211,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-              hit-testability against the viewport alone, so a row scrolled just past
-              the *sheet's* clipped edge was hit-tested at its unpainted position and
-              reported as visible-but-unclickable — a false failure indistinguishable
-              from the real clipping bug the suite is named after; it now intersects
-              against every clipping ancestor and hit-tests the centre of the visible
-              region. Ground truth was measured before accepting the greener result:
-              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-              and no painted control fails a hit test. Then (`7ff42cee`) two more
-              guards on the helper itself: a synthetic fixture pinning both branches
-              of the clipped-ancestor fix so neither can regress silently, and a check
-              that the collision matrix's "no collision" result means a selector
-              matched and did not overlap, not that a renamed selector stopped
-              matching anything.
+                  hit-testability against the viewport alone, so a row scrolled just past
+                  the *sheet's* clipped edge was hit-tested at its unpainted position and
+                  reported as visible-but-unclickable — a false failure indistinguishable
+                  from the real clipping bug the suite is named after; it now intersects
+                  against every clipping ancestor and hit-tests the centre of the visible
+                  region. Ground truth was measured before accepting the greener result:
+                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                  and no painted control fails a hit test. Then (`7ff42cee`) two more
+                  guards on the helper itself: a synthetic fixture pinning both branches
+                  of the clipped-ancestor fix so neither can regress silently, and a check
+                  that the collision matrix's "no collision" result means a selector
+                  matched and did not overlap, not that a renamed selector stopped
+                  matching anything.
 
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
