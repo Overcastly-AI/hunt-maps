@@ -8,6 +8,28 @@
 
 The analytics engine, validated against analytically-known surfaces.
 
+- [x] **The availability denominator was the bounding box, not the boundary —
+      `BACKLOG R70`.** `analytics.module.ts` refused to run without a boundary,
+      then passed only its envelope to `shareOf`. On an L-shaped fixture whose
+      envelope is 1.8× its true area, the "flat" share read **0.5487** against
+      a true **0.9877** — 44 points, because it was measuring a hillside on
+      somebody else's ground. Every Manly ratio and chi-square inherited that.
+      Fixed with a polygon mask rasterised once in `GeometryService`; the test
+      asserts a >0.3 delta, since one asserting "shares sum to 1" would have
+      passed throughout the bug's entire life.
+
+- [x] **"Not a bench" and "flat ground" matched ground never measured —
+      `BACKLOG R69`.** Found by `analytics-auditor`, and invisible to the
+      `R56` guard because that tests the *syntax* `not` while the real property
+      is "can match a cell the engine never measured". `isBench: false` matched
+      **100% of a plane with no benches on it**; an aspect predicate with
+      "also match flat ground" returned **only voids**. `BenchFlag.Unknown = 2`
+      appended never renumbered; auditing readers for truthiness rather than
+      `=== 1` found `removeSmallBlobs` promoting voids to benches and
+      `renderMask` painting every void solid bench orange in both apps. The
+      tri-state then broke `benchShare` in a way that typechecked and never
+      threw — the agent caught its own break and reported it as blocking.
+
 - [x] **Two operators reported a confident answer from a one-sided sample —
       `BACKLOG R50`/`R59`/`R60`, 244 → 260 tests.** The rows assumed a tile
       border was the problem. Measurement said otherwise: a fully-haloed tile is
@@ -124,6 +146,24 @@ The analytics engine, validated against analytically-known surfaces.
 ## 🚧 Phase 2 — Property workflows and field capture
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
+
+- [x] **The doors actually open — the tabbed drawer.** The three panels were
+      built, tested, and mountable by nothing. `App.tsx` now tracks a
+      `drawerTab` rather than a `sheetOpen` boolean, with a `TabBar` primitive
+      switching Layers / Stands / Sightings **inside the one drawer slot** —
+      not a third `CommandBarCell`, per the note that block has carried since
+      `R44`, because two stacked `.rl-sheet`s overlap exactly and the lower one
+      becomes an `elementFromPoint` trap. Switching tabs fully unmounts the
+      previous panel, and the invariant asserts `.rl-drawer .rl-sheet` is
+      always exactly 1. **`propertyId` is never fabricated** — null until the
+      user picks, persisted per user so a shared device cannot leak one
+      account's choice into another, and re-validated against the live list so
+      a deleted property falls back to asking. Filing a hunter's observations
+      against someone else's ground is the failure that prevents. 11 new
+      invariants prove wind/date/thermals stay reachable on **every tab at
+      390×844** — `R42`'s lesson, held. `Button variant="link"` was fixed at
+      source after two agents worked around the same sub-44px box
+      independently.
 
 - [x] **The product has doors — properties, stands, observations and the
       saved-filter editor.** 163 → **308 tests** in one wave, three agents on
