@@ -19,6 +19,7 @@
 
 import type { AnalysisLayer } from '@hunt-maps/terrain';
 import { mapColor, type EvidenceGrade } from '@hunt-maps/design';
+import { DEM_SOURCE } from './map/demSource';
 
 export type LayerGroup = 'base' | 'relief' | 'analysis' | 'hunting' | 'saved';
 
@@ -71,11 +72,13 @@ export const LAYERS: LayerDefinition[] = [
   },
   {
     id: 'multiHillshade',
-    label: 'LiDAR relief',
+    label: 'Shaded relief',
     group: 'relief',
     blurb:
-      'Multi-directional shaded relief. Reveals benches, old logging grades and micro-terrain ' +
-      'that single-direction hillshade flattens out.',
+      `Multi-directional shading over ${DEM_SOURCE.label} (${DEM_SOURCE.resolutionNote}). Lit ` +
+      'from several directions at once so a ridge never reads as a draw. Shows broad shape — ' +
+      'drainages, benches wide enough to matter, ridge lines — not old logging grades or skid ' +
+      'roads, which need finer LiDAR data this map does not yet serve.',
     defaultOpacity: 0.55,
   },
   {
