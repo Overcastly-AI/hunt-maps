@@ -8,7 +8,10 @@ import {
   type TerrainFields,
   type TerrainPredicate,
 } from './terrainFilter.js';
-import { WeissLandform, WoodFeature } from '../analysis/landform.js';
+import { BenchFlag, detectBenches, WeissLandform, WoodFeature } from '../analysis/landform.js';
+import { computeSurface } from '../analysis/surface.js';
+import { NODATA } from '../dem/encoding.js';
+import { hillsideWithBench, plane, syntheticGrid } from '../testing/synthetic.js';
 
 function fields(over: Partial<TerrainFields> = {}): TerrainFields {
   return {
@@ -83,6 +86,189 @@ describe('aspect predicate', () => {
     expect([...evaluateFilter({ ...base, includeFlat: true } as TerrainPredicate, f)]).toEqual([
       1, 1, 1, 1,
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R69 — a predicate must never match ground the engine did not measure.
+//
+// Two of the filter editor's own controls did. Both are the *absent vs measured*
+// conflation this repo has now hit six times (`R30`, `R40`, `R41`, `R49`, `R66`),
+// arriving in the filter layer:
+//
+//  - "Not on a bench" — `detectBenches` left the zero-initialised `0` on an
+//    unmeasurable cell, and `(arr[i] === 1) === false` is `true` on `0`.
+//  - "Also match flat ground" — `aspect` uses `-1` for *both* a genuinely flat
+//    cell and an unmeasurable one, and this branch never read `slope`, which
+//    `surface.ts:80-86` names in terms as the only field that can tell them
+//    apart.
+//
+// The match-share percentage and the painted layer are computed from the same
+// mask, so both were inflated by exactly the ground nobody knows anything about.
+// ---------------------------------------------------------------------------
+describe('predicates never match unmeasured ground (R69)', () => {
+  const SIZE = 61;
+
+  /** Cell-level fields: measured slope, measured flat, and a void. */
+  function threeStates(): TerrainFields {
+    return {
+      width: 3,
+      height: 1,
+      //             sloped     flat      void
+      slope: Float32Array.from([22, 0, NaN]),
+      aspect: Float32Array.from([180, -1, -1]),
+      bench: Uint8Array.from([BenchFlag.NotBench, BenchFlag.Bench, BenchFlag.Unknown]),
+    };
+  }
+
+  describe('bench', () => {
+    it('isBench:false matches a measured non-bench and abstains on a void', () => {
+      const f = threeStates();
+      expect([...evaluateFilter({ kind: 'bench', isBench: false }, f)]).toEqual([1, 0, 0]);
+    });
+
+    it('isBench:true is unchanged by the third state', () => {
+      const f = threeStates();
+      expect([...evaluateFilter({ kind: 'bench', isBench: true }, f)]).toEqual([0, 1, 0]);
+    });
+
+    it('matches neither way on a void — the mask has to abstain, not flip', () => {
+      const f = threeStates();
+      const yes = evaluateFilter({ kind: 'bench', isBench: true }, f);
+      const no = evaluateFilter({ kind: 'bench', isBench: false }, f);
+      expect(yes[2] || no[2], 'a void answers neither question').toBe(0);
+    });
+
+    it('a bare not-a-bench filter no longer claims 100% of a voided 25° plane', () => {
+      // The reproduction, end to end. A uniform 25° plane has no benches at all,
+      // so "not on a bench" is genuinely true of every cell the engine measured
+      // — and of none of the 225 it did not. Before the fix the mask covered
+      // 3721/3721 = 100.0% of the tile; the honest figure is 3496/3721 = 93.95%
+      // of the tile, which is 100% of measured ground.
+      const g = syntheticGrid(plane(0, Math.tan((25 * Math.PI) / 180)), {
+        size: SIZE,
+        halo: 12,
+        cellSize: 10,
+      });
+      for (let y = 2; y <= 14; y++) for (let x = 2; x <= 14; x++) g.set(x, y, NODATA);
+      const surface = computeSurface(g);
+      const fields: TerrainFields = {
+        width: SIZE,
+        height: SIZE,
+        slope: surface.slope,
+        aspect: surface.aspect,
+        bench: detectBenches(g, surface, { minCells: 1 }),
+      };
+      const mask = evaluateFilter({ kind: 'bench', isBench: false }, fields);
+      expect(matchFraction(mask), 'was 1').toBeCloseTo(3496 / 3721, 12);
+      let onVoid = 0;
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        if (!Number.isFinite(surface.slope[i]) && mask[i]) onVoid++;
+      }
+      expect(onVoid, 'was 225').toBe(0);
+    });
+  });
+
+  describe('aspect', () => {
+    it('includeFlat matches a measured flat cell and not a void', () => {
+      const f = threeStates();
+      const p: TerrainPredicate = {
+        kind: 'aspect',
+        centerDeg: 0,
+        toleranceDeg: 45,
+        includeFlat: true,
+      };
+      // Cell 0 faces south (180°), so it is out of a north window either way.
+      expect([...evaluateFilter(p, f)]).toEqual([0, 1, 0]);
+    });
+
+    it('still excludes measured flat ground when includeFlat is off', () => {
+      const f = threeStates();
+      const p: TerrainPredicate = { kind: 'aspect', centerDeg: 180, toleranceDeg: 45 };
+      expect([...evaluateFilter(p, f)]).toEqual([1, 0, 0]);
+    });
+
+    it('abstains when slope is absent — it cannot tell flat from unmeasured', () => {
+      // `requiredMetrics` asks for slope, but a caller can still hand over a
+      // bundle without it. Guessing "flat" there is the same defect one level up.
+      const f: TerrainFields = {
+        width: 2,
+        height: 1,
+        aspect: Float32Array.from([-1, -1]),
+      };
+      const p: TerrainPredicate = {
+        kind: 'aspect',
+        centerDeg: 0,
+        toleranceDeg: 45,
+        includeFlat: true,
+      };
+      expect([...evaluateFilter(p, f)]).toEqual([0, 0]);
+    });
+
+    it('requiredMetrics asks for slope, because the flat test depends on it', () => {
+      const p: TerrainPredicate = { kind: 'aspect', centerDeg: 0, toleranceDeg: 45 };
+      expect([...requiredMetrics(p)].sort()).toEqual(['aspect', 'slope']);
+    });
+
+    it('"also match flat ground" over a voided plane matches nothing at all', () => {
+      // The sharpest reproduction in the row: a 25° plane falling due south has
+      // no north-facing cell and no flat cell, so the honest answer is 0%.
+      // Before the fix the predicate matched 225 cells — 6.05% of the tile, and
+      // **100% of what it matched was ground the engine had never measured**,
+      // painted under a checkbox that calls it "flat ground".
+      const g = syntheticGrid(plane(0, Math.tan((25 * Math.PI) / 180)), {
+        size: SIZE,
+        halo: 12,
+        cellSize: 10,
+      });
+      for (let y = 2; y <= 14; y++) for (let x = 2; x <= 14; x++) g.set(x, y, NODATA);
+      const surface = computeSurface(g);
+      const fields: TerrainFields = {
+        width: SIZE,
+        height: SIZE,
+        slope: surface.slope,
+        aspect: surface.aspect,
+      };
+      const p: TerrainPredicate = {
+        kind: 'aspect',
+        centerDeg: 0,
+        toleranceDeg: 45,
+        includeFlat: true,
+      };
+      expect(matchFraction(evaluateFilter(p, fields)), 'was 225/3721').toBe(0);
+    });
+
+    it('a real flat pad still matches — the option is a user choice, not the bug', () => {
+      // Anti-over-correction, and the reason `includeFlat` survives at all: the
+      // bench pad of `hillsideWithBench` is dead level, so it has no aspect and
+      // it is the ground a hunter asking for "flat" actually wants.
+      const g = syntheticGrid(hillsideWithBench(0.6, -40, 40), {
+        size: SIZE,
+        halo: 12,
+        cellSize: 10,
+      });
+      for (let y = 2; y <= 14; y++) for (let x = 2; x <= 14; x++) g.set(x, y, NODATA);
+      const surface = computeSurface(g);
+      const fields: TerrainFields = {
+        width: SIZE,
+        height: SIZE,
+        slope: surface.slope,
+        aspect: surface.aspect,
+      };
+      const mask = evaluateFilter(
+        { kind: 'aspect', centerDeg: 0, toleranceDeg: 45, includeFlat: true },
+        fields,
+      );
+      let onPad = 0;
+      let onVoid = 0;
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        if (!mask[i]) continue;
+        if (Number.isFinite(surface.slope[i])) onPad++;
+        else onVoid++;
+      }
+      expect(onPad, 'the level shelf, ~7 rows of 61').toBe(427);
+      expect(onVoid, 'was 225').toBe(0);
+    });
   });
 });
 

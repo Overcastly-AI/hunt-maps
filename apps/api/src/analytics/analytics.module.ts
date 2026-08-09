@@ -18,7 +18,7 @@ import {
   SLOPE_BANDS,
   type SelectionAnalysisDto,
 } from '@hunt-maps/shared';
-import { analyze, sunTimes, WEISS_LABELS, type WeissLandform } from '@hunt-maps/terrain';
+import { analyze, BenchFlag, sunTimes, WEISS_LABELS, type WeissLandform } from '@hunt-maps/terrain';
 import { AuthModule } from '../auth/auth.module';
 import { TerrainModule } from '../terrain/terrain.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -72,28 +72,67 @@ export class AnalyticsService {
         'This property has no boundary drawn. Availability-corrected analytics need one.',
       );
     }
+    // `boundsOf` is an envelope (`ST_XMin/YMin/XMax/YMax`), not the parcel.
+    // On anything non-rectangular — an L, a riverfront strip, a property
+    // split by a road — the envelope includes ground the hunter does not
+    // own, and every share below would be biased toward whatever terrain
+    // dominates outside the real boundary (`R70`). `rasterizeMask` clips to
+    // the actual polygon, in grid space, once, rather than a per-cell
+    // `ST_Contains` — see its doc comment for the cost argument.
     const bbox = await this.geometry.boundsOf(boundary);
     const source = this.dem.resolveSource();
-    const { grid } = await this.dem.gridForBBox(bbox, zoom, source, 24);
+    const { grid, originTile } = await this.dem.gridForBBox(bbox, zoom, source, 24);
+    const mask = this.geometry.rasterizeMask(
+      boundary,
+      (lng, lat) => this.dem.pixelInMosaic(lng, lat, originTile, source.tileSize),
+      grid.width,
+      grid.height,
+    );
     const result = analyze(grid, {
       layers: ['elevation', 'slope', 'aspect', 'weiss', 'bench'],
     });
 
-    const slopeShares = shareOf(result.slope!, SLOPE_BANDS.length, (v) =>
-      bandIndex(SLOPE_BANDS, v),
+    const slopeShares = shareOf(
+      result.slope!,
+      SLOPE_BANDS.length,
+      (v) => bandIndex(SLOPE_BANDS, v),
+      mask,
     );
-    const aspectShares = shareOf(result.aspect!, ASPECT_OCTANTS.length, (v) =>
-      v < 0 ? -1 : bandIndex(ASPECT_OCTANTS, v),
+    const aspectShares = shareOf(
+      result.aspect!,
+      ASPECT_OCTANTS.length,
+      (v) => (v < 0 ? -1 : bandIndex(ASPECT_OCTANTS, v)),
+      mask,
     );
-    const landformShares = shareOf(result.weiss!, 11, (v) => v);
+    const landformShares = shareOf(result.weiss!, 11, (v) => v, mask);
 
+    // `bench` is tri-state since `R69` — `BenchFlag.Unknown = 2` marks ground
+    // the engine could not measure. Summing the array directly, as this did,
+    // adds **two** per void cell and inflates the share past 1.0 without
+    // throwing or failing typecheck. Skip unknowns entirely rather than
+    // counting them as "not a bench": an unmeasured cell is absent from the
+    // denominator, which is the same convention `shareOf` twelve lines above
+    // applies to non-finite values.
     let benchCount = 0;
-    for (let i = 0; i < result.bench!.length; i++) benchCount += result.bench![i];
+    let benchTotal = 0;
+    for (let i = 0; i < result.bench!.length; i++) {
+      if (mask[i] === 0) continue;
+      const flag = result.bench![i];
+      if (flag === BenchFlag.Unknown) continue;
+      if (flag === BenchFlag.Bench) benchCount++;
+      benchTotal++;
+    }
 
+    // `grid.range()` is left un-clipped: it walks the whole-mosaic buffer
+    // inside `packages/terrain`, which this fix does not touch — the
+    // envelope's elevation range is a display stat, not a selection-ratio
+    // denominator, so it is out of scope for `R70`.
     const range = grid.range();
     let slopeSum = 0;
     let slopeN = 0;
-    for (const s of result.slope!) {
+    for (let i = 0; i < result.slope!.length; i++) {
+      if (mask[i] === 0) continue;
+      const s = result.slope![i];
       if (Number.isFinite(s)) {
         slopeSum += s;
         slopeN++;
@@ -113,7 +152,7 @@ export class AnalyticsService {
         slopeShares,
         aspectShares,
         landformShares,
-        benchShare: result.bench!.length > 0 ? benchCount / result.bench!.length : 0,
+        benchShare: benchTotal > 0 ? benchCount / benchTotal : 0,
         sourceVersion,
       },
       update: {
@@ -126,7 +165,7 @@ export class AnalyticsService {
         slopeShares,
         aspectShares,
         landformShares,
-        benchShare: result.bench!.length > 0 ? benchCount / result.bench!.length : 0,
+        benchShare: benchTotal > 0 ? benchCount / benchTotal : 0,
         sourceVersion,
         computedAt: new Date(),
       },
@@ -172,10 +211,11 @@ export class AnalyticsService {
     // "Mature buck" is the question every serious deer hunter is actually
     // asking, and it behaves differently enough from the general population
     // that mixing them washes out the signal.
-    const isMature = (r: ObservationRow) =>
-      r.sex === 'BUCK' && (r.estimatedAge ?? 0) >= 3.5;
+    const isMature = (r: ObservationRow) => r.sex === 'BUCK' && (r.estimatedAge ?? 0) >= 3.5;
     const sightings = rows.filter(
-      (r) => !r.isBlankSit && (r.kind === 'SIGHTING' || r.kind === 'TRAIL_CAMERA' || r.kind === 'HARVEST'),
+      (r) =>
+        !r.isBlankSit &&
+        (r.kind === 'SIGHTING' || r.kind === 'TRAIL_CAMERA' || r.kind === 'HARVEST'),
     );
     const subject = options.matureOnly ? sightings.filter(isMature) : sightings;
     const sits = rows.filter((r) => r.kind === 'SIT' || r.isBlankSit).length + sightings.length;
@@ -269,15 +309,24 @@ export class AnalyticsService {
   }
 }
 
-/** Fraction of finite cells falling in each bin. */
+/**
+ * Fraction of finite, in-boundary cells falling in each bin.
+ *
+ * `mask`, when supplied, restricts the denominator to cells the `R70`
+ * polygon rasterisation marked as inside the property — without it every
+ * cell in the mosaic's bounding-box envelope counts, including ground the
+ * hunter does not own.
+ */
 function shareOf(
   field: Float32Array | Uint8Array,
   binCount: number,
   toBin: (v: number) => number,
+  mask?: Uint8Array,
 ): number[] {
   const counts = new Array<number>(binCount).fill(0);
   let total = 0;
   for (let i = 0; i < field.length; i++) {
+    if (mask && mask[i] === 0) continue;
     const v = field[i];
     if (!Number.isFinite(v)) continue;
     const b = toBin(v);

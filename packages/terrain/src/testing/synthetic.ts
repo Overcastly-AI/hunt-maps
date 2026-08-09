@@ -79,16 +79,40 @@ export function cone(slopeRatio: number) {
  * metres north of centre the elevation is held constant, producing a level
  * terrace with steep ground above and below it.
  */
-export function hillsideWithBench(
-  grade = 0.45,
-  benchLow = -30,
-  benchHigh = 30,
-) {
+export function hillsideWithBench(grade = 0.45, benchLow = -30, benchHigh = 30) {
   return (x: number, y: number): number => {
     void x;
     if (y > benchHigh) return 500 + grade * (y - benchHigh) + grade * (benchHigh - benchLow) * 0;
     if (y >= benchLow) return 500;
     return 500 + grade * (y - benchLow);
+  };
+}
+
+/**
+ * A hillside with a **graded** shelf cut into it — the bench as it exists on
+ * real ground, where the pad carries a few degrees rather than being a table.
+ *
+ * Continuous everywhere (no manufactured break of slope beyond the two intended
+ * ones), so slope is analytically known: `atan(benchGrade)` on the pad between
+ * `benchLow` and `benchHigh` metres north of centre, `atan(hillGrade)` above and
+ * below. That closed form is what lets a test say a 10° shelf must outscore a
+ * 22° sidehill and mean something by it.
+ *
+ * A pad grade of exactly 0 is avoidable on purpose in tests: a dead-flat cell has
+ * no aspect, and every aspect-dependent term then collapses to its neutral value.
+ */
+export function benchedHillside(
+  hillGrade = 0.45,
+  benchGrade = 0.1,
+  benchLow = -30,
+  benchHigh = 30,
+) {
+  return (x: number, y: number): number => {
+    void x;
+    if (y > benchHigh)
+      return 500 + benchGrade * (benchHigh - benchLow) + hillGrade * (y - benchHigh);
+    if (y >= benchLow) return 500 + benchGrade * (y - benchLow);
+    return 500 + hillGrade * (y - benchLow);
   };
 }
 

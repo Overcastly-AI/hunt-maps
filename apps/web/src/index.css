@@ -67,7 +67,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-
 }
 
 .chrome-bottomright {
@@ -95,54 +94,83 @@
  *
  * This overrides `.rl-sheet--drawer`'s own `bottom` offset
  * (`packages/design/src/styles.css`), which only budgets for a single
- * touch-target-tall control. This app's own rail stacks three buttons in
- * that corner (`--space-touch` x3 plus a gap on each side), so the sheet
- * needs three times the clearance — a fact about *this app's* specific
- * chrome arrangement, not about the sheet component itself, which is why the
+ * touch-target-tall control. A fact about *this app's* specific chrome
+ * arrangement, not about the sheet component itself, which is why the
  * override lives here rather than in the design package. Scoped to widths
- * above the sheet's own mobile breakpoint so it never fights the intentional
- * full-width bottom-sheet behaviour below that.
+ * above the sheet's own mobile breakpoint so it never fights the mobile
+ * clearance below.
+ *
+ * Used to be `calc(var(--space-touch) * 2 + var(--space-6) * 2)` — "two
+ * buttons" hand-counted in a file that does not contain the buttons
+ * (`docs/AUDIT-PRODUCT.md` F7, BACKLOG R44). `CommandBar` (BACKLOG R44)
+ * replaced the stacked rail with a fixed-height row, so this is now the
+ * bar's own measured height plus one gap, regardless of how many cells the
+ * bar holds — the `* N` is gone, not just correct for today's count.
  */
 @media (min-width: 861px) {
   .rl-sheet--drawer {
-    bottom: calc(var(--space-touch) * 3 + var(--space-6) * 2);
-  }
-
-  /*
-   * Lift the whole chrome layer above the drawer, so the wind and time
-   * popovers — which open upward out of the conditions bar and across the
-   * drawer's column — are clickable while the layers sheet is open.
-   *
-   * Why it has to be *here*, on `.map-chrome`, and not on the popover: the
-   * popover already sets `z-index: 25` against a sheet at 20, which looks
-   * like it should win and cannot. Two ancestors defeat it. `.rl-conditions`
-   * carries `backdrop-filter` for the glass, and backdrop-filter creates a
-   * stacking context, so the popover's 25 only orders it *within the
-   * conditions bar*. And `.rl-sheet` is not a descendant of `.map-chrome` at
-   * all — it is a sibling under `.app-shell` — so the comparison that
-   * actually decides paint order is `.map-chrome`'s 10 against the sheet's
-   * 20. Nothing nested inside the chrome can escape that, at any z-index.
-   *
-   * The result was the popover painting under the sheet with its lower half
-   * hit-testing into `.rl-group` behind it: visible, and dead. Same failure
-   * class as the earlier `overflow: hidden` bug, and the same lesson — an
-   * ancestor property, invisible at the call site, silently overriding a
-   * child's own correct-looking rule.
-   *
-   * Desktop only. Below 861px the sheet is a full-width bottom sheet that is
-   * *meant* to cover this row while open (see the comment in the max-width
-   * block); raising the chrome there would leave the rail punched through a
-   * panel that is deliberately on top.
-   */
-  .map-chrome {
-    z-index: 30;
+    bottom: calc(var(--layout-command-bar-height) + var(--space-6));
   }
 }
 
 /*
- * On a phone the conditions bar spans the full width and sits above the sheet.
- * Wind and time are the two things a hunter re-checks constantly, so they get
- * the bottom edge — the only part of a large phone a thumb reaches reliably.
+ * Lift the whole chrome layer above any open sheet, so the wind and time
+ * popovers — which open upward out of the conditions bar — are clickable
+ * while the Layers sheet (or the region picker, which shares the same drawer
+ * slot) is open.
+ *
+ * Why it has to be *here*, on `.map-chrome`, and not on the popover: the
+ * popover already sets `z-index: 25` against a sheet at 20, which looks like
+ * it should win and cannot. Two ancestors defeat it. `.rl-conditions` carries
+ * `backdrop-filter` for the glass, and backdrop-filter creates a stacking
+ * context, so the popover's 25 only orders it *within the conditions bar*.
+ * And `.rl-sheet` is not a descendant of `.map-chrome` at all — it is a
+ * sibling under `.app-shell` — so the comparison that actually decides paint
+ * order is `.map-chrome`'s 10 against the sheet's 20. Nothing nested inside
+ * the chrome can escape that, at any z-index.
+ *
+ * The result, before this rule, was the popover painting under the sheet
+ * with its lower half hit-testing into `.rl-group` behind it: visible, and
+ * dead. Same failure class as the earlier `overflow: hidden` bug, and the
+ * same lesson — an ancestor property, invisible at the call site, silently
+ * overriding a child's own correct-looking rule.
+ *
+ * Used to be scoped to `@media (min-width: 861px)`, because below that width
+ * the sheet ran to `bottom: 0` and was *meant* to cover this row while open —
+ * raising the chrome there would have punched the rail through a panel
+ * deliberately on top of it. R42 (below) removed that: the mobile sheet now
+ * reserves clearance for `.chrome-bottomleft` instead of covering it, which
+ * makes opening the wind popover *while the sheet is open* newly possible on
+ * a phone — the flagship "sweep the wind, watch bedding repaint" move this
+ * product exists for. It has to win the same stacking-context fight there
+ * that it already won on desktop, so this rule now applies unconditionally.
+ */
+.map-chrome {
+  z-index: 30;
+}
+
+/*
+ * On a phone the conditions bar spans the full width and sits above the
+ * command bar. `column-reverse` places the *first* DOM child (`CommandBar`,
+ * `App.tsx`) at the main-start edge, which is the *bottom* once the axis is
+ * reversed — so the command bar sits on the true bottom edge and the
+ * conditions bar sits above it.
+ *
+ * F3 (`docs/AUDIT-PRODUCT.md`, 2026-08-07 pass) reads this arrangement as a
+ * defect: wind and time are the two things a hunter re-checks constantly, so
+ * the finding wants *them* on the bottom edge instead. That swap was tried
+ * while building `CommandBar` (BACKLOG R44) — plain `column`, `ConditionsBar`
+ * last — and reverted: the wind/time popover opens *upward* from inside the
+ * conditions bar (`bottom: calc(100% + var(--space-2))`,
+ * `packages/design/src/styles.css`'s `.rl-popover`), and with the conditions
+ * bar moved to the very bottom, that upward-opening popover lands squarely on
+ * top of the command bar sitting right above it — a real, measured overlap
+ * (group 4's `390px — wind popover open` test), not a cosmetic one. Fixing
+ * F3 properly needs the popover to know how much chrome sits above its own
+ * anchor and clear it, which is `Popover` positioning logic, not something
+ * `CommandBar`'s container shape can settle on its own — left open,
+ * deliberately, rather than reintroducing a mobile chrome collision to close
+ * a different finding. Tracked at BACKLOG R44 rather than silently dropped.
  */
 @media (max-width: 860px) {
   .map-chrome {
@@ -159,15 +187,429 @@
   }
 
   /*
-   * The mobile bottom sheet rises from the bottom edge and covers this row
-   * outright while open, rather than making room for it — there is no
-   * "sideways" on a full-width sheet. That is a deliberate, temporary
-   * occlusion by a panel the user can dismiss, not the trigger-displacement
-   * bug described above: nothing here moves, it is only painted over.
+   * R42 — the sheet (Layers or the region picker; both use
+   * `.rl-sheet--drawer`) must stop covering `.chrome-bottomleft` while open.
+   *
+   * It used to run to `bottom: 0`, so it painted straight over the rail and
+   * the ConditionsBar rather than making room for them — including Wind,
+   * which bedding (and every other wind-dependent layer) is correctly
+   * disabled without. Turning bedding on from a cold start on a phone took
+   * eight interactions with a mandatory panel-close in the middle: open the
+   * sheet, discover bedding needs a wind, close the sheet (the only way to
+   * reach Wind), set it, reopen the sheet, scroll back, toggle. The flagship
+   * move this product exists for — sweep the wind dial, watch leeward
+   * bedding repaint live — was reachable on a desktop and not on the device
+   * this product is actually used on. (`docs/AUDIT-PRODUCT.md`, 2026-08-07
+   * pass, "the finding that matters most"; `docs/QA-FIELD.md` finding 3 flags
+   * the same row as untracked by any collision check.)
+   *
+   * The two custom properties below are this app's own bottom-left and
+   * top-right chrome group heights on a phone. `--rl-mobile-bottom-clearance`
+   * used to hand-count `(var(--space-touch) * 2 + 3px)` for the old rail's
+   * button stack — the same debt as the desktop `* 2` override above
+   * (BACKLOG R44/F7) — and now reads `CommandBar`'s own fixed height
+   * instead, so a cell added to the bar (there is room for one more before
+   * the tool tray in `docs/AUDIT-PRODUCT.md` rec's IA table needs building)
+   * never has to touch this file. `--rl-mobile-top-clearance` still hand-
+   * counts the top-right rail's three buttons (`* 3`) — that one survives
+   * this pass on purpose: it belongs to BACKLOG R48 (drop zoom on mobile,
+   * move locate into the thumb arc), which is explicitly out of scope here
+   * and deletes the top-right rail on mobile outright when it ships, rather
+   * than needing this arithmetic fixed in place. `--layout-conditions-bar-
+   * height` is the one measured (not computed) number in the mix — see its
+   * definition in `packages/design/src/tokens.ts` for why.
+   */
+  .rl-sheet--drawer {
+    /* Top-right rail (zoom in/out, locate — still three buttons; R45 only
+       removed a button from the bottom-left rail) plus the grid padding on
+       each side of it, so the sheet's top edge can never creep up into it. */
+    --rl-mobile-top-clearance: calc(
+      var(--space-3) + (var(--space-touch) * 3 + 4px) + var(--space-3)
+    );
+    /* map-chrome's own bottom padding/safe-area, the command bar, the gap
+       above it, ConditionsBar's measured height, and a breathing gap. */
+    --rl-mobile-bottom-clearance: calc(
+      max(var(--space-3), env(safe-area-inset-bottom)) + var(--layout-command-bar-height) +
+        var(--space-3) + var(--layout-conditions-bar-height) + var(--space-3)
+    );
+    top: var(--rl-mobile-top-clearance);
+    bottom: var(--rl-mobile-bottom-clearance);
+    /* Fully determined by `top` + `bottom` now; the design package's own
+       `62vh` cap (`packages/design/src/styles.css`) would only ever bind if
+       this computed height exceeded it, which it does not on any viewport
+       this app supports, but `none` says so rather than leaving it to a
+       coincidence of arithmetic. */
+    max-height: none;
+  }
+
+  /*
+   * The dead reserved corner (`docs/AUDIT-PRODUCT.md` F9) — never rendered,
+   * kept `display: none` so its own reserved grid area can't trap a stray
+   * pointer event.
    */
   .chrome-bottomright {
     display: none;
   }
+}
+
+/* --------------------------------------------------------------------------
+ * Tabbed drawer — Layers / Stands / Sightings share the one drawer slot
+ * (`docs/AUDIT-PRODUCT.md` rec 20; `CommandBar`'s own doc comment already
+ * reserved this: "adding Filters or Property later means adding a tab
+ * inside the one drawer slot, not a third cell here").
+ *
+ * `LayersSheet`, `WaypointsSheet` and `ObservationsSheet` each render their
+ * own `<Sheet>` (`packages/design`) independently and correctly — that is
+ * unchanged, and two of those three components are outside this agent's
+ * territory (`components/waypoints|observations`), so this does not try to
+ * teach any of them a "tabbed" mode. Instead `App.tsx` mounts exactly one of
+ * them at a time (same one-panel-at-a-time contract the Layers/Offline
+ * toggle already had) inside `.rl-drawer`, with a `TabBar`
+ * (`@hunt-maps/design`) as a sibling above it. `.rl-drawer` claims the exact
+ * screen position `.rl-sheet--drawer` used to own outright; the block below
+ * that neutralises `.rl-sheet--drawer` puts the nested panel back to filling
+ * whatever `.rl-drawer__body` gives it, so the two absolute-position
+ * systems never stack.
+ * -------------------------------------------------------------------------- */
+
+.rl-drawer {
+  position: absolute;
+  /* Same layer `.rl-sheet` itself painted at — the nested panel below is
+     neutralised to `position: static` and no longer contributes its own
+     stacking context, so this is now the one figure that has to win against
+     `.map-chrome`'s 30 the same way the plain sheet always did (see that
+     rule's own comment for why `.map-chrome` sits above it on purpose). */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  top: var(--space-3);
+  left: var(--space-3);
+  bottom: calc(var(--space-touch) + var(--space-6));
+  width: var(--layout-sheet-width);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sheet);
+  animation: rl-drawer-in var(--motion-sheet) var(--motion-ease);
+}
+
+@keyframes rl-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Desktop clearance above the command bar — identical figure to
+   `.rl-sheet--drawer`'s own override above, duplicated because this is a
+   different element occupying the same slot. */
+@media (min-width: 861px) {
+  .rl-drawer {
+    bottom: calc(var(--layout-command-bar-height) + var(--space-6));
+  }
+}
+
+@media (max-width: 860px) {
+  .rl-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation-name: rl-drawer-up;
+  }
+
+  @keyframes rl-drawer-up {
+    from {
+      transform: translateY(16px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  /*
+   * R42, duplicated for the tabbed drawer. See `.rl-sheet--drawer`'s
+   * identical block above for the derivation of every term — kept as a
+   * second copy rather than shared, the same call `.rl-readout` already
+   * made above it: a CSS custom property does not inherit across DOM
+   * siblings, and `.rl-drawer`/`.rl-sheet--drawer`/`.rl-readout` are three
+   * siblings under `.app-shell`, not ancestor and descendant. Keep the three
+   * figures in sync if any one row's height token changes.
+   */
+  .rl-drawer {
+    --rl-mobile-top-clearance: calc(
+      var(--space-3) + (var(--space-touch) * 3 + 4px) + var(--space-3)
+    );
+    --rl-mobile-bottom-clearance: calc(
+      max(var(--space-3), env(safe-area-inset-bottom)) + var(--layout-command-bar-height) +
+        var(--space-3) + var(--layout-conditions-bar-height) + var(--space-3)
+    );
+    top: var(--rl-mobile-top-clearance);
+    bottom: var(--rl-mobile-bottom-clearance);
+  }
+}
+
+.rl-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/*
+ * Neutralises the nested panel's own `.rl-sheet--drawer` positioning.
+ *
+ * `LayersSheet`/`WaypointsSheet`/`ObservationsSheet` each render a `<Sheet>`
+ * that is correctly self-positioned in isolation — but `Sheet` claims the
+ * exact coordinates `.rl-drawer` above already reserves, and stacking two
+ * independent `position: absolute` boxes at the same coordinates would
+ * double the offset rather than nest cleanly. Rather than teach three
+ * components (two of them outside this agent's territory) a "tabbed" mode,
+ * the nested `<Sheet>` is left alone entirely and simply told to fill
+ * whatever box `.rl-drawer__body` gives it: `position: static`, full
+ * width/flex-height, and a border-radius that only rounds its *bottom*
+ * corners now that `TabBar` owns the top ones.
+ *
+ * Three classes of specificity (`.rl-drawer__body > .rl-sheet.rl-sheet--
+ * drawer`) beat every other rule matching `.rl-sheet--drawer` — the base
+ * rule in `packages/design`, both of its own media-query variants, and this
+ * file's R42 override — regardless of viewport or source order, which is
+ * why one unconditional rule is enough here instead of a media-query pair.
+ */
+.rl-drawer__body > .rl-sheet.rl-sheet--drawer {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  border-top: none;
+  /* `.rl-drawer` already carries the one shadow for the whole assembly —
+     a second shadow here would draw a seam at the tab-bar/panel join. */
+  box-shadow: none;
+  /* `.rl-drawer` already animates in as a unit; animating the inner panel
+     too on every tab switch would read as a flicker, not a transition. */
+  animation: none;
+}
+
+/*
+ * A hunter must never be left guessing whose ground a stand or sighting is
+ * about to be filed against (`CLAUDE.md`, "never be confidently wrong about
+ * identity"), so this is the one row that persists above whichever panel is
+ * showing, whenever a property has actually been chosen — see
+ * `lib/currentProperty.ts` for why nothing here is ever picked *for* the
+ * user.
+ */
+.rl-property-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+
+.rl-property-banner__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-dim);
+}
+
+.rl-property-banner__name strong {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+/* Picker shown in place of Stands/Sightings until a property is chosen. */
+.rl-property-picker {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * Offline-coverage chip slot in the Layers sheet header.
+ *
+ * A bare wrapper for a test handle would still be a block-level participant in
+ * the header's flex row; `inline-flex` keeps the chip's own geometry exactly
+ * what it was before the wrapper existed, and `min-width: 0` lets the label
+ * ("Partial — 43%", "Storage unreadable") shrink rather than push the header
+ * past the sheet's width on a phone, which would give the page a horizontal
+ * scroll the map's own pan gesture then fights.
+ */
+.coverage-chip {
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Offline region picker
+ *
+ * Layout only, as with everything else in this file — every colour, radius and
+ * spacing value here reads a token from `@hunt-maps/design`.
+ * -------------------------------------------------------------------------- */
+
+/*
+ * The elevation-only sentence. Given a little more weight than a plain hint
+ * because it is the one line that explains why this download is worth the
+ * megabytes, and it has to survive being skimmed at 22:00 in a hotel.
+ */
+.region-story {
+  border-left: 2px solid var(--color-accent-dim);
+  padding-left: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/*
+ * Segmented choices (area size, detail level).
+ *
+ * `auto-fit`/`minmax` rather than a fixed column count so a four-up row of
+ * detail levels and a three-up row of area sizes share one rule, and so a
+ * narrow phone wraps instead of forcing the sheet wider than the screen —
+ * which the "no horizontal page scroll" invariant would (rightly) fail.
+ * The minimum is the glove-sized touch target, so a wrapped button is still
+ * tappable rather than merely present.
+ */
+.region-segments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--space-touch), 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* Figure rows: label left, monospace number right, so sizes line up. */
+.region-figures {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.region-figures dt {
+  color: var(--color-text-dim);
+}
+
+.region-figures dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+}
+
+/*
+ * Progress bar.
+ *
+ * A plain div rather than `<progress>`: `<progress>` is styled entirely
+ * differently per engine and cannot take a token-driven fill without
+ * vendor-prefixed pseudo-elements. The ARIA role and value attributes carry
+ * the semantics a screen reader needs, which is what `<progress>` was for.
+ */
+.region-bar {
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-raised);
+  border: 1px solid var(--color-line);
+  overflow: hidden;
+  margin-bottom: var(--space-3);
+}
+
+.region-bar__fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width var(--motion-base) linear;
+}
+
+.region-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/*
+ * The estimate line under the Download button.
+ *
+ * Deliberately *below* the action, not above it. The panel's whole job is to
+ * get a hunter to a considered press, and the two numbers that decide that
+ * press are on the button itself; everything else here is provenance and
+ * caveats, which must never push the action further down the panel.
+ *
+ * There was a `position: sticky` action bar here for one iteration. It solved
+ * the "button below the fold" problem and created a worse one: on a 390px
+ * phone it painted over the Detail buttons, which then hit-tested to the bar —
+ * visible and unclickable, caught by `ui-invariants` section 1 at the mobile
+ * viewport. Nothing in this panel overlaps anything now; the ordering above
+ * does the work instead.
+ */
+.region-summary {
+  margin-top: var(--space-2);
+}
+
+.region-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.region-item {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.region-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+/*
+ * A region name is user-supplied and can be long. `min-width: 0` plus
+ * `overflow-wrap` keeps it inside the sheet rather than pushing the page wide
+ * enough to gain a horizontal scrollbar that fights the map's pan gesture.
+ */
+.region-item__name {
+  min-width: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.region-item__meta {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.region-backend {
+  display: inline-flex;
+  min-width: 0;
 }
 
 /* Terrain readout, anchored above the conditions bar. */
@@ -196,6 +638,313 @@
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: var(--track-label);
+}
+
+/* --------------------------------------------------------------------------
+ * Terrain readout — peek-detent bottom sheet (`TerrainReadout.tsx`, BACKLOG
+ * R6), replacing `.inspect-card` above once `App.tsx` is switched over.
+ *
+ * A small floating plate, not a full drawer like `.rl-sheet--drawer`
+ * (`LayersSheet`/`RegionPicker`) — `docs/design/direction-a-instrument.html`'s
+ * thesis names this the one thing allowed to float uninvited over the map,
+ * because it is answering "what is this ground *right here*", and burying
+ * the map to show that answer defeats the question. Anchored bottom-left
+ * (desktop) / full-width bottom (mobile) with the same vertical clearance
+ * `.rl-sheet--drawer` reserves above the command bar + conditions row, so
+ * opening it can never re-create BACKLOG R42 (a panel painting over the wind
+ * control). The clearance arithmetic is duplicated rather than shared across
+ * a selector list — this component and `LayersSheet` are different agents'
+ * file territories, and a custom property does not inherit across DOM
+ * siblings — so keep the two figures in sync if either row's height token
+ * changes.
+ * -------------------------------------------------------------------------- */
+
+.rl-readout {
+  position: absolute;
+  left: var(--space-3);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100% - var(--space-6)));
+  border-radius: var(--radius-xl);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+@media (min-width: 861px) {
+  .rl-readout {
+    /* Same figure as `.rl-sheet--drawer`'s desktop override, above. */
+    bottom: calc(var(--layout-command-bar-height) + var(--space-6));
+  }
+}
+
+@media (max-width: 860px) {
+  .rl-readout {
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+    /* Same figure as `--rl-mobile-bottom-clearance` on `.rl-sheet--drawer`,
+       above (BACKLOG R42). */
+    bottom: calc(
+      max(var(--space-3), env(safe-area-inset-bottom)) + var(--layout-command-bar-height) +
+        var(--space-3) + var(--layout-conditions-bar-height) + var(--space-3)
+    );
+  }
+}
+
+.rl-readout__grip-row {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* The drag handle is also a plain tap target (peek <-> expanded) — gloves and
+   cold make a precise drag unreliable, so every detent stays reachable with a
+   single tap, never only by dragging. Padded out to the touch floor even
+   though the visible bar is small. */
+.rl-readout__grip {
+  width: 100%;
+  min-height: var(--space-touch);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  touch-action: none;
+  cursor: grab;
+}
+
+.rl-readout__grip-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-line-strong);
+}
+
+.rl-readout__peek {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.rl-readout__peek-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* The fact line — measured geometry only, never a `Confidence` chip (see the
+   grade-rule note on `TerrainReadout.tsx`). */
+.rl-readout__facts {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rl-readout__sep {
+  color: var(--color-text-dim);
+  padding: 0 var(--space-1);
+}
+
+/* Loading / no-data / error headline — prose, not the mono fact-line style,
+   so it can never be mistaken for a figure. */
+.rl-readout__status {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+}
+
+/* "Not measured here" — the one rule this whole component exists to keep:
+   never a number, never a dash, never mono-styled like a figure. */
+.rl-readout__unmeasured {
+  font-family: var(--font-sans);
+  font-style: italic;
+  color: var(--color-text-dim);
+}
+
+.rl-readout__body {
+  padding: 0 var(--space-3) var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: min(320px, 42vh);
+}
+
+.rl-readout__section {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+.rl-readout__section-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+}
+
+.rl-readout__fact-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.rl-readout__fact-label {
+  color: var(--color-text-dim);
+}
+
+.rl-readout__fact-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.rl-readout__judgement-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.rl-readout__judgement-label {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.rl-readout__judgement-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rl-readout__judgement-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+
+.rl-readout__provenance {
+  margin: var(--space-2) var(--space-3) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+/* --------------------------------------------------------------------------
+ * Auth (`components/auth/**`)
+ *
+ * A full-viewport dark shell with one centred card, built from the same
+ * `rl-glass`/`Field`/`Button` vocabulary the map chrome uses elsewhere in
+ * this file — see `AuthShell.tsx`'s doc comment for why this does not chase
+ * `docs/design/direction-a-instrument.html`'s not-yet-landed token set.
+ * -------------------------------------------------------------------------- */
+
+.auth-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  background: var(--color-ground);
+  padding: max(var(--space-6), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right)) max(var(--space-6), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+  font-family: var(--font-condensed);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  margin-bottom: var(--space-4);
+}
+
+.auth-card__eyebrow {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--track-eyebrow);
+}
+
+.auth-card__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.auth-card__subtitle {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-dim);
+}
+
+.auth-card__footer {
+  margin-top: var(--space-4);
+  text-align: center;
+}
+
+.auth-card__switch {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+}
+
+.auth-card__switch a {
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+  /*
+   * A real 44x44px hit area, not a visual one — the same technique
+   * `.rl-btn--link` uses (`packages/design/src/styles.css`), so this inline
+   * link meets the same gloved-fingertip floor a standalone button does
+   * regardless of the surrounding sentence's own font metrics.
+   *
+   * `min-width` matters as much as `min-height` here and was missing on the
+   * first pass: "Register" (login screen) happened to measure 44px+ wide on
+   * its own text alone, but "Sign in" (register screen) measured 35px —
+   * `apps/web/e2e/auth-invariants.spec.ts`'s touch-target check caught the
+   * narrower word failing the same rule the wider one passed by accident.
+   * `justify-content: center` keeps the (shorter) text centred in the wider
+   * box rather than left-hung against the extra width.
+   */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--space-touch);
+  min-width: var(--space-touch);
+}
+
+.auth-card__switch a:hover {
+  color: var(--color-accent-bright);
 }
 
 /* Readout rows: label left, monospace figure right, so values align in a column. */

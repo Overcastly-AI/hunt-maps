@@ -19,7 +19,13 @@
  * date this century — far tighter than the terrain data it is applied to.
  */
 
+import { isElevation } from '../dem/encoding.js';
+import { emptyScan, scanHorizon } from './horizon.js';
 import type { SurfaceField } from './surface.js';
+
+/** Module-local aliases — see the note in `horizon.ts` on CommonJS inlining. */
+const isElev = isElevation;
+const scanRay = scanHorizon;
 
 export interface SolarPosition {
   /** Degrees above the horizon; negative when the sun is down. */
@@ -79,8 +85,7 @@ export function solarPosition(date: Date, latitude: number, longitude: number): 
       1.25 * eccent * eccent * Math.sin(2 * Mrad));
 
   // True solar time → hour angle.
-  const utcMinutes =
-    date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
   const trueSolarTime = mod(utcMinutes + eqTime + 4 * longitude, 1440);
   const hourAngle = trueSolarTime / 4 < 0 ? trueSolarTime / 4 + 180 : trueSolarTime / 4 - 180;
 
@@ -96,8 +101,7 @@ export function solarPosition(date: Date, latitude: number, longitude: number): 
   let azimuth: number;
   const denom = Math.cos(latRad) * Math.sin(zenith * RAD);
   if (Math.abs(denom) > 1e-9) {
-    const cosAz =
-      (Math.sin(latRad) * Math.cos(zenith * RAD) - Math.sin(decRad)) / denom;
+    const cosAz = (Math.sin(latRad) * Math.cos(zenith * RAD) - Math.sin(decRad)) / denom;
     azimuth = Math.acos(Math.max(-1, Math.min(1, cosAz))) * DEG;
     azimuth = hourAngle > 0 ? mod360(azimuth + 180) : mod360(540 - azimuth);
   } else {
@@ -142,11 +146,43 @@ export function slopeInsolation(surface: SurfaceField, sun: SolarPosition): Floa
 }
 
 /**
- * Cast terrain shadows for a sun position. Returns 1 where lit, 0 where shaded.
+ * Shadow-mask states. Three, not two: a byte mask has no `NaN`, and "the DEM ran
+ * out before the ray reached the sun" is a different claim from "shaded".
  *
- * Ray-marches toward the sun accumulating the horizon angle. Early low-sun
- * shadow is the single biggest driver of where a cold-front morning's first
- * warmth lands, so this is not a cosmetic layer.
+ * `SHADOW_SHADED` is 0 so an all-zero mask still means "nothing is lit", which
+ * is the correct reading when the sun is below the horizon.
+ */
+export const SHADOW_SHADED = 0;
+export const SHADOW_LIT = 1;
+export const SHADOW_UNKNOWN = 2;
+
+/**
+ * Default ray-march distance toward the sun, in cells.
+ *
+ * **Not yet accounted for in `requiredHalo()`** — `castShadows` is not wired
+ * into `analyze()` at all (`R27`). Whoever wires it must add this radius to the
+ * halo accounting in the same commit, or every cell whose ray leaves the halo
+ * will now correctly report `SHADOW_UNKNOWN` and the layer will be mostly holes.
+ */
+export const DEFAULT_SHADOW_RADIUS_CELLS = 64;
+
+/**
+ * Cast terrain shadows for a sun position.
+ *
+ * Returns `SHADOW_LIT` / `SHADOW_SHADED` / `SHADOW_UNKNOWN` per cell. Ray-marches
+ * toward the sun accumulating the horizon angle. Early low-sun shadow is the
+ * single biggest driver of where a cold-front morning's first warmth lands, so
+ * this is not a cosmetic layer.
+ *
+ * ## Missing data
+ *
+ * An unreadable cell on the ray used to be skipped, and because `NODATA` is a
+ * finite −32768 that meant a ray running off the edge of the DEM reported the
+ * cell **lit** — full sun on a bench that may sit under a rim (`R30`). It now
+ * reports `SHADOW_UNKNOWN`, *except* where a blocker was already found: shading
+ * is monotone, so a cell blocked by visible terrain stays shaded whatever lies
+ * behind the blocker. A cell with no elevation of its own is `SHADOW_UNKNOWN`
+ * too, rather than the `SHADOW_SHADED` it used to fall through to.
  */
 export function castShadows(
   heightAt: (x: number, y: number) => number,
@@ -154,9 +190,11 @@ export function castShadows(
   height: number,
   cellSize: number,
   sun: SolarPosition,
-  maxRadiusCells = 64,
+  maxRadiusCells = DEFAULT_SHADOW_RADIUS_CELLS,
 ): Uint8Array {
   const out = new Uint8Array(width * height);
+  // Sun below the horizon: everything is shaded, and that is *known*, not
+  // unknown — no ray needs to be marched to establish it.
   if (sun.altitude <= 0) return out;
 
   const azRad = sun.azimuth * RAD;
@@ -164,21 +202,19 @@ export function castShadows(
   const dx = Math.sin(azRad);
   const dy = -Math.cos(azRad);
   const tanAlt = Math.tan(sun.altitude * RAD);
+  const scan = emptyScan();
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const z0 = heightAt(x, y);
-      if (!Number.isFinite(z0)) continue;
-      let lit = 1;
-      for (let r = 1; r <= maxRadiusCells; r++) {
-        const zr = heightAt(Math.round(x + dx * r), Math.round(y + dy * r));
-        if (!Number.isFinite(zr)) continue;
-        if (zr - z0 > r * cellSize * tanAlt) {
-          lit = 0;
-          break;
-        }
+      if (!isElev(z0)) {
+        out[y * width + x] = SHADOW_UNKNOWN;
+        continue;
       }
-      out[y * width + x] = lit;
+      // Anything rising above the sun's altitude pins the answer at shaded.
+      scanRay(heightAt, x, y, dx, dy, z0, cellSize, maxRadiusCells, tanAlt, scan);
+      out[y * width + x] =
+        scan.maxTan > tanAlt ? SHADOW_SHADED : scan.incomplete ? SHADOW_UNKNOWN : SHADOW_LIT;
     }
   }
   return out;

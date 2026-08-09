@@ -1,0 +1,390 @@
+/**
+ * Styles for `components/properties/**` (BACKLOG R1 — property boundary
+ * drawing, and the list/detail screens that make it reachable).
+ *
+ * Scoped to this feature's own stylesheet rather than the shared
+ * `apps/web/src/index.css`, following the same reasoning `components/filters
+ * /filters.css` states for itself: this task's territory is
+ * `components/properties/**` only, and `index.css` is shared chrome-layout
+ * ground other in-flight agents may be touching. Every rule below follows
+ * the same law that file states — **no literal colours, sizes or radii**,
+ * every value reads a `--color-*`/`--space-*`/`--radius-*`/`--text-*` custom
+ * property from `@hunt-maps/design/tokens.css`. Classes are prefixed
+ * `property-`/`boundary-editor__` so nothing here can shadow a future
+ * `packages/design` primitive or another feature's own scoped sheet.
+ *
+ * `html, body, #root` are `overflow: hidden` globally
+ * (`packages/design/src/styles.css`) — "the page itself never scrolls", by
+ * design, because the map handles its own panning. Every one of these
+ * screens is *not* the map, so each one owns its own scroll container
+ * rather than silently relying on page scroll that does not exist.
+ */
+
+/* ---- shared screen chassis ------------------------------------------------ */
+
+.property-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-ground);
+}
+
+.property-screen__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) var(--space-3)
+    max(var(--space-4), env(safe-area-inset-left));
+  border-bottom: 1px solid var(--color-line);
+}
+
+.property-screen__back {
+  display: inline-flex;
+  align-items: center;
+  /* A real 44px hit area on the back link, the same technique
+     `.auth-card__switch a` uses — its own comment explains why min-width
+     matters as much as min-height for a short word like "Back". */
+  min-height: var(--space-touch);
+  color: var(--color-text-dim);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.property-screen__back:hover {
+  color: var(--color-accent);
+}
+
+.property-screen__title {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+/* The list/detail screens scroll their own body; the map/draw screens do not
+   (the map fills the remaining space itself — see `.property-screen--map`
+   below), so this is opt-in per screen rather than on the shared chassis. */
+.property-screen__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-6), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+.property-screen--map .property-screen__head {
+  border-bottom: none;
+}
+
+/* ---- properties list ------------------------------------------------------ */
+
+.property-empty {
+  max-width: 40em;
+  padding: var(--space-6) 0;
+}
+
+.property-empty h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  color: var(--color-text);
+}
+
+.property-empty .rl-btn {
+  margin-top: var(--space-4);
+}
+
+.property-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.property-card {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.property-card__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  min-height: var(--space-touch);
+  color: inherit;
+  text-decoration: none;
+}
+
+.property-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.property-card__name {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.property-card__meta {
+  margin: 0;
+}
+
+.property-card__chips {
+  margin-top: var(--space-1);
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ---- property detail ------------------------------------------------------ */
+
+.property-detail__hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.property-detail__facts {
+  flex: 1 1 auto;
+}
+
+.property-detail__description {
+  color: var(--color-text-dim);
+  max-width: 60em;
+}
+
+.property-detail__rut-phase {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.property-detail__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.property-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.property-members__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+/* ---- boundary shape preview (list/detail — SVG, no MapLibre instance) ---- */
+
+.property-preview {
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+}
+
+.property-preview--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-line);
+  color: var(--color-text-faint);
+  font-size: var(--text-lg);
+}
+
+/* ---- the boundary drawing surface ---------------------------------------- */
+
+.boundary-editor {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.boundary-editor__map-wrap {
+  position: relative;
+  flex: 1 1 240px;
+  min-height: 180px;
+}
+
+.boundary-editor__map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Every vertex button is positioned here; the wrapper stays click-through so
+   panning the map between points still works, the same technique
+   `.map-chrome` uses in `apps/web/src/index.css` for the same reason. */
+.boundary-editor__vertices {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.boundary-editor__rail {
+  position: absolute;
+  top: max(var(--space-3), env(safe-area-inset-top));
+  right: max(var(--space-3), env(safe-area-inset-right));
+}
+
+/*
+ * The 44×44 CSS px hit target is the button box itself, not just its visible
+ * dot — see `BoundaryEditor.tsx`'s own doc comment for why a canvas-painted
+ * vertex could never satisfy this the same way. `transform: translate(-50%,
+ * -50%)` centres the box on the projected point set via `left`/`top` in
+ * React, so the *visual* dot sits exactly on the vertex while the much
+ * larger hit box is centred the same way.
+ */
+.boundary-vertex {
+  position: absolute;
+  width: var(--space-touch);
+  height: var(--space-touch);
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: grab;
+  /* Stops the browser's own touch-scroll/pinch gesture from fighting a
+     pointer drag on a vertex — the same reasoning `RegionPicker`'s slider
+     rows and `TerrainReadout`'s grip both need, applied to a drag target
+     instead of a slider. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.boundary-vertex:active {
+  cursor: grabbing;
+}
+
+.boundary-vertex::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-ground);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+
+.boundary-vertex--first::before {
+  /* The start point reads distinctly (hue is never the only signal —
+     paired with the smaller/larger convention below and, on hover/focus,
+     the shared accent ring) so a hunter can tell which corner drawing
+     began from without relying on colour alone. */
+  width: 18px;
+  height: 18px;
+  background: var(--color-ground);
+  border: 2px solid var(--color-accent);
+}
+
+.boundary-vertex:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.boundary-vertex:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.boundary-editor__toolbar {
+  flex: 0 0 auto;
+  /* A defensive ceiling, not a tuned number: once the "name it and save"
+     form (`footer`) grows the toolbar, this keeps some of the map visible
+     above it rather than letting stacked callouts squeeze the drawing
+     surface to nothing on a short phone — the same "what does this panel
+     occlude" question `TerrainReadout.tsx`'s clearance arithmetic answers
+     for the mobile sheet, applied here to a panel that grows in place
+     instead of sliding over something else. */
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+  border-top: 2px solid var(--plate-border);
+}
+
+.boundary-editor__readout {
+  margin-bottom: var(--space-3);
+}
+
+.boundary-editor__area {
+  display: block;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.boundary-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.boundary-editor__save-form {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--plate-divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.boundary-editor__description {
+  font-family: var(--font-sans);
+  resize: vertical;
+  min-height: calc(var(--space-touch) * 1.4);
+}
+
+.boundary-editor__ack {
+  /*
+   * This `<label>` — not the ~18px checkbox glyph it wraps — is the box a
+   * browser actually honours a tap against, exactly `.rl-toggle__main`'s own
+   * reasoning (`packages/design/src/styles.css`) applied here rather than
+   * reused directly: that class's sibling rules assume `ToggleRow`'s layer-
+   * list structure, which this one-off acknowledgement checkbox is not.
+   */
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--space-touch);
+  cursor: pointer;
+  color: var(--color-text-dim);
+  font-size: var(--text-sm);
+}
+
+.boundary-editor__ack input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+  margin: 0;
+}

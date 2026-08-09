@@ -52,16 +52,16 @@ export interface TokenGroup {
  */
 export const color = {
   /** Blue hour. The base the map floats on. */
-  'ground': '#0a0f14',
+  ground: '#0a0f14',
   /** Floating chrome: rails, sheets, bars. */
-  'surface': '#121a22',
+  surface: '#121a22',
   /** Raised within a surface: active rows, inputs. */
-  'raised': '#1b242e',
+  raised: '#1b242e',
   /** Scrim behind an open sheet. */
-  'scrim': 'rgb(6 10 14 / 0.62)',
-  'line': '#26323d',
+  scrim: 'rgb(6 10 14 / 0.62)',
+  line: '#26323d',
   'line-strong': '#374757',
-  'text': '#e8edf2',
+  text: '#e8edf2',
   /*
    * `text-dim` / `text-faint` were tuned against `color.ground`, a flat swatch
    * — that is what the token test still checks, and it is the wrong surface.
@@ -78,16 +78,29 @@ export const color = {
   'text-dim': '#b2bfcb',
   'text-faint': '#94a3b0',
   /** Survey brass. The single accent. */
-  'accent': '#c9a253',
+  accent: '#c9a253',
   'accent-dim': '#6f5525',
   'accent-bright': '#e3bd76',
   /** Ink for text sitting on the accent. */
   'accent-ink': '#120d03',
-  'ok': '#4fc3a1',
-  'warn': '#e0b64a',
+  ok: '#4fc3a1',
+  warn: '#e0b64a',
   /** Hunter safety orange. Reserved for critical states only. */
-  'blaze': '#ff5a1f',
-  'info': '#5b9dd9',
+  blaze: '#ff5a1f',
+  info: '#5b9dd9',
+  /**
+   * The fourth evidence-grade tone (`Confidence`'s `assumed` grade — see
+   * `docs/EVIDENCE.md`'s 🔴). Deliberately its own colour rather than reusing
+   * `blaze`: `blaze` is hunter-safety orange, reserved for real alerts
+   * (`Callout tone="danger"` — a device that will not persist storage, a
+   * download that failed), and an "Assumed" evidence chip is not that. The
+   * two can render on the same screen — the bedding layer row and the
+   * offline-storage warning both live in `LayersSheet` — and sharing a colour
+   * between "this parameter is a defensible guess" and "you are about to
+   * lose your map" is the exact coincidence-becomes-confusion case
+   * `docs/design/PLAN-direction-a.md` §a calls out.
+   */
+  critical: '#d67862',
 } as const satisfies TokenGroup;
 
 /**
@@ -109,8 +122,8 @@ export const mapColor = {
   'feature-ridge': '#e08d47',
   'feature-peak': '#dd5a4e',
   'feature-bench': '#c9a253',
-  'corridor': '#4fc3a1',
-  'pinch': '#ff5a1f',
+  corridor: '#4fc3a1',
+  pinch: '#ff5a1f',
 } as const satisfies TokenGroup;
 
 /**
@@ -132,11 +145,45 @@ export const glass = {
    * how much the map can bleed through is the other half of the fix and lets
    * the text values stay reasonable. Still visibly glass — not opaque.
    */
-  'bg': 'rgb(18 26 34 / 0.92)',
+  bg: 'rgb(18 26 34 / 0.92)',
   'bg-strong': 'rgb(10 15 20 / 0.97)',
-  'blur': 'blur(18px) saturate(140%)',
-  'border': 'rgb(255 255 255 / 0.09)',
-  'highlight': 'inset 0 1px 0 rgb(255 255 255 / 0.06)',
+  blur: 'blur(18px) saturate(140%)',
+  border: 'rgb(255 255 255 / 0.09)',
+  highlight: 'inset 0 1px 0 rgb(255 255 255 / 0.06)',
+} as const satisfies TokenGroup;
+
+/**
+ * Plate. A second floating-chrome material, additive to `glass` rather than a
+ * replacement for it (`docs/design/PLAN-direction-a.md` §a).
+ *
+ * `glass` is used where the surface *is* the map's own edge — imagery bleeding
+ * through a blurred pane so the chrome never fully commits to hiding the
+ * ground beneath it. `plate` is for chrome that should instead read as a
+ * physical instrument bezel bolted to the glass: the conditions cluster,
+ * where a hunter is reading a bearing off a dial, not glancing through a
+ * pane. Flat and unblurred is the whole point — Direction A's own file
+ * states the reasoning as "a hard edge on an unblurred plate reads as an
+ * instrument bezel; blur reads as software chrome" — so this group carries
+ * no `blur` key at all, unlike `glass`.
+ *
+ * Deliberately its own token group rather than a `glass` variant: `Popover`
+ * also composes the shared glass styling and is out of scope for this pass,
+ * so redefining what `glass` means would change the wind/time editor's
+ * material as a side effect nobody asked for. Adding a name is reviewable;
+ * silently repointing a shared one is not.
+ */
+export const plate = {
+  /**
+   * Flat, near-opaque. Close in value to `glass.bg` on purpose — both sit on
+   * the same dark chassis — but composited with no blur behind it, so unlike
+   * glass its effective colour does not drift with whatever patch of map
+   * happens to sit underneath.
+   */
+  bg: 'rgb(15 19 20 / 0.94)',
+  /** The plate's own edge — a hairline with more contrast than `divider`. */
+  border: '#3a4a4d',
+  /** Divider between cells on the same plate — present, but quieter than `border`. */
+  divider: '#29373a',
 } as const satisfies TokenGroup;
 
 /**
@@ -157,15 +204,15 @@ export const space = {
   '8': '32px',
   '10': '40px',
   '12': '48px',
-  'touch': '44px',
+  touch: '44px',
 } as const satisfies TokenGroup;
 
 export const radius = {
-  'sm': '4px',
-  'md': '8px',
-  'lg': '12px',
-  'xl': '18px',
-  'pill': '999px',
+  sm: '4px',
+  md: '8px',
+  lg: '12px',
+  xl: '18px',
+  pill: '999px',
 } as const satisfies TokenGroup;
 
 /**
@@ -183,9 +230,9 @@ export const radius = {
  * the production CSP restricts `font-src` to `'self'` anyway.
  */
 export const font = {
-  'sans': "'Barlow', ui-sans-serif, system-ui, -apple-system, sans-serif",
-  'condensed': "'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif",
-  'mono': "'IBM Plex Mono', ui-monospace, 'SF Mono', monospace",
+  sans: "'Barlow', ui-sans-serif, system-ui, -apple-system, sans-serif",
+  condensed: "'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif",
+  mono: "'IBM Plex Mono', ui-monospace, 'SF Mono', monospace",
 } as const satisfies TokenGroup;
 
 /**
@@ -195,40 +242,40 @@ export const font = {
  * clipped to a pack strap, which is where a lot of this gets read.
  */
 export const fontSize = {
-  'xs': '11px',
-  'sm': '12px',
-  'base': '14px',
-  'md': '15px',
-  'lg': '18px',
-  'xl': '24px',
-  'display': '32px',
+  xs: '11px',
+  sm: '12px',
+  base: '14px',
+  md: '15px',
+  lg: '18px',
+  xl: '24px',
+  display: '32px',
 } as const satisfies TokenGroup;
 
 export const fontWeight = {
-  'normal': '400',
-  'medium': '500',
-  'semibold': '600',
-  'bold': '700',
+  normal: '400',
+  medium: '500',
+  semibold: '600',
+  bold: '700',
 } as const satisfies TokenGroup;
 
 export const lineHeight = {
-  'tight': '1.2',
-  'normal': '1.45',
-  'loose': '1.6',
+  tight: '1.2',
+  normal: '1.45',
+  loose: '1.6',
 } as const satisfies TokenGroup;
 
 /** Letter-spacing. Uppercase labels need air; display sizes need the opposite. */
 export const tracking = {
-  'display': '-0.02em',
-  'normal': '0',
-  'label': '0.09em',
-  'eyebrow': '0.14em',
+  display: '-0.02em',
+  normal: '0',
+  label: '0.09em',
+  eyebrow: '0.14em',
 } as const satisfies TokenGroup;
 
 export const shadow = {
-  'rail': '0 4px 20px rgb(0 0 0 / 0.45)',
-  'sheet': '0 16px 48px rgb(0 0 0 / 0.6)',
-  'raised': '0 2px 8px rgb(0 0 0 / 0.35)',
+  rail: '0 4px 20px rgb(0 0 0 / 0.45)',
+  sheet: '0 16px 48px rgb(0 0 0 / 0.6)',
+  raised: '0 2px 8px rgb(0 0 0 / 0.35)',
 } as const satisfies TokenGroup;
 
 export const layout = {
@@ -236,14 +283,56 @@ export const layout = {
   'sheet-max-height': '62vh',
   'rail-gap': '12px',
   'breakpoint-compact': '860px',
+  /**
+   * `ConditionsBar`'s own rendered height on a phone — two stacked lines
+   * (label + value) inside `.rl-conditions__cell`'s padding, plus the shared
+   * `.rl-glass` border. Measured directly with `getBoundingClientRect` at
+   * 390px (~51-52px, both with and without a wind set — the row is always
+   * two lines) and padded up to a round number so a font-metrics difference
+   * across platforms cannot re-open the gap it exists to guarantee: the
+   * mobile Layers/Offline sheet's clearance in `apps/web/src/index.css`,
+   * which must stop above this row rather than painting over it (BACKLOG
+   * R42) — the wind control has to stay reachable while the sheet is open,
+   * or the app's flagship "sweep the wind, watch bedding repaint" move is
+   * impossible on the device this product is used on.
+   */
+  'conditions-bar-height': '56px',
+  /**
+   * `CommandBar`'s own rendered height (BACKLOG R44) — one row, icon +
+   * label, `.rl-command__cell`'s `--space-3` vertical padding plus
+   * `.rl-glass`'s 1px border top and bottom. Computed from the same tokens
+   * the bar is built from (icon 20px vs. an 11px/1.45 label line both lose
+   * to `--space-touch`'s 44px floor, +2px border = 46px) and padded up a
+   * couple of pixels the same way `conditions-bar-height` is, so a
+   * font-metrics difference across platforms cannot reopen the gap this
+   * exists to guarantee.
+   *
+   * This is the number that replaces the old `--space-touch * N` arithmetic
+   * in `apps/web/src/index.css` — the bar's own clearance is now one fixed
+   * value regardless of how many cells it holds, which is the entire point
+   * of building it as a row instead of a stack.
+   */
+  'command-bar-height': '48px',
+  /**
+   * The tab strip switching between panels in the one drawer slot (Layers /
+   * Stands / Sightings — `docs/AUDIT-PRODUCT.md` rec 20). Same construction
+   * as `command-bar-height`: `.rl-tabbar__tab`'s `--space-touch` floor plus
+   * the bar's own 1px bottom hairline, so it is one fixed figure the drawer's
+   * clearance math can add regardless of how the tab labels themselves are
+   * styled. Kept distinct from `command-bar-height` rather than reused,
+   * because the two bars are visually different weights (icon+label vs.
+   * label-only) and a future restyle of one must not silently resize the
+   * other's reserved clearance.
+   */
+  'tabbar-height': '45px',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */
 export const motion = {
-  'fast': '120ms',
-  'base': '220ms',
-  'sheet': '280ms',
-  'ease': 'cubic-bezier(0.32, 0.72, 0, 1)',
+  fast: '120ms',
+  base: '220ms',
+  sheet: '280ms',
+  ease: 'cubic-bezier(0.32, 0.72, 0, 1)',
 } as const satisfies TokenGroup;
 
 /** Every token group, keyed by the CSS custom-property prefix it generates. */
@@ -251,6 +340,7 @@ export const TOKEN_GROUPS: Record<string, TokenGroup> = {
   color,
   map: mapColor,
   glass,
+  plate,
   space,
   radius,
   font,

@@ -85,6 +85,57 @@ export class GeometryService {
   }
 
   /**
+   * Rasterise a polygonal boundary into a cell mask over an already-built
+   * raster grid — the fix for `R70`/audit `F5`: `boundsOf` returns an
+   * envelope, and an availability distribution computed over the envelope of
+   * an irregular parcel (an L, a riverfront strip, anything split by a road)
+   * counts ground the hunter does not own.
+   *
+   * Deliberately **not** a PostGIS round trip. This runs once per property
+   * over a whole-property mosaic that can be a million-plus cells; a
+   * per-cell `ST_Contains` would be a per-cell network round trip on top of
+   * an already-expensive raster pass. A boundary has at most a few hundred
+   * vertices, so a classic even-odd scanline fill — built once here, in
+   * pixel space, from vertices already resolved to grid coordinates by the
+   * caller — is O(cells + vertices) and pays for itself immediately. Rings
+   * after the first (holes) fall out of the even-odd rule for free: crossing
+   * a hole's boundary flips inside/outside exactly like crossing the
+   * exterior ring, so no special-casing is needed to subtract them.
+   *
+   * `Property.boundary` is stored `geometry(MultiPolygon, 4326)` (`ST_Multi`
+   * on every write — see `multiPolygonFromGeoJson`), so `ST_AsGeoJSON`
+   * always hands `readGeoJson` back a `MultiPolygon`, not the `Polygon` the
+   * `GeoGeometry` union claims. That union predates the `MultiPolygon`
+   * columns and is a pre-existing gap in `packages/shared`, out of scope
+   * here — this method reads `.type` off the raw value rather than trusting
+   * the narrowed TS type, so it is correct for what the database actually
+   * returns.
+   */
+  rasterizeMask(
+    geometry: GeoGeometry,
+    toPixel: (lng: number, lat: number) => { x: number; y: number },
+    width: number,
+    height: number,
+  ): Uint8Array {
+    const mask = new Uint8Array(width * height);
+    const raw = geometry as unknown as { type: string; coordinates: unknown };
+
+    let polygons: Array<Array<Array<[number, number]>>>;
+    if (raw.type === 'MultiPolygon') {
+      polygons = raw.coordinates as Array<Array<Array<[number, number]>>>;
+    } else if (raw.type === 'Polygon') {
+      polygons = [raw.coordinates as Array<Array<[number, number]>>];
+    } else {
+      throw new Error(`rasterizeMask needs a Polygon or MultiPolygon boundary, got "${raw.type}".`);
+    }
+
+    for (const rings of polygons) {
+      fillPolygonEvenOdd(rings, toPixel, mask, width, height);
+    }
+    return mask;
+  }
+
+  /**
    * Reject geometry that is outside any plausible hunting property.
    *
    * A finger-slip on a mobile map can produce a "property" spanning a
@@ -119,11 +170,7 @@ export class GeometryService {
   }
 
   /** Read a geometry column back as GeoJSON. */
-  async readGeoJson(
-    table: string,
-    column: string,
-    id: string,
-  ): Promise<GeoGeometry | null> {
+  async readGeoJson(table: string, column: string, id: string): Promise<GeoGeometry | null> {
     // Identifiers cannot be parameters, so they are whitelisted rather than
     // interpolated from caller input.
     if (!ALLOWED_GEOMETRY_COLUMNS.has(`${table}.${column}`)) {
@@ -162,12 +209,7 @@ export class GeometryService {
    * default 25° half-angle is conservative; light and variable wind justifies
    * widening it.
    */
-  scentCone(
-    origin: GeoPoint,
-    bearingDeg: number,
-    lengthM: number,
-    halfAngleDeg = 25,
-  ): GeoPolygon {
+  scentCone(origin: GeoPoint, bearingDeg: number, lengthM: number, halfAngleDeg = 25): GeoPolygon {
     const [lng, lat] = origin.coordinates;
     const ring: Array<[number, number]> = [[lng, lat]];
     const steps = 12;
@@ -196,13 +238,66 @@ const ALLOWED_GEOMETRY_COLUMNS = new Set([
   'OfflineRegion.bounds',
 ]);
 
+/**
+ * Even-odd scanline fill of one polygon (exterior ring + optional hole
+ * rings) into `mask`, in pixel space.
+ *
+ * Cells are tested by their centre (`x + 0.5`, `y + 0.5`) against the
+ * intersections of each scanline with every ring edge, which is the
+ * standard polygon-rasterisation approach — see `rasterizeMask` for why this
+ * runs once in pure JS rather than as SQL.
+ */
+function fillPolygonEvenOdd(
+  rings: Array<Array<[number, number]>>,
+  toPixel: (lng: number, lat: number) => { x: number; y: number },
+  mask: Uint8Array,
+  width: number,
+  height: number,
+): void {
+  const edges: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+  for (const ring of rings) {
+    const px = ring.map(([lng, lat]) => toPixel(lng, lat));
+    for (let i = 0; i < px.length; i++) {
+      const a = px[i];
+      const b = px[(i + 1) % px.length];
+      if (a.y === b.y) continue; // horizontal edges never cross a scanline
+      edges.push({ x0: a.x, y0: a.y, x1: b.x, y1: b.y });
+    }
+  }
+  if (edges.length === 0) return;
+
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const e of edges) {
+    minY = Math.min(minY, e.y0, e.y1);
+    maxY = Math.max(maxY, e.y0, e.y1);
+  }
+  const yFrom = Math.max(0, Math.floor(minY));
+  const yTo = Math.min(height - 1, Math.ceil(maxY));
+
+  const xs: number[] = [];
+  for (let y = yFrom; y <= yTo; y++) {
+    const scanY = y + 0.5;
+    xs.length = 0;
+    // Half-open per edge ([y0, y1) in traversal direction) so a vertex
+    // shared by two edges is counted exactly once, not zero or twice.
+    for (const e of edges) {
+      const crosses = (e.y0 <= scanY && e.y1 > scanY) || (e.y1 <= scanY && e.y0 > scanY);
+      if (!crosses) continue;
+      const t = (scanY - e.y0) / (e.y1 - e.y0);
+      xs.push(e.x0 + t * (e.x1 - e.x0));
+    }
+    xs.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < xs.length; i += 2) {
+      const xFrom = Math.max(0, Math.ceil(xs[i] - 0.5));
+      const xTo = Math.min(width - 1, Math.floor(xs[i + 1] - 0.5));
+      for (let x = xFrom; x <= xTo; x++) mask[y * width + x] = 1;
+    }
+  }
+}
+
 /** Move a lng/lat by `distanceM` along `bearingDeg`, on a spherical earth. */
-function offset(
-  lng: number,
-  lat: number,
-  bearingDeg: number,
-  distanceM: number,
-): [number, number] {
+function offset(lng: number, lat: number, bearingDeg: number, distanceM: number): [number, number] {
   const R = 6378137;
   const br = (bearingDeg * Math.PI) / 180;
   const lat1 = (lat * Math.PI) / 180;

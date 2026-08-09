@@ -17,6 +17,27 @@ export type DemEncoding = 'terrarium' | 'terrain-rgb';
 /** Sentinel used for "no data" cells throughout the engine. */
 export const NODATA = -32768;
 
+/**
+ * Does this sample carry a real elevation?
+ *
+ * **Use this, never a bare `Number.isFinite`.** `NODATA` is `-32768`, which *is*
+ * finite, so `Number.isFinite(z)` happily accepts a cell that was never written
+ * and treats it as terrain 33 km below the viewer — the most "open" value the
+ * encoding can represent. Three horizon operators guarded their ray-march that
+ * way and therefore reported full sky, zero shelter and full sun wherever their
+ * inputs ran out, silently (BACKLOG `R30`). Nothing crashed; the map was just
+ * confidently wrong, which is the failure class this product ranks worst.
+ *
+ * The `> NODATA + 1` form (rather than `!== NODATA`) is deliberate and matches
+ * the rest of `grid.ts`: elevations round-trip through Float32 and through
+ * bilinear resampling, so the sentinel arrives as `-32768.000004` about as often
+ * as it arrives exact. The margin also rejects anything below −32767 m, which no
+ * point on Earth or in its oceans reaches.
+ */
+export function isElevation(z: number): boolean {
+  return Number.isFinite(z) && z > NODATA + 1;
+}
+
 /** Decode a single pixel to metres. */
 export function decodePixel(r: number, g: number, b: number, encoding: DemEncoding): number {
   if (encoding === 'terrarium') {

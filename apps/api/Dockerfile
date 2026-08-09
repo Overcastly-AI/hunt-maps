@@ -77,7 +77,22 @@ EXPOSE 3001
 # Migrate on boot so a fresh volume comes up with PostGIS enabled and the
 # schema in place, rather than failing on the first spatial query.
 #
-# The Helm chart overrides this: on Kubernetes the migration runs as a
-# pre-upgrade hook Job instead, because with more than one replica every pod
+# The migration is RETRIED, and that is load-bearing rather than defensive.
+# The postgis image restarts its server partway through first-run init — initdb
+# brings up a bootstrap instance, the extension scripts run against it, then the
+# real server starts. `pg_isready` answers yes during that window, so "wait for
+# the database, then migrate" is not enough: the connection is refused again a
+# moment later, `migrate deploy` exits non-zero, and `&&` kills the container.
+# That is a one-shot failure on a cold volume — exactly `docker compose up` on a
+# new machine, and it is what turned CI red rather than any application change.
+#
+# Same shape as the Helm chart's migrate initContainer, deliberately: `migrate
+# deploy` is idempotent, so retrying it is both the wait and the work, and no
+# separate readiness probe is needed (pg_isready is not in this image — it ships
+# Prisma, not the Postgres client tools). /bin/sh here is dash, so this stays
+# POSIX: no bashisms.
+#
+# The Helm chart still overrides this entirely: on Kubernetes the migration runs
+# in an initContainer instead, because with more than one replica every pod
 # would otherwise race to apply the same migration on every rollout.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/apps/api/src/main.js"]
+CMD ["sh", "-c", "attempt=1; until pnpm exec prisma migrate deploy; do if [ \"$attempt\" -ge 30 ]; then echo \"database unreachable or migration failing after $attempt attempts; giving up\"; exit 1; fi; echo \"migrate attempt $attempt failed; database may still be starting - retrying in 2s\"; attempt=$((attempt + 1)); sleep 2; done; exec node dist/apps/api/src/main.js"]

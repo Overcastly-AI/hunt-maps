@@ -4,6 +4,7 @@ import {
   assembleGrid,
   decodeRgbaToHeights,
   HeightGrid,
+  InsufficientHaloError,
   lngLatToTile,
   pixelSizeMeters,
   type BBox,
@@ -200,6 +201,27 @@ export class DemService {
    * tile-by-tile would break least-cost routing at every tile seam — a corridor
    * cannot be solved per tile, because the optimal route is a global property of
    * the whole surface.
+   *
+   * ## The halo is a ring of real tiles, not a promise (`R41`)
+   *
+   * `HeightGrid.empty` allocates `halo` cells of padding on every side, but
+   * until this fetch loop nothing ever wrote into that padding — the mosaic
+   * covers exactly the requested tile range, so the halo sat at `NODATA`
+   * forever. `fillVoids` only diffuses real data ~8 cells from an edge, so
+   * anything deeper stayed `NODATA`: finite, so it used to sail past every
+   * `!Number.isFinite` guard and read as terrain 33 km below the viewer
+   * (`R30` before its fix), and now correctly, but silently, reads as `NaN`
+   * in `terrainShelter`/`skyViewFactor`/`beddingLikelihood` in a band as deep
+   * as the halo — a greyed rim on every server-rendered mosaic tile.
+   *
+   * The fix is the same one `gridForTile`'s 3x3 fetch already uses: fetch a
+   * one-tile-wide ring of neighbour tiles around the mosaic and blit them in
+   * too. `HeightGrid.set` silently drops writes outside the interior+halo
+   * bounds, so blitting a whole ring tile at its natural offset is enough —
+   * only the sliver actually inside the halo lands. A one-tile ring can
+   * supply at most `ts` cells of real halo, the same ceiling `assembleGrid`
+   * enforces for a single tile, so a halo request deeper than that is
+   * refused up front rather than silently degrading — see the guard below.
    */
   async gridForBBox(
     bbox: BBox,
@@ -225,6 +247,26 @@ export class DemService {
       );
     }
 
+    // A one-tile-deep neighbour ring (fetched below) cannot supply a halo
+    // deeper than one tile — identical ceiling to `assembleGrid`'s guard for
+    // `gridForTile`'s 3x3 fetch. Refuse rather than allocate a grid whose
+    // outer band can never be filled: that silent allocation is exactly what
+    // `R41` found. `analyze()` would eventually throw the same error once it
+    // compared `grid.halo` to `requiredHalo()`, but only *after* every tile in
+    // the mosaic had already been fetched — failing here is cheaper and no
+    // less honest.
+    if (halo > ts) {
+      throw new InsufficientHaloError({
+        required: halo,
+        available: ts,
+        detail:
+          `A one-tile neighbour ring around this mosaic cannot supply a halo ` +
+          `deeper than one tile (${ts}px) at zoom ${zoom}. Reduce the operator ` +
+          `radius, or run at a lower zoom where the same ground distance is ` +
+          `fewer cells.`,
+      });
+    }
+
     const width = tilesX * ts;
     const height = tilesY * ts;
     const centerLat = (bbox.north + bbox.south) / 2;
@@ -238,27 +280,46 @@ export class DemService {
       centerLng,
     );
 
+    // `HeightGrid.set` clips anything outside [-halo, width/height+halo), so a
+    // tile blitted at its natural mosaic offset is safe to call unconditionally
+    // whether it lands in the interior or the halo.
+    const blitTile = (tx: number, ty: number): Promise<void> =>
+      this.fetchTile({ z: zoom, x: tx, y: ty }, source)
+        .then((buf) => {
+          const heights = this.decode(buf, source);
+          const ox = (tx - x0) * ts;
+          const oy = (ty - y0) * ts;
+          for (let y = 0; y < ts; y++) {
+            for (let x = 0; x < ts; x++) {
+              grid.set(ox + x, oy + y, heights[y * ts + x]);
+            }
+          }
+        })
+        // A hole in coverage — interior or halo — is filled by `fillVoids`
+        // below rather than failing the whole mosaic.
+        .catch(() => undefined);
+
     const jobs: Array<Promise<void>> = [];
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
-        const ox = (tx - x0) * ts;
-        const oy = (ty - y0) * ts;
-        jobs.push(
-          this.fetchTile({ z: zoom, x: tx, y: ty }, source)
-            .then((buf) => {
-              const heights = this.decode(buf, source);
-              for (let y = 0; y < ts; y++) {
-                for (let x = 0; x < ts; x++) {
-                  grid.set(ox + x, oy + y, heights[y * ts + x]);
-                }
-              }
-            })
-            // A hole in coverage is filled by `fillVoids` below rather than
-            // failing the whole mosaic.
-            .catch(() => undefined),
-        );
+        jobs.push(blitTile(tx, ty));
       }
     }
+
+    // The halo ring: every tile bordering the mosaic, one tile deep. Skipped
+    // entirely when no halo was requested (`evaluateArea`'s slope/aspect-only
+    // callers, for instance) so a caller that never needed the edge does not
+    // pay for it.
+    if (halo > 0) {
+      for (let ty = y0 - 1; ty <= y1 + 1; ty++) {
+        for (let tx = x0 - 1; tx <= x1 + 1; tx++) {
+          const isInterior = tx >= x0 && tx <= x1 && ty >= y0 && ty <= y1;
+          if (isInterior) continue;
+          jobs.push(blitTile(tx, ty));
+        }
+      }
+    }
+
     await Promise.all(jobs);
     grid.fillVoids();
 

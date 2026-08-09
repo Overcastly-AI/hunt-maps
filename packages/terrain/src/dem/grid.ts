@@ -16,8 +16,16 @@
  * required radius rather than assuming 1.
  */
 
-import { NODATA } from './encoding.js';
+import { isElevation, NODATA } from './encoding.js';
+import { InsufficientHaloError } from './halo.js';
 import { pixelSizeMeters, type TileCoord, tileCenter } from './tilemath.js';
+
+/**
+ * Module-local alias — see the same note in `analysis/horizon.ts`. `fillVoids`
+ * evaluates this ~21 million times per tile (8 passes x the padded buffer x a
+ * 3x3 window), and under CommonJS a cross-module call there is not inlined.
+ */
+const isElev = isElevation;
 
 export interface HeightGridInit {
   /** Interior width in cells. */
@@ -97,7 +105,7 @@ export class HeightGrid {
   }
 
   hasData(x: number, y: number): boolean {
-    return this.get(x, y) > NODATA + 1;
+    return isElevation(this.get(x, y));
   }
 
   /** Bilinear sample at fractional interior coordinates. */
@@ -131,7 +139,7 @@ export class HeightGrid {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const v = this.get(x, y);
-        if (v <= NODATA + 1) continue;
+        if (!isElev(v)) continue;
         if (v < min) min = v;
         if (v > max) max = v;
       }
@@ -152,7 +160,7 @@ export class HeightGrid {
       let filled = 0;
       const snapshot = Float32Array.from(this.data);
       for (let i = 0; i < total; i++) {
-        if (snapshot[i] > NODATA + 1) continue;
+        if (isElev(snapshot[i])) continue;
         const px = i % this.stride;
         const py = Math.floor(i / this.stride);
         let sum = 0;
@@ -161,9 +169,10 @@ export class HeightGrid {
           for (let dx = -1; dx <= 1; dx++) {
             const nx = px + dx;
             const ny = py + dy;
-            if (nx < 0 || ny < 0 || nx >= this.stride || ny >= this.height + 2 * this.halo) continue;
+            if (nx < 0 || ny < 0 || nx >= this.stride || ny >= this.height + 2 * this.halo)
+              continue;
             const v = snapshot[ny * this.stride + nx];
-            if (v > NODATA + 1) {
+            if (isElev(v)) {
               sum += v;
               count++;
             }
@@ -188,7 +197,17 @@ function clamp(v: number, lo: number, hi: number): number {
  * Stitch a centre tile plus its 8 neighbours into one haloed grid.
  *
  * `neighbours` is keyed `"dx,dy"` with dx/dy in {-1,0,1}; missing neighbours are
- * simply left as no-data and then edge-replicated by `HeightGrid.get`.
+ * left as `NODATA`. Note what that does and does not do: `HeightGrid.get` only
+ * edge-replicates *outside* the padded buffer, so a missing neighbour leaves a
+ * real block of no-data cells **inside** the halo. Neighbourhood operators must
+ * detect that with `isElevation` and say they do not know — reading the sentinel
+ * as an elevation is `R30`, where the shading layers reported open ground
+ * wherever a neighbour tile had 404'd or the user was offline past the edge of a
+ * downloaded region.
+ *
+ * Throws `InsufficientHaloError` when `halo` exceeds what a 3x3 fetch can
+ * physically supply, rather than returning a grid whose outer halo is
+ * guaranteed-empty and letting the operators find out.
  */
 export function assembleGrid(
   tile: TileCoord,
@@ -197,6 +216,16 @@ export function assembleGrid(
   tileSize: number,
   halo: number,
 ): HeightGrid {
+  if (halo > tileSize) {
+    throw new InsufficientHaloError({
+      required: halo,
+      available: tileSize,
+      detail:
+        `A 3x3 fetch of ${tileSize}px tiles cannot supply a halo deeper than one ` +
+        `tile. Fetch a wider neighbourhood, reduce the operator radius, or run at ` +
+        `a lower zoom where the same ground distance is fewer cells.`,
+    });
+  }
   const { lat, lng } = tileCenter(tile);
   const grid = HeightGrid.empty(
     tileSize,
@@ -219,13 +248,7 @@ export function assembleGrid(
 }
 
 /** Copy `src` (a tileSize² buffer) into `grid` at interior offset (ox, oy). */
-function blit(
-  grid: HeightGrid,
-  src: Float32Array,
-  tileSize: number,
-  ox: number,
-  oy: number,
-): void {
+function blit(grid: HeightGrid, src: Float32Array, tileSize: number, ox: number, oy: number): void {
   for (let y = 0; y < tileSize; y++) {
     const ty = oy + y;
     if (ty < -grid.halo || ty >= grid.height + grid.halo) continue;

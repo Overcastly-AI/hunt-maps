@@ -1,0 +1,359 @@
+/**
+ * Styles for the saved-filter visual editor (`BACKLOG R2`).
+ *
+ * Scoped to this feature's own stylesheet rather than the shared
+ * `apps/web/src/index.css` — this territory brief is `components/filters/**`
+ * only, and `index.css` is shared chrome-layout ground two other in-flight
+ * agents may be touching. Every rule below still follows the same law that
+ * file states for itself: **no literal colours, sizes or radii** — every
+ * value reads a `--color-*`/`--space-*`/`--radius-*`/`--text-*` custom
+ * property from `@hunt-maps/design/tokens.css`. The `rl-` prefix matches the
+ * app-wide convention (`packages/design/src/styles.css`, `index.css`); the
+ * `rl-filter-` sub-prefix keeps every class name unambiguously owned by this
+ * feature rather than shadowing a future `packages/design` primitive.
+ */
+
+/* ---- predicate group / row chrome --------------------------------------- */
+
+.rl-filter-group {
+  border-left: 2px solid var(--color-line);
+  padding-left: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.rl-filter-group__mode {
+  margin-bottom: var(--space-3);
+}
+
+.rl-filter-group__list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rl-filter-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rl-filter-row {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-raised);
+}
+
+/* Colour is never the only signal (`CLAUDE.md`) — the negated state also
+   gets a distinct left stripe and the checkbox/text state itself, on top of
+   the always-visible `Callout` beneath it. */
+.rl-filter-row--negated {
+  border-left: 3px solid var(--color-warn);
+}
+
+.rl-filter-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.rl-filter-row__negate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Both dimensions, not just height — a hit target narrow in one axis is
+     the exact defect class this task's brief calls out by measurement
+     (35×44px against the 44px floor). Padding rather than a bare min-width
+     keeps the checkbox+label pair from looking stretched when the word
+     "Not" alone would render narrower than 44px. */
+  min-height: var(--space-touch);
+  min-width: var(--space-touch);
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+  cursor: pointer;
+}
+
+.rl-filter-row__negate input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-warn);
+}
+
+/* ---- segmented mode/toggle control (ALL/ANY, bench yes/no) -------------- */
+
+.rl-filter-segmented {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.rl-filter-segmented .rl-btn {
+  flex: 1 1 0;
+}
+
+/* ---- one leaf predicate's own controls ----------------------------------- */
+
+.rl-filter-node {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rl-filter-node__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.rl-filter-node__row-label {
+  flex-shrink: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-dim);
+}
+
+.rl-filter-node__select {
+  flex: 1;
+}
+
+.rl-filter-node__summary {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.rl-filter-node__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-touch);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.rl-filter-node__checkbox-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.rl-filter-node__checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+/* ---- dual-range band slider ---------------------------------------------- */
+
+.rl-filter-band-field {
+  margin-bottom: var(--space-2);
+}
+
+.rl-filter-band {
+  position: relative;
+  /* Gloved-thumb hit height, matching `.rl-range`'s own 28px. */
+  height: 28px;
+  margin: var(--space-2) 0;
+}
+
+.rl-filter-band__track {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--color-line);
+  border-radius: var(--radius-sm);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.rl-filter-band__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--color-accent);
+}
+
+.rl-filter-band__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: none;
+}
+
+.rl-filter-band__input::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 28px;
+}
+
+.rl-filter-band__input::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  border: 2px solid var(--color-accent-ink);
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.rl-filter-band__input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-accent-bright);
+  outline-offset: 2px;
+}
+
+.rl-filter-band__input::-moz-range-track {
+  background: transparent;
+  height: 28px;
+}
+
+.rl-filter-band__input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  border: 2px solid var(--color-accent-ink);
+  cursor: pointer;
+}
+
+.rl-filter-band__input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-accent-bright);
+  outline-offset: 2px;
+}
+
+.rl-filter-band__exact {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.rl-filter-band__exact-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+}
+
+.rl-filter-band__exact-field input {
+  flex: 1;
+  min-height: var(--space-touch);
+}
+
+/* ---- filter metadata (name/description/colour/opacity) ------------------ */
+
+.rl-filter-meta {
+  margin-bottom: var(--space-4);
+}
+
+.rl-filter-meta__textarea {
+  min-height: calc(var(--space-touch) * 1.6);
+  resize: vertical;
+  font-family: var(--font-sans);
+}
+
+.rl-filter-meta__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.rl-filter-meta__swatch-btn {
+  width: var(--space-touch);
+  height: var(--space-touch);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-line);
+  cursor: pointer;
+}
+
+.rl-filter-meta__swatch-btn[aria-pressed='true'] {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.rl-filter-meta__hex {
+  width: 11ch;
+  min-height: var(--space-touch);
+}
+
+/* ---- live match share ----------------------------------------------------- */
+
+.rl-match-share {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rl-match-share__headline {
+  display: flex;
+}
+
+.rl-match-share__advice {
+  color: var(--color-warn);
+}
+
+/* ---- editor actions -------------------------------------------------------- */
+
+.rl-filter-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
+/* ---- filter library (preset picker) --------------------------------------- */
+
+.rl-filter-library__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rl-filter-library__item {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.rl-filter-library__item-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.rl-filter-library__item-name {
+  font-family: var(--font-condensed);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rl-filter-band__input,
+  .rl-filter-meta__swatch-btn {
+    transition: none;
+  }
+}

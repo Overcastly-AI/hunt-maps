@@ -313,22 +313,58 @@ export async function collectChromeTextNodes(
           }
           const rect = el.getBoundingClientRect();
           if (rect.width <= 0 || rect.height <= 0) continue;
-          if (
-            rect.bottom < 0 ||
-            rect.right < 0 ||
-            rect.top > window.innerHeight ||
-            rect.left > window.innerWidth
-          ) {
-            continue;
+
+          // Intersect with every clipping ancestor, then with the viewport —
+          // the same derivation `auditInteractiveElements` uses, and for the
+          // same reason.
+          //
+          // This helper used to check the viewport alone, and that produced
+          // *confidently wrong contrast failures*. A paragraph scrolled past
+          // the bottom of `.rl-sheet__body`'s own clip is not painted at all,
+          // but its `getBoundingClientRect()` still lands inside the window —
+          // so the sampler read the pixels at that location, which are the
+          // live map, and compared the panel's text colour against a hillshade.
+          // The tell was that the identical assertion passed with the DEM relay
+          // switched off (dark map, accidentally high contrast) and failed with
+          // it on: "One at a time — ramps do not stack" measured 3.45:1 against
+          // terrain it was nowhere near. It also fails the other way round — a
+          // genuinely low-contrast string below the fold was never assessed at
+          // all. Both directions are exactly what this suite exists to prevent.
+          let box = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+          let ancestor = el.parentElement;
+          while (ancestor && ancestor !== document.documentElement) {
+            const cs = window.getComputedStyle(ancestor);
+            const clipsX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
+            const clipsY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
+            if (clipsX || clipsY) {
+              const ar = ancestor.getBoundingClientRect();
+              box = {
+                left: clipsX ? Math.max(box.left, ar.left) : box.left,
+                right: clipsX ? Math.min(box.right, ar.right) : box.right,
+                top: clipsY ? Math.max(box.top, ar.top) : box.top,
+                bottom: clipsY ? Math.min(box.bottom, ar.bottom) : box.bottom,
+              };
+            }
+            ancestor = ancestor.parentElement;
           }
+          box = {
+            left: Math.max(box.left, 0),
+            top: Math.max(box.top, 0),
+            right: Math.min(box.right, window.innerWidth),
+            bottom: Math.min(box.bottom, window.innerHeight),
+          };
+          // Nothing of it is on screen — there are no pixels to judge.
+          if (box.right <= box.left || box.bottom <= box.top) continue;
 
           out.push({
             selectorHint: el.className ? `.${String(el.className).trim().split(/\s+/).join('.')}` : el.tagName,
             text: (el.textContent ?? '').trim().slice(0, 40),
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
+            // The *visible* box, so the sampling grid can only ever land on
+            // pixels this element actually painted.
+            x: box.left,
+            y: box.top,
+            width: box.right - box.left,
+            height: box.bottom - box.top,
             colorCss: style.color,
             fontSizePx: parseFloat(style.fontSize),
             fontWeight: parseInt(style.fontWeight, 10) || 400,
@@ -354,17 +390,18 @@ export async function collectChromeTextNodes(
 
 export interface ChromeRects {
   railTopRight: { x: number; y: number; width: number; height: number } | null;
-  railBottomLeft: { x: number; y: number; width: number; height: number } | null;
+  /** `CommandBar` (BACKLOG R44) — replaced the old bottom-left `.rl-rail`. */
+  commandBar: { x: number; y: number; width: number; height: number } | null;
   conditions: { x: number; y: number; width: number; height: number } | null;
   /**
-   * The bounding box of `.chrome-bottomleft` as a whole — the rail and the
-   * conditions bar together, plus the gap between them. Checking the rail and
-   * the conditions bar as two separate rects (below) does not cover that gap,
-   * and a sheet whose edge lands *inside* it would pass both of those checks
-   * while still visually overlapping the group and creating exactly the
-   * elementFromPoint trap this invariant exists to catch. This closes that
-   * measurement gap without replacing the two finer-grained checks, which
-   * still give a more specific failure message when only one piece collides.
+   * The bounding box of `.chrome-bottomleft` as a whole — the command bar and
+   * the conditions bar together, plus the gap between them. Checking the two
+   * as separate rects (below) does not cover that gap, and a sheet whose edge
+   * lands *inside* it would pass both of those checks while still visually
+   * overlapping the group and creating exactly the elementFromPoint trap this
+   * invariant exists to catch. This closes that measurement gap without
+   * replacing the two finer-grained checks, which still give a more specific
+   * failure message when only one piece collides.
    */
   bottomLeftGroup: { x: number; y: number; width: number; height: number } | null;
   sheet: { x: number; y: number; width: number; height: number } | null;
@@ -382,13 +419,84 @@ export async function collectChromeRects(page: Page): Promise<ChromeRects> {
     };
     return {
       railTopRight: rectOf('.chrome-topright .rl-rail'),
-      railBottomLeft: rectOf('.chrome-bottomleft .rl-rail'),
+      commandBar: rectOf('.chrome-bottomleft .rl-command'),
       conditions: rectOf('.rl-conditions'),
       bottomLeftGroup: rectOf('.chrome-bottomleft'),
       sheet: rectOf('.rl-sheet'),
       popover: rectOf('.rl-popover'),
     };
   });
+}
+
+export interface GlassSurplus {
+  /** `null` only if the container selector matched nothing. */
+  container: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * The union of every visible child's own bounding box — not the
+   * container's, so an oversized glass background around correctly-sized
+   * buttons shows up as a gap between the two, rather than being hidden
+   * inside a single averaged measurement. `null` only when the container
+   * exists but has no visible matching children (nothing to compare against,
+   * a different defect from a surplus).
+   */
+  childUnion: { x: number; y: number; width: number; height: number } | null;
+}
+
+/**
+ * How much bigger a shared-background glass container is than the union of
+ * its own interactive children.
+ *
+ * The direct measurement for `docs/QA-FIELD.md` finding 1 (BACKLOG R43):
+ * `.rl-rail` stretched to the full width of its mobile corner while
+ * `.rl-rail__btn` stayed a fixed 44px, leaving ~85% of the painted glass
+ * belonging to no button at all — correctly 44×44 by every touch-target and
+ * hit-testability check, which both sample only the button's *own* rect and
+ * so never see the dead space around it. This is the check that does.
+ */
+export async function measureGlassSurplus(
+  page: Page,
+  containerSelector: string,
+  childSelector: string,
+): Promise<GlassSurplus> {
+  return page.evaluate(
+    ({ containerSelector, childSelector }: { containerSelector: string; childSelector: string }) => {
+      const container = document.querySelector(containerSelector);
+      if (!container) return { container: null, childUnion: null };
+      const cr = container.getBoundingClientRect();
+
+      const children = Array.from(container.querySelectorAll(childSelector)).filter((el) => {
+        const s = window.getComputedStyle(el);
+        if (s.display === 'none' || s.visibility === 'hidden') return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+
+      if (children.length === 0) {
+        return {
+          container: { x: cr.x, y: cr.y, width: cr.width, height: cr.height },
+          childUnion: null,
+        };
+      }
+
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      for (const el of children) {
+        const r = el.getBoundingClientRect();
+        left = Math.min(left, r.left);
+        top = Math.min(top, r.top);
+        right = Math.max(right, r.right);
+        bottom = Math.max(bottom, r.bottom);
+      }
+
+      return {
+        container: { x: cr.x, y: cr.y, width: cr.width, height: cr.height },
+        childUnion: { x: left, y: top, width: right - left, height: bottom - top },
+      };
+    },
+    { containerSelector, childSelector },
+  );
 }
 
 /** Whether two axis-aligned rects overlap (touching edges do not count). */

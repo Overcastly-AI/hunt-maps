@@ -67,8 +67,18 @@ export const SLOPE_RAMP: RampStop[] = [
  * Aspect ramp — cyclic, so it must start and end on the same colour or north
  * shows a hard seam. Warm hues sit on the southern half, which reads
  * intuitively as "the sunny side".
+ *
+ * **The leading transparent stop is load-bearing.** `aspect` uses `-1` for "this
+ * cell has no aspect", covering both a dead-flat cell and one the engine could
+ * not measure. `sampleRamp` clamps anything at or below its first stop to that
+ * stop's colour, so without this the layer painted every flat field, every lake
+ * and every DEM void in solid **north-facing blue** — a confident bearing for
+ * ground that has no bearing at all, which on a leeward-bedding map is exactly
+ * the kind of answer that gets somebody sat on the wrong side of a hill.
+ * Nothing lands strictly between -1 and 0, so this cannot dilute a real azimuth.
  */
 export const ASPECT_RAMP: RampStop[] = [
+  { value: -1, color: [0, 0, 0, 0] },
   { value: 0, color: [90, 122, 190, 180] },
   { value: 90, color: [96, 186, 154, 180] },
   { value: 180, color: [232, 172, 74, 180] },
@@ -116,17 +126,19 @@ export const WOOD_COLORS: Rgba[] = [
   [64, 214, 226, 235], // pass / SADDLE
   [232, 150, 78, 205], // ridge
   [226, 96, 84, 215], // peak
+  // 6 unknown — transparent, same as planar. They *look* identical on purpose:
+  // the honest rendering of "not measurable" is to show the imagery underneath,
+  // and hatching every DEM void would add chrome to a layer whose job is to make
+  // six saddles findable. The distinction is carried by the value, which is what
+  // the point query and the saved filters read.
+  [0, 0, 0, 0],
 ];
 
 /** Parse `#rgb` / `#rrggbb` into an RGB triple. */
 export function parseHexColor(hex: string): [number, number, number] {
   const h = hex.replace('#', '').trim();
   if (h.length === 3) {
-    return [
-      parseInt(h[0] + h[0], 16),
-      parseInt(h[1] + h[1], 16),
-      parseInt(h[2] + h[2], 16),
-    ];
+    return [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)];
   }
   return [
     parseInt(h.slice(0, 2), 16) || 0,
@@ -171,20 +183,38 @@ export function renderCategorical(
   return buf;
 }
 
-/** Render greyscale hillshade (0..1) into RGBA. */
+/**
+ * Render greyscale hillshade (0..1) into RGBA.
+ *
+ * **Non-finite is transparent, not black** — the same rule `sampleRamp` already
+ * applies to every scalar ramp. A void now reaches here as `NaN` rather than as
+ * a fabricated zero gradient (`R49`), and painting it opaque black would swap
+ * one confident lie for another: a black blob reads as a shadowed hollow, and it
+ * would also hide the imagery underneath, which is the only evidence a hunter
+ * has left about ground the DEM cannot describe.
+ */
 export function renderHillshade(
   shade: Float32Array,
   opacity = 1,
   out?: Uint8ClampedArray,
 ): Uint8ClampedArray {
   const buf = out ?? new Uint8ClampedArray(shade.length * 4);
+  const alpha = Math.round(255 * opacity);
   for (let i = 0; i < shade.length; i++) {
-    const v = Number.isFinite(shade[i]) ? Math.round(shade[i] * 255) : 0;
+    const s = shade[i];
     const o = i * 4;
+    if (!Number.isFinite(s)) {
+      buf[o] = 0;
+      buf[o + 1] = 0;
+      buf[o + 2] = 0;
+      buf[o + 3] = 0;
+      continue;
+    }
+    const v = Math.round(s * 255);
     buf[o] = v;
     buf[o + 1] = v;
     buf[o + 2] = v;
-    buf[o + 3] = Math.round(255 * opacity);
+    buf[o + 3] = alpha;
   }
   return buf;
 }
@@ -195,6 +225,12 @@ export function renderHillshade(
  * The outline is what makes saved filters usable when several are stacked: a
  * hunter running "benches" over "leeward" over "saddles" needs to see the
  * boundaries, not three washes of colour averaging into mud.
+ *
+ * **Only `1` paints (`R69`).** This tested truthiness until `detectBenches` grew
+ * a third state, and this function renders that array directly — so
+ * `BenchFlag.Unknown = 2` would have come out as a solid orange shelf over every
+ * DEM void, on the one layer a hunter uses to pick a bed. Filter masks from
+ * `evaluateFilter` are only ever 0/1, so the stricter test costs them nothing.
  */
 export function renderMask(
   mask: Uint8Array,
@@ -211,7 +247,7 @@ export function renderMask(
 
   for (let i = 0; i < mask.length; i++) {
     const o = i * 4;
-    if (!mask[i]) {
+    if (mask[i] !== 1) {
       buf[o + 3] = 0;
       continue;
     }
@@ -225,12 +261,16 @@ export function renderMask(
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = y * width + x;
-        if (!mask[i]) continue;
+        if (mask[i] !== 1) continue;
         const edge =
-          (x === 0 || !mask[i - 1]) ||
-          (x === width - 1 || !mask[i + 1]) ||
-          (y === 0 || !mask[i - width]) ||
-          (y === height - 1 || !mask[i + width]);
+          x === 0 ||
+          mask[i - 1] !== 1 ||
+          x === width - 1 ||
+          mask[i + 1] !== 1 ||
+          y === 0 ||
+          mask[i - width] !== 1 ||
+          y === height - 1 ||
+          mask[i + width] !== 1;
         if (edge) {
           const o = i * 4;
           // Brighten toward white rather than switching hue, so the outline

@@ -1,12 +1,22 @@
 import 'reflect-metadata';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { InsufficientHaloFilter } from './terrain/insufficient-halo.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // `BaseExceptionFilter` needs the http adapter to fall through to Nest's
+  // default handling for everything that is not `InsufficientHaloError` —
+  // constructing it here (rather than via `APP_FILTER`) is the documented
+  // way to get that reference. See the filter's own doc comment for why this
+  // exists: a hunter's client should be able to grey a layer out and say why,
+  // not receive a 500 with a stack trace.
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new InsufficientHaloFilter(httpAdapter));
 
   // `crossOriginEmbedderPolicy` is disabled deliberately: the map client uses
   // SharedArrayBuffer-free workers but loads tile images from the API and the

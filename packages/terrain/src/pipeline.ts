@@ -16,10 +16,13 @@
  */
 
 import { HeightGrid } from './dem/grid.js';
+import { InsufficientHaloError } from './dem/halo.js';
 import {
   computeCurvature,
   computeRuggedness,
   computeSurface,
+  computeVectorRuggedness,
+  DEFAULT_VRM_RADIUS_CELLS,
   type CurvatureField,
   type SurfaceField,
 } from './analysis/surface.js';
@@ -34,6 +37,7 @@ import {
   type WoodOptions,
 } from './analysis/landform.js';
 import {
+  DEFAULT_SKY_VIEW_RADIUS_CELLS,
   hillshade,
   multidirectionalHillshade,
   skyViewFactor,
@@ -42,6 +46,8 @@ import {
 import { slopeInsolation, solarPosition, type SolarPosition } from './analysis/solar.js';
 import {
   beddingLikelihood,
+  coldBlendWeight,
+  DEFAULT_SHELTER_RADIUS_CELLS,
   terrainShelter,
   windExposure,
   type BeddingOptions,
@@ -81,10 +87,26 @@ export interface AnalysisRequest {
   weiss?: WeissOptions;
   wood?: WoodOptions;
   bench?: BenchOptions;
-  bedding?: Omit<BeddingOptions, 'windFromDeg'>;
+  bedding?: Omit<BeddingOptions, 'windFromDeg' | 'season'>;
   /** Radii in cells for the two TPI scales. */
   tpiSmallRadius?: number;
   tpiLargeRadius?: number;
+  /**
+   * VRM window radius in cells for the bedding cover term. Raise it on
+   * sub-5 m DEMs — see `DEFAULT_VRM_RADIUS_CELLS`. `requiredHalo` reads the same
+   * value, so widening the window can never open a seam.
+   */
+  coverRadiusCells?: number;
+  /**
+   * Air temperature expected during the sit, °C. **Optional and deliberately
+   * undefaulted**: supplying it switches on the cold-season solar-aspect term in
+   * `beddingLikelihood`; omitting it leaves the bedding layer purely leeward and
+   * bit-identical to what it computed before that term existed. Guessing a
+   * season on the user's behalf is the failure mode this avoids — a layer that
+   * quietly assumed January would move every bedding prediction to the sunny
+   * face without saying so.
+   */
+  temperatureC?: number;
 }
 
 export interface AnalysisResult extends TerrainFields {
@@ -100,6 +122,27 @@ export interface AnalysisResult extends TerrainFields {
  * how many requested layers depend on it.
  */
 export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisResult {
+  // Refuse an undersized halo instead of computing on terrain that is not there.
+  //
+  // Both shipped callers clamp with `Math.min(requiredHalo(request), tileSize)`,
+  // because a 3x3 DEM fetch cannot supply more than one tile of halo. That clamp
+  // used to be a silent truncation: the operators ran anyway, read the `NODATA`
+  // sentinel as elevation, and reported open ground (`R30`). Failing here is what
+  // makes the clamp honest. The error is duck-typed via `isInsufficientHaloError`
+  // so a caller can grey the layer out — "this needs a wider fetch" is a normal,
+  // recoverable state, not a crash.
+  const required = requiredHalo(request);
+  if (grid.halo < required) {
+    throw new InsufficientHaloError({
+      required,
+      available: grid.halo,
+      layers: request.layers,
+      detail:
+        'Every cell within that distance of the tile edge would be computed from ' +
+        'no-data, which reads as open ground.',
+    });
+  }
+
   const want = new Set<string>(request.layers);
   const { width, height, cellSize } = grid;
   const heightAt = (x: number, y: number): number =>
@@ -124,9 +167,7 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
   if (want.has('aspect')) result.aspect = surface.aspect;
 
   const needsCurvature =
-    want.has('curvatureProfile') ||
-    want.has('curvaturePlan') ||
-    want.has('wood');
+    want.has('curvatureProfile') || want.has('curvaturePlan') || want.has('wood');
   let curvature: CurvatureField | undefined;
   if (needsCurvature) {
     curvature = computeCurvature(grid);
@@ -136,21 +177,20 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
   }
 
   if (want.has('tpiSmall')) {
-    result.tpiSmall = standardize(
-      computeTpi(grid, { radius: request.tpiSmallRadius ?? 3 }),
-    );
+    result.tpiSmall = standardize(computeTpi(grid, { radius: request.tpiSmallRadius ?? 3 }));
   }
   if (want.has('tpiLarge')) {
-    result.tpiLarge = standardize(
-      computeTpi(grid, { radius: request.tpiLargeRadius ?? 20 }),
-    );
+    result.tpiLarge = standardize(computeTpi(grid, { radius: request.tpiLargeRadius ?? 20 }));
   }
 
-  const needsRuggedness = want.has('ruggedness') || want.has('bedding');
-  let ruggedness: Float32Array | undefined;
-  if (needsRuggedness) {
-    ruggedness = computeRuggedness(grid);
-    if (want.has('ruggedness')) result.ruggedness = ruggedness;
+  // Two different ruggedness measures, on purpose. TRI is the layer a user
+  // reads ("local relief in metres") and the value denormalised onto
+  // observations; VRM is the only one admissible as bedding *cover*, because it
+  // is independent of slope and the bedding score already has slope terms.
+  if (want.has('ruggedness')) result.ruggedness = computeRuggedness(grid);
+  let cover: Float32Array | undefined;
+  if (want.has('bedding')) {
+    cover = computeVectorRuggedness(grid, { radiusCells: request.coverRadiusCells });
   }
 
   if (want.has('weiss')) result.weiss = classifyWeiss(grid, surface, request.weiss);
@@ -198,12 +238,54 @@ export function analyze(grid: HeightGrid, request: AnalysisRequest): AnalysisRes
     result.bedding = beddingLikelihood(surface, {
       windFromDeg: windFrom,
       shelter,
-      ruggedness,
+      vectorRuggedness: cover,
       ...request.bedding,
+      season: beddingSeason(
+        request,
+        surface,
+        request.latitude ?? grid.centerLat,
+        request.longitude ?? grid.centerLng,
+      ),
     });
   }
 
   return result;
+}
+
+/**
+ * Build the cold-season aspect inputs for `beddingLikelihood`, or `undefined`.
+ *
+ * Returns `undefined` unless the caller supplied a temperature *and* that
+ * temperature is cold enough to give the solar term non-zero weight, so the warm
+ * path never pays for an insolation pass and never diverges by a float ulp from
+ * the leeward-only result.
+ *
+ * The insolation is evaluated at **mean solar noon** — the moment the aspect
+ * contrast between faces is largest and the one that governs how much snow a
+ * slope sheds (Lang & Gates 1985 mean depths: SE face 18.1 cm vs NE face
+ * 21.7 cm, a **1.20×** effect — *not* the 2.32× this comment used to quote,
+ * which compared a mean against the study's deepest single reading; see
+ * `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`). Mean solar noon rather than true solar
+ * noon: the equation of time moves
+ * it by at most ±16 minutes, which shifts the sun's azimuth by ~4° and changes
+ * nothing about which face wins, whereas making the field depend on the local
+ * time zone would make it depend on politics.
+ */
+function beddingSeason(
+  request: AnalysisRequest,
+  surface: SurfaceField,
+  latitude: number,
+  longitude: number,
+): BeddingOptions['season'] {
+  const temperatureC = request.temperatureC;
+  if (temperatureC === undefined || coldBlendWeight(temperatureC) <= 0) return undefined;
+  const date = request.date ?? new Date();
+  const noonUtc = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12) -
+      (longitude / 15) * 3600000,
+  );
+  const sun = solarPosition(noonUtc, latitude, longitude);
+  return { temperatureC, insolation: slopeInsolation(surface, sun) };
 }
 
 /**
@@ -224,7 +306,19 @@ export function requiredHalo(request: AnalysisRequest): number {
     halo = Math.max(halo, request.tpiLargeRadius ?? 20, request.weiss?.largeRadius ?? 20);
   }
   if (want.has('bench')) halo = Math.max(halo, (request.bench?.ringRadius ?? 8) + 1);
-  if (want.has('skyView')) halo = Math.max(halo, 24);
-  if (want.has('shelter') || want.has('bedding')) halo = Math.max(halo, 20);
+  // Both radii come from the operators themselves rather than being restated
+  // here. Two independent literals is how the march quietly outgrows the halo.
+  if (want.has('skyView')) halo = Math.max(halo, DEFAULT_SKY_VIEW_RADIUS_CELLS);
+  if (want.has('shelter') || want.has('bedding')) {
+    halo = Math.max(halo, DEFAULT_SHELTER_RADIUS_CELLS);
+  }
+  if (want.has('bedding')) {
+    // The bedding cover term is a VRM window, which reads radius+1 cells out
+    // (radius for the window, one more for the Horn kernel at its edge). Below
+    // the shelter ray-march this is slack, but it must be stated: a caller who
+    // raises `coverRadiusCells` for a 1 m DEM and does not widen the halo gets a
+    // seam grid across the flagship layer.
+    halo = Math.max(halo, (request.coverRadiusCells ?? DEFAULT_VRM_RADIUS_CELLS) + 1);
+  }
   return halo;
 }

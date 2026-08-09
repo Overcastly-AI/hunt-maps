@@ -1,9 +1,15 @@
 import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
-import type { AnalysisLayer } from '@hunt-maps/terrain';
+import type { AnalysisLayer, BBox } from '@hunt-maps/terrain';
 import { color } from '@hunt-maps/design';
 import { LAYERS, layerById } from '../lib/layers';
+import { BASE_SOURCES, isSyncedLayer } from '../lib/map/baseSources';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
+import { boundsToBBox, DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
+import { exposeDevHook } from '../lib/devHook';
+import { CoverageOverlay, coverageExtentToDraw } from '../lib/map/coverageOverlay';
+import { RegionOutline } from '../lib/map/regionOutline';
+import type { CoverageState } from '../lib/offline/coverage';
 
 export interface MapViewProps {
   activeLayers: Set<string>;
@@ -17,23 +23,41 @@ export interface MapViewProps {
   onReady?: (map: maplibregl.Map) => void;
   /** Map centre, so solar and thermal readouts follow the ground being viewed. */
   onMove?: (center: { lng: number; lat: number }) => void;
+  /**
+   * Viewport extent and zoom, for the offline region picker.
+   *
+   * Separate from `onMove` because it answers a different question and has a
+   * different cost: the picker re-plans a tile list from this, and folding it
+   * into the centre callback would re-run the solar model every time the
+   * picker wanted a bounding box.
+   */
+  onViewChange?: (view: { bounds: BBox; zoom: number }) => void;
   protocol: TerrainProtocol;
+  /**
+   * Current offline coverage for this view, drawn as the hatched stored-extent
+   * overlay. An indeterminate or unmeasured answer draws nothing — the decision
+   * of *when* there is an extent worth drawing belongs to
+   * `coverageExtentToDraw`, not to this component.
+   */
+  coverage?: CoverageState | null;
+  /**
+   * The area the region picker is about to download, drawn as a dashed box.
+   *
+   * Deliberately a different mark from the coverage hatch: one says what you
+   * are *about* to have, the other what you *do* have, and a hunter who
+   * confuses the two walks in on a region that was never downloaded.
+   */
+  regionBox?: BBox | null;
+  /**
+   * Whether the user wants the coverage extent drawn at all.
+   *
+   * Separate from `coverage` because they answer different questions: what is
+   * true (`coverage`) versus whether the map should be carrying that truth
+   * right now. Off while the Layers sheet is closed keeps the map clean; the
+   * *text* verdict is never suppressed this way.
+   */
+  showCoverage?: boolean;
 }
-
-const BASE_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom: number }> = {
-  satellite: {
-    tiles: [
-      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    ],
-    attribution: 'Imagery: Esri, Maxar, Earthstar Geographics',
-    maxzoom: 19,
-  },
-  topo: {
-    tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'],
-    attribution: '© OpenTopoMap, © OpenStreetMap contributors',
-    maxzoom: 17,
-  },
-};
 
 /**
  * The map.
@@ -56,9 +80,36 @@ export function MapView({
   onReady,
   onMove,
   protocol,
+  coverage,
+  showCoverage = false,
+  onViewChange,
+  regionBox = null,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
+  const overlay = useRef<CoverageOverlay | null>(null);
+  const regionOutline = useRef<RegionOutline | null>(null);
+  // Held in a ref and read from the listener, so the mount-only effect below
+  // never has to be re-run to pick up a new callback identity — re-running it
+  // would tear down and rebuild the map.
+  const viewChangeRef = useRef(onViewChange);
+  viewChangeRef.current = onViewChange;
+  // Set once the style has loaded for the first time. `isStyleLoaded()`
+  // answers a different question than its name suggests: MapLibre also folds
+  // in-flight tile activity for *already-added* sources into it, so it can
+  // flip back to `false` well after the initial style is up (this app's own
+  // satellite source retries indefinitely against a network that will not
+  // resolve, which is exactly the condition that exposed this). The sync
+  // effect below used to re-check `isStyleLoaded()` on every dependency
+  // change and fall back to `map.once('load', apply)` when it read false —
+  // but MapLibre's `'load'` event fires exactly once per style, so any sync
+  // that happened to land during a transient `false` attached a listener
+  // that would never fire again, silently stranding every later layer toggle
+  // (BACKLOG R32: this is why the bedding layer never painted in CI — the
+  // toggle never reached `map.addSource` at all, before the ramp domain was
+  // even in play). Tracked with a ref rather than re-deriving it from the map
+  // each time, because the map has no public "has loaded at least once" query.
+  const styleLoadedOnce = useRef(false);
 
   useEffect(() => {
     if (!container.current || map.current) return;
@@ -105,10 +156,20 @@ export function MapView({
     instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-right');
 
     instance.on('contextmenu', (e) => onPointInspect?.(e.lngLat));
-    instance.on('moveend', () => {
+    const publishView = (): void => {
       const c = instance.getCenter();
       onMove?.({ lng: c.lng, lat: c.lat });
-    });
+      viewChangeRef.current?.({
+        bounds: boundsToBBox(instance.getBounds()),
+        zoom: instance.getZoom(),
+      });
+    };
+    instance.on('moveend', publishView);
+    // The first publish, so the picker has a box before the user touches
+    // anything. `idle` as well as `load` for the same reason the coverage hook
+    // needs both: offline, `load` may already have fired or may never settle.
+    instance.once('load', publishView);
+    instance.once('idle', publishView);
     map.current = instance;
 
     // E2E / debugging hook. Screenshot and QA runs need a reliable "tiles have
@@ -116,12 +177,14 @@ export function MapView({
     // sniffing the GL framebuffer gives false negatives because the drawing
     // buffer is cleared between frames unless preserveDrawingBuffer is set,
     // which would cost real performance in production.
-    (window as unknown as { __ridgeline?: { map: maplibregl.Map } }).__ridgeline = {
-      map: instance,
-    };
+    exposeDevHook({ map: instance });
     onReady?.(instance);
 
     return () => {
+      overlay.current?.destroy();
+      overlay.current = null;
+      regionOutline.current?.destroy();
+      regionOutline.current = null;
       instance.remove();
       map.current = null;
     };
@@ -137,9 +200,45 @@ export function MapView({
     if (!instance) return;
 
     const apply = () => syncLayers(instance, activeLayers, opacities, windFromDeg, atUtc, filterStackId);
-    if (instance.isStyleLoaded()) apply();
-    else instance.once('load', apply);
+
+    // Once the style has loaded for the first time, every later dependency
+    // change (a layer toggle, a wind scrub, a date change) applies straight
+    // away — see `styleLoadedOnce` above for why re-checking
+    // `isStyleLoaded()` here is the bug this replaced.
+    if (styleLoadedOnce.current) {
+      apply();
+    } else if (instance.isStyleLoaded()) {
+      styleLoadedOnce.current = true;
+      apply();
+    } else {
+      instance.once('load', () => {
+        styleLoadedOnce.current = true;
+        apply();
+      });
+    }
   }, [activeLayers, opacities, windFromDeg, atUtc, filterStackId, protocol]);
+
+  // Coverage gets its own effect and its own module: it is not an analysis
+  // layer, it changes on a different cadence (every move), and `map-builder`
+  // should be able to retune its cartography without touching the layer stack
+  // above. What is *drawable* is decided by `coverageExtentToDraw`, not here —
+  // an indeterminate or sampled answer has no honest extent and draws nothing.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    overlay.current ??= new CoverageOverlay(instance);
+    overlay.current.setTiles(showCoverage ? coverageExtentToDraw(coverage ?? null) : []);
+  }, [coverage, showCoverage]);
+
+  // The region picker's pending box. Its own overlay and its own effect: it
+  // changes as the user pans with the picker open, which is a different cadence
+  // again from either the layer stack or the coverage hatch.
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+    regionOutline.current ??= new RegionOutline(instance);
+    regionOutline.current.setBoxes(regionBox ? [regionBox] : []);
+  }, [regionBox]);
 
   return <div ref={container} className="map-canvas" data-testid="map-canvas" />;
 }
@@ -174,9 +273,17 @@ function syncLayers(
   if (filterStackId) wanted.add('__filters');
 
   // Remove layers that are no longer wanted.
+  //
+  // Only ones this function created. The `rl-` prefix alone is not enough: the
+  // coverage overlay (`lib/map/coverageOverlay.ts`) also lives under it, and a
+  // prefix-only test tore it off the map on the next layer toggle — the badge
+  // still said "Partial", the hatch showing *which half* silently vanished.
+  // Matching against the known layer registry keeps ownership explicit, and
+  // survives the overlay being renamed.
   for (const layer of map.getStyle().layers ?? []) {
     if (!layer.id.startsWith('rl-')) continue;
     const id = layer.id.slice(3);
+    if (!isSyncedLayer(id)) continue;
     if (!wanted.has(id)) {
       map.removeLayer(layer.id);
       if (map.getSource(layer.id)) map.removeSource(layer.id);
@@ -214,8 +321,12 @@ function syncLayers(
       map.addSource(sourceId, {
         type: 'raster',
         tiles,
-        tileSize: 256,
-        maxzoom: BASE_SOURCES[id]?.maxzoom ?? 15,
+        // Shared constants, not literals: `lib/map/demTiles.ts` derives the
+        // zoom the offline coverage check probes at from exactly these two
+        // values. A local `256`/`15` here is how the badge and the fetch would
+        // silently start disagreeing about which tiles a view needs.
+        tileSize: DEM_TILE_SIZE,
+        maxzoom: BASE_SOURCES[id]?.maxzoom ?? DEM_MAX_ZOOM,
         attribution: BASE_SOURCES[id]?.attribution ?? 'Elevation: USGS / AWS Terrain Tiles',
       });
       map.addLayer(

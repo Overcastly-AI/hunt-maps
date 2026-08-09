@@ -57,6 +57,130 @@ export function RailButton({ label, active, children, ...rest }: RailButtonProps
 }
 
 // ---------------------------------------------------------------------------
+// Command bar
+// ---------------------------------------------------------------------------
+
+export interface CommandBarCellProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /**
+   * A short, always-visible word naming the control — e.g. "Layers",
+   * "Offline". Required, and rendered as text, not just an `aria-label`:
+   * `title` never fires on a touchscreen, so an icon with only a hover
+   * tooltip is inert in the field (`docs/AUDIT-PRODUCT.md` F4). The word is
+   * the affordance.
+   */
+  label: string;
+  active?: boolean;
+  /**
+   * A fuller accessible name, for when the visible word under-states the
+   * action — e.g. the visible word "Offline" behind the description "Save
+   * this area for offline use". Optional; when set it replaces the
+   * accessible name entirely, so it must contain `label` (a substring match
+   * is enough) or a screen-reader user and a sighted user end up being told
+   * two unrelated things about the same control — WCAG 2.5.3 Label in Name.
+   */
+  description?: string;
+  /** The icon. Decorative — `label` already carries the name, so this is `aria-hidden`. */
+  children: ReactNode;
+}
+
+export function CommandBarCell({
+  label,
+  active,
+  description,
+  children,
+  className,
+  ...rest
+}: CommandBarCellProps) {
+  return (
+    <button
+      type="button"
+      className={cx('rl-command__cell', className)}
+      aria-label={description}
+      title={description ?? label}
+      aria-pressed={active}
+      {...rest}
+    >
+      <span className="rl-command__icon" aria-hidden="true">
+        {children}
+      </span>
+      <span className="rl-command__label">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * A horizontal bar of labelled cells whose height does not depend on how many
+ * cells it holds.
+ *
+ * Replaces `.rl-rail` in the bottom-left corner (`docs/AUDIT-PRODUCT.md`
+ * recs #17-#18, BACKLOG R44). `.rl-rail` stacked buttons in a column, so its
+ * container had to reserve `--space-touch * N` of clearance for whatever *N*
+ * happened to be that week — a constant hand-computed in a different file
+ * from the buttons it counted (F7), and it had already produced a real
+ * defect (F6, the dead middle button nobody could tell apart from the two
+ * live ones) before the roadmap even reached its planned nine controls. A
+ * row does not have this problem: cells lay out side by side and the bar's
+ * own height is fixed by its tallest cell, never by how many there are.
+ *
+ * Every cell is built the way `.rl-conditions__cell` is — no explicit width,
+ * sized by its own flex share of the row rather than pinned inside a
+ * container that stretches around it. That is not a style choice; it is the
+ * field audit's hard constraint (`docs/QA-FIELD.md`, "Note to the sibling
+ * audit"): a fixed-width child inside a stretched container is exactly the
+ * shape that left ~85% of `.rl-rail`'s painted glass belonging to no button
+ * at all on a phone (BACKLOG R43). Here the button *is* the flex item that
+ * grows to fill its share of the row, so the painted surface and the
+ * interactive surface can never disagree, at any cell count.
+ */
+export function CommandBar({ children }: { children: ReactNode }) {
+  return <div className="rl-command rl-glass">{children}</div>;
+}
+
+// ---------------------------------------------------------------------------
+// TabBar — switches which panel occupies the one drawer slot
+// ---------------------------------------------------------------------------
+
+/**
+ * A row of tabs deciding which panel currently occupies the drawer slot
+ * (Layers / Stands / Sightings — `docs/AUDIT-PRODUCT.md` rec 20).
+ *
+ * Not a fourth `CommandBarCell`: the command bar's whole point is that its
+ * height never depends on how many controls it has, and a persistent panel
+ * (as opposed to the drawer, an offline download, or a conditions reading)
+ * is meant to live *inside* the one drawer slot rather than add a new bar.
+ * `TabBar` is that inside-the-drawer control — visually smaller and text-only
+ * (no icon column) so it reads as a sub-navigation strip belonging to the
+ * panel beneath it, not a second command bar competing with the real one.
+ */
+export function TabBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="rl-tabbar rl-glass" role="tablist">
+      {children}
+    </div>
+  );
+}
+
+export interface TabBarButtonProps {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}
+
+export function TabBarButton({ active, onClick, children }: TabBarButtonProps) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={cx('rl-tabbar__tab', active && 'rl-tabbar__tab--active')}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sheet
 // ---------------------------------------------------------------------------
 
@@ -140,25 +264,25 @@ export function ConditionsBar({
   timeEditor,
 }: ConditionsBarProps) {
   return (
-    <div className="rl-conditions rl-glass">
+    <div className="rl-conditions rl-plate">
       <div className="rl-popover-anchor">
-      <button type="button" className="rl-conditions__cell" onClick={onWindClick}>
-        <WindNeedle
-          fromDeg={windFromDeg}
-          className={cx('rl-needle', windFromDeg === null && 'rl-needle--unset')}
-        />
-        <span>
-          <span className="rl-conditions__label">Wind from</span>
-          <span
-            className={cx(
-              'rl-conditions__value',
-              windFromDeg === null && 'rl-conditions__value--unset',
-            )}
-          >
-            {windFromDeg === null ? 'Not set' : `${Math.round(windFromDeg)}° ${windOctant}`}
+        <button type="button" className="rl-conditions__cell" onClick={onWindClick}>
+          <WindNeedle
+            fromDeg={windFromDeg}
+            className={cx('rl-needle', windFromDeg === null && 'rl-needle--unset')}
+          />
+          <span>
+            <span className="rl-conditions__label">Wind from</span>
+            <span
+              className={cx(
+                'rl-conditions__value',
+                windFromDeg === null && 'rl-conditions__value--unset',
+              )}
+            >
+              {windFromDeg === null ? 'Not set' : `${Math.round(windFromDeg)}° ${windOctant}`}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
         {windEditor}
       </div>
 
@@ -188,7 +312,7 @@ export function ConditionsBar({
 // Chip
 // ---------------------------------------------------------------------------
 
-export type ChipTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info';
+export type ChipTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info' | 'critical';
 
 export interface ChipProps {
   tone?: ChipTone;
@@ -283,8 +407,10 @@ export function Field({ id, label, value, hint, children }: FieldProps) {
   );
 }
 
-export interface RangeFieldProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
+export interface RangeFieldProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'value' | 'onChange'
+> {
   id: string;
   label: ReactNode;
   value: number;
@@ -337,6 +463,14 @@ export interface ToggleRowProps {
    * how the design system enforces it rather than hoping each screen remembers.
    */
   blockedReason?: string;
+  /**
+   * An action rendered beside the label, always visible regardless of
+   * checked state — e.g. an "Edit" link on a saved filter row. Deliberately
+   * separate from `children`, which only appears once the row is switched
+   * on: an edit affordance has to work on a filter the user has *not* turned
+   * on yet, so it cannot share that gate.
+   */
+  action?: ReactNode;
   children?: ReactNode;
 }
 
@@ -348,6 +482,7 @@ export function ToggleRow({
   blurb,
   swatch,
   blockedReason,
+  action,
   children,
 }: ToggleRowProps) {
   const blocked = Boolean(blockedReason);
@@ -355,20 +490,23 @@ export function ToggleRow({
 
   return (
     <div className={cx('rl-toggle', checked && 'rl-toggle--on', blocked && 'rl-toggle--blocked')}>
-      <label className="rl-toggle__main" htmlFor={id}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          disabled={blocked}
-          onChange={onToggle}
-          aria-describedby={describedBy}
-        />
-        {swatch && (
-          <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />
-        )}
-        <span className="rl-toggle__label">{label}</span>
-      </label>
+      <div className="rl-toggle__head">
+        <label className="rl-toggle__main" htmlFor={id}>
+          <input
+            id={id}
+            type="checkbox"
+            checked={checked}
+            disabled={blocked}
+            onChange={onToggle}
+            aria-describedby={describedBy}
+          />
+          {swatch && (
+            <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />
+          )}
+          <span className="rl-toggle__label">{label}</span>
+        </label>
+        {action && <span className="rl-toggle__action">{action}</span>}
+      </div>
       {(blurb || blockedReason) && (
         <p id={describedBy} className={cx('rl-toggle__blurb', blocked && 'rl-toggle__blurb--warn')}>
           {blockedReason ?? blurb}
@@ -475,7 +613,13 @@ export function Confidence({ grade, note }: { grade: EvidenceGrade; note?: strin
     measured: 'ok',
     inferred: 'info',
     doctrine: 'warn',
-    assumed: 'danger',
+    // Not `danger` — that tone renders in hunter-safety orange
+    // (`--color-blaze`), reserved for real alerts, and an "Assumed" evidence
+    // grade sharing it with "your storage is not persisting" is the exact
+    // coincidence `docs/design/PLAN-direction-a.md` §a warns becomes a real
+    // confusion the day both appear on the same screen — which they do, in
+    // `LayersSheet`.
+    assumed: 'critical',
   };
   const glyph: Record<EvidenceGrade, string> = {
     measured: '●',

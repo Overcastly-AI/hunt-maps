@@ -1,0 +1,205 @@
+/**
+ * `components/observations` — layout only, tokens only. See
+ * `apps/web/src/components/waypoints/waypoints.css`'s header comment for the
+ * rule this follows. Prefixed `obs-`.
+ */
+
+.obs-home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.obs-home__context {
+  margin-top: 0;
+}
+
+.obs-home__more-label {
+  margin: 0 0 var(--space-2);
+}
+
+.obs-home-more {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.obs-recent {
+  margin-bottom: 0;
+}
+
+.obs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.obs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--space-touch);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-raised);
+}
+
+.obs-row__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.obs-row__headline {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.obs-row__meta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+}
+
+/* --------------------------------------------------------------------------
+ * Kind picker — same shape as waypoints' type picker, kept as an independent
+ * copy (see `waypoints.css`'s note on duplication for observations vs.
+ * waypoints being separate territories).
+ * -------------------------------------------------------------------------- */
+
+.obs-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.obs-kind-btn {
+  min-height: var(--space-touch);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  text-align: center;
+}
+
+.obs-kind-btn:hover {
+  border-color: var(--color-line-strong);
+}
+
+.obs-kind-btn--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-weight: var(--weight-semibold);
+}
+
+.obs-kind-blurb {
+  margin-top: 0;
+  margin-bottom: var(--space-4);
+}
+
+.obs-blank-toggle {
+  margin-bottom: var(--space-3);
+}
+
+.obs-blank-toggle__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-touch);
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.obs-blank-toggle__label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.obs-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.obs-textarea {
+  min-height: calc(var(--space-touch) * 2);
+  resize: vertical;
+  font-family: var(--font-sans);
+}
+
+.obs-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.obs-inline-link {
+  padding: 0;
+  min-height: 0;
+  vertical-align: baseline;
+}
+
+/* --------------------------------------------------------------------------
+ * Blank-sit quick log
+ * -------------------------------------------------------------------------- */
+
+.obs-blank-sit__lede {
+  margin-top: 0;
+}
+
+.obs-blank-sit__summary {
+  margin-bottom: var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
+ * Conditions block
+ * -------------------------------------------------------------------------- */
+
+.obs-conditions {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-raised);
+}
+
+.obs-conditions__auto {
+  margin-bottom: 0;
+}
+
+/* `.readout dd` (`apps/web/src/index.css`) sets colour on the same element;
+   qualified with the parent class rather than `!important` so this still
+   wins on specificity alone. */
+.readout dd.obs-conditions__unset {
+  color: var(--color-warn);
+}
+
+.obs-conditions__toggle {
+  padding-left: 0;
+  margin-top: var(--space-2);
+}
+
+.obs-conditions__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 var(--space-3);
+  margin-top: var(--space-2);
+}

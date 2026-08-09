@@ -84,6 +84,19 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+ * Plate — a second material for chrome that should read as a bolted-on
+ * instrument bezel, not a pane of glass over the map. No blur, no highlight
+ * inset: flat is the entire distinction from `.rl-glass` above. See the
+ * `plate` token group's doc comment in `tokens.ts` for why this is a
+ * separate class rather than a `glass` variant.
+ * -------------------------------------------------------------------------- */
+
+.rl-plate {
+  background: var(--plate-bg);
+  border: 1px solid var(--plate-border);
+}
+
+/* --------------------------------------------------------------------------
  * Eyebrow / section heading
  * -------------------------------------------------------------------------- */
 
@@ -143,12 +156,26 @@ body {
   background: transparent;
   color: var(--color-text-dim);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease),
+  transition:
+    background var(--motion-fast) var(--motion-ease),
     color var(--motion-fast) var(--motion-ease);
 }
 
 .rl-rail__btn:hover {
   background: var(--color-raised);
+  color: var(--color-text);
+}
+
+/*
+ * Press feedback. `:hover` never fires on a touchscreen, so gloved, with no
+ * toast, a miss and a hit used to be visually identical at the moment of the
+ * tap (`docs/QA-FIELD.md` finding 1/2) — there was no `:active` rule anywhere
+ * in this file, for any button. `--color-line-strong` rather than `--color-
+ * raised` (the hover colour) so a mouse user's hover-then-press still reads
+ * as two distinct states, not one.
+ */
+.rl-rail__btn:active {
+  background: var(--color-line-strong);
   color: var(--color-text);
 }
 
@@ -160,6 +187,154 @@ body {
 .rl-rail__btn svg {
   width: 20px;
   height: 20px;
+}
+
+/* --------------------------------------------------------------------------
+ * Command bar — labelled cells, one row, fixed height (BACKLOG R44)
+ *
+ * Replaces `.rl-rail` in the bottom-left corner. `overflow: hidden` is safe
+ * here in a way it was not for `.rl-conditions`: nothing anchors a popover to
+ * a command-bar cell (Layers and Offline both open a `Sheet`, not a
+ * `Popover`), so there is nothing for the clip to cut off.
+ *
+ * `flex: 1 1 0` on the cell, not the container, is the whole fix for R43's
+ * dead-glass defect: each cell grows to fill its own equal share of
+ * whatever width the container is given (fixed by content on desktop,
+ * stretched to the corner's full width on mobile via `.chrome-bottomleft`'s
+ * `align-items: stretch`), so the button's own painted box *is* its share of
+ * the row — there is no separate glass surface around a smaller fixed-width
+ * child for a gloved tap to land on and miss.
+ * -------------------------------------------------------------------------- */
+
+.rl-command {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rl-command__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: 1 1 0;
+  min-width: var(--space-touch);
+  min-height: var(--space-touch);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--color-text-dim);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.rl-command__cell:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+/* Press feedback — see `.rl-rail__btn:active` for why every button gets this. */
+.rl-command__cell:active {
+  background: var(--color-line-strong);
+  color: var(--color-text);
+}
+
+.rl-command__cell[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.rl-command__icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.rl-command__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.rl-command__label {
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+/* --------------------------------------------------------------------------
+ * TabBar — the tab strip switching between panels inside the one drawer slot
+ * (Layers / Stands / Sightings). `apps/web/src/index.css` positions the
+ * drawer that carries this bar; this file only owns how the bar itself
+ * looks, matching `.rl-command`'s recipe (hairline cells, condensed
+ * uppercase label, equal flex share of the row) so the two tab-like controls
+ * in this app read as one visual system.
+ * -------------------------------------------------------------------------- */
+
+.rl-tabbar {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--glass-border);
+  /* Rounded to match the drawer's own top corners — the tab strip and the
+     panel beneath it are two DOM siblings meant to read as one object. */
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  overflow: hidden;
+}
+
+.rl-tabbar__tab {
+  flex: 1 1 0;
+  min-width: var(--space-touch);
+  min-height: var(--space-touch);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-left: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-text-dim);
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.rl-tabbar__tab:first-child {
+  border-left: none;
+}
+
+.rl-tabbar__tab:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.rl-tabbar__tab:active {
+  background: var(--color-line-strong);
+  color: var(--color-text);
+}
+
+/*
+ * The active tab is never colour alone: bold weight and a filled background
+ * both change alongside the accent colour, so the current tab still reads
+ * correctly for the ~8% of men who are red-green colourblind — the same rule
+ * `tokens.ts` states for the map's slope bands, applied here to chrome.
+ */
+.rl-tabbar__tab--active {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-weight: var(--weight-bold);
 }
 
 /* --------------------------------------------------------------------------
@@ -283,32 +458,21 @@ body {
 .rl-conditions {
   display: flex;
   align-items: stretch;
-  gap: 1px;
-  border-radius: var(--radius-lg);
   /*
-   * Deliberately NOT `overflow: hidden`.
+   * Hard edge, no rounding — an instrument bezel, not a soft panel
+   * (`docs/design/PLAN-direction-a.md` §a: radius-to-zero is a
+   * component-by-component pass, and this is that pass for `ConditionsBar`).
    *
-   * The obvious way to round a segmented bar is to clip it, and that is exactly
-   * what broke the wind and time editors: they anchor *inside* a cell so their
-   * caret points at the right control, and clipping the bar clipped them out of
-   * existence. They still painted (a bounding box is not affected by an
-   * ancestor's clip) but `elementFromPoint` returned the map underneath, so the
-   * buttons were visible and unclickable — the worst kind of broken.
-   *
-   * Corners are rounded on the end children instead.
+   * Deliberately NOT `overflow: hidden` — unrelated to the radius (there is
+   * none to clip to now) but the reason still applies to anything else this
+   * container might grow: the wind and time editors anchor *inside* a cell so
+   * their caret points at the right control, and clipping this bar would clip
+   * them out of existence. They would still paint (a bounding box is not
+   * affected by an ancestor's clip) but `elementFromPoint` would return the
+   * map underneath, so the buttons would be visible and unclickable — the
+   * worst kind of broken.
    */
-}
-
-.rl-conditions > *:first-child,
-.rl-conditions > *:first-child .rl-conditions__cell {
-  border-top-left-radius: var(--radius-lg);
-  border-bottom-left-radius: var(--radius-lg);
-}
-
-.rl-conditions > *:last-child,
-.rl-conditions > *:last-child .rl-conditions__cell {
-  border-top-right-radius: var(--radius-lg);
-  border-bottom-right-radius: var(--radius-lg);
+  border-radius: 0;
 }
 
 .rl-conditions__cell {
@@ -318,6 +482,9 @@ body {
   padding: var(--space-2) var(--space-4);
   background: transparent;
   border: none;
+  /* The cell divider — a quieter hairline than the plate's own outer border,
+     matching Direction A's `.cond-cell{ border-left: 1px solid var(--hairline) }`. */
+  border-left: 1px solid var(--plate-divider);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -325,8 +492,18 @@ body {
   transition: background var(--motion-fast) var(--motion-ease);
 }
 
+.rl-conditions > *:first-child,
+.rl-conditions > *:first-child .rl-conditions__cell {
+  border-left: none;
+}
+
 .rl-conditions__cell:hover {
   background: var(--color-raised);
+}
+
+/* Press feedback — see `.rl-rail__btn:active` for why this exists at all. */
+.rl-conditions__cell:active {
+  background: var(--color-line-strong);
 }
 
 .rl-conditions__label {
@@ -361,6 +538,15 @@ body {
   height: 30px;
   flex-shrink: 0;
   color: var(--color-accent);
+}
+
+/*
+ * The bezel (ring + ticks) is fixed, so only the inner `<g>` that carries the
+ * needle and hub rotates — `transition` is not an inherited CSS property, so
+ * this has to target that element directly rather than `.rl-needle` itself,
+ * which no longer has a per-render transform to animate.
+ */
+.rl-needle > g {
   transition: transform var(--motion-base) var(--motion-ease);
 }
 
@@ -412,6 +598,13 @@ body {
   color: var(--color-info);
   border-color: color-mix(in srgb, var(--color-info) 42%, transparent);
   background: color-mix(in srgb, var(--color-info) 10%, transparent);
+}
+/* The fourth evidence-grade tone (`Confidence`'s `assumed`) — see
+   `--color-critical`'s doc comment in `tokens.ts` for why this is not `danger`. */
+.rl-chip--critical {
+  color: var(--color-critical);
+  border-color: color-mix(in srgb, var(--color-critical) 42%, transparent);
+  background: color-mix(in srgb, var(--color-critical) 10%, transparent);
 }
 
 /* --------------------------------------------------------------------------
@@ -468,7 +661,8 @@ body {
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease),
+  transition:
+    background var(--motion-fast) var(--motion-ease),
     border-color var(--motion-fast) var(--motion-ease);
 }
 
@@ -485,6 +679,11 @@ body {
 .rl-btn--primary:hover:not(:disabled) {
   background: var(--color-accent-bright);
 }
+/* Press feedback, darker than the resting colour rather than the hover's
+   brighter one — see `.rl-rail__btn:active` for why every button gets this. */
+.rl-btn--primary:active:not(:disabled) {
+  background: var(--color-accent-dim);
+}
 
 .rl-btn--ghost {
   background: var(--color-raised);
@@ -494,11 +693,18 @@ body {
 .rl-btn--ghost:hover:not(:disabled) {
   border-color: var(--color-line-strong);
 }
+.rl-btn--ghost:active:not(:disabled) {
+  background: var(--color-line-strong);
+  border-color: var(--color-line-strong);
+}
 
 .rl-btn--danger {
   background: transparent;
   border-color: color-mix(in srgb, var(--color-blaze) 50%, transparent);
   color: var(--color-blaze);
+}
+.rl-btn--danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-blaze) 16%, transparent);
 }
 
 .rl-btn--link {
@@ -512,17 +718,63 @@ body {
    * min-height, not a visual trick, because the invariants suite measures the
    * element's own rendered box, the same box a gloved tap actually lands in.
    * "New filter" and "Clear wind" were 22px tall, half the 44px floor.
+   *
+   * `min-width` was missing here on that first pass, and it was not a
+   * theoretical gap: two agents hit it independently on short labels — "Sign
+   * in" measured 35px wide on the register screen, "Back" measured 42px on
+   * two different sheets (`WaypointsSheet`/`ObservationsSheet`) — and both
+   * worked around it locally in `apps/web` rather than fixing the primitive,
+   * because the app-level fix (switching to `variant="ghost"`, which does not
+   * have this bug, or hand-rolling `.auth-card__switch a`'s identical
+   * min-width trick) was faster than touching a package outside their
+   * territory. Fixing it here is the point of a design system: the next
+   * short label gets the floor for free instead of a third local workaround.
+   * `justify-content: center` (inherited from `.rl-btn`) keeps short text
+   * centred in the now-wider box rather than left-hung against the padding.
    */
   min-height: var(--space-touch);
+  min-width: var(--space-touch);
   padding: var(--space-2);
 }
 .rl-btn--link:hover:not(:disabled) {
   color: var(--color-accent-bright);
   text-decoration: underline;
 }
+.rl-btn--link:active:not(:disabled) {
+  color: var(--color-accent-dim);
+}
 
 .rl-btn--block {
   width: 100%;
+}
+
+/*
+ * A plain inline link — `<a>`/router `<Link>` sitting mid-sentence inside a
+ * paragraph, not a `Button` — that still needs a real 44x44 hit box.
+ *
+ * The exact same defect `.rl-btn--link` was just fixed for above, found
+ * again by a different route: `apps/web/src/index.css`'s `.auth-card__switch
+ * a` already carries this identical `inline-flex` + `min-height`/`min-width`
+ * trick as a one-off (its own comment explains why — a short word like "Sign
+ * in" can measure under the floor on its own text alone even though a longer
+ * neighbour on the same screen happens to clear it by accident). The tabbed-
+ * drawer property gate (`App.tsx`) hit the same shape a second time — a
+ * `<Link to="/login">Sign in</Link>` inside a `Callout` measuring 35×14px —
+ * which is the signal to stop re-deriving it per screen. Anything that is a
+ * link, not a button, and needs this floor should reach for this class
+ * instead of a third hand-rolled copy.
+ */
+.rl-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--space-touch);
+  min-width: var(--space-touch);
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+}
+.rl-link:hover {
+  color: var(--color-accent-bright);
 }
 
 /* --------------------------------------------------------------------------
@@ -604,11 +856,30 @@ body {
   opacity: 0.7;
 }
 
+/*
+ * Wraps `.rl-toggle__main` and the optional `action` slot on one row. Only
+ * exists so an always-visible action (an "Edit" link on a saved filter) can
+ * sit beside the label without being pulled into `.rl-toggle__main`, which is
+ * itself a `<label for=id>` — nesting a second interactive control inside
+ * that label would make a tap on "Edit" also toggle the checkbox underneath
+ * it, exactly the kind of two-controls-fighting-over-one-tap defect this
+ * design system exists to prevent.
+ */
+.rl-toggle__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .rl-toggle__main {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   cursor: pointer;
+  flex: 1 1 auto;
+  /* Lets the label truncate/wrap rather than push `.rl-toggle__action` out
+     of the row on a narrow phone. */
+  min-width: 0;
   /*
    * This `<label>` — not the 18px checkbox it wraps — is the box a browser
    * actually honours a tap against, and at `--space-8` (32px) it sat below
@@ -617,6 +888,10 @@ body {
    * every other interactive element in this file already uses.
    */
   min-height: var(--space-touch);
+}
+
+.rl-toggle__action {
+  flex-shrink: 0;
 }
 
 .rl-toggle--blocked .rl-toggle__main {

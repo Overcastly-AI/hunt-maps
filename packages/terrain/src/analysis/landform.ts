@@ -20,8 +20,21 @@
  * cell-for-cell, and both are exposed as toggleable map layers.
  */
 
+import { NODATA } from '../dem/encoding.js';
 import { HeightGrid } from '../dem/grid.js';
 import type { CurvatureField, SurfaceField } from './surface.js';
+
+/**
+ * No-data threshold as a module-local constant — the `R30`/`R49` lesson.
+ *
+ * The TPI table evaluates this once per padded cell (~87k per tile at r=20,
+ * twice over for the two Weiss scales). Reaching across the module boundary for
+ * either `isElevation` or `NODATA` in that loop is a property load V8 will not
+ * fold; measured on `computeSurface`, the identical mistake cost +58%. Same
+ * predicate as `isElevation` — `>` already rejects `NaN` and `-Infinity`, and no
+ * decoder in this package can produce `+Infinity`.
+ */
+const NODATA_FLOOR = NODATA + 1;
 
 // ---------------------------------------------------------------------------
 // Topographic Position Index
@@ -38,6 +51,99 @@ export interface TpiOptions {
 }
 
 /**
+ * Fraction of a TPI neighbourhood that must carry data before the cell gets an
+ * answer instead of `NaN`.
+ *
+ * **This one is `Doctrine`, not `Measured` (`R60`).** 0.5 was picked to line up
+ * with `BEDDING_RING_MIN_DATA_FRACTION`, and the earlier note here went further
+ * and claimed the shared value meant TPI, the bedding ring and `detectBenches`
+ * "cannot disagree about how much of a neighbourhood has to answer". That is the
+ * claim `R55` retracted one file over, and it is no truer here. The denominators
+ * are not the same quantity:
+ *
+ *  - this one is the **full geometric window**, `(2r+1)²`. `computeTpi` pads its
+ *    summed-area table by exactly `r`, so an interior cell's window is never
+ *    clipped, and `HeightGrid.get` edge-replicates past the buffer. A tile whose
+ *    eight neighbours are present therefore has 100% coverage at every interior
+ *    cell, corners included — measured, not assumed.
+ *  - `detectBenches` tests `samples >= 8` of 16 ring directions **absolutely**,
+ *    and `SurfaceField` covers the tile interior only, so its directions go
+ *    missing at every tile border whether or not any data is.
+ *
+ * So at a tile border the two diverge by construction: benches fall silent and
+ * TPI speaks, because TPI reads the halo and benches cannot. Where they do agree
+ * is the case the shared number was really bought for — a lake, a DEM void or a
+ * 404'd neighbour *inside* the grid, which is the only thing that reduces TPI's
+ * coverage at all.
+ *
+ * What this quorum is for is the **symmetric** loss: a window eaten from all
+ * sides, where the survivors are still a fair sample of the disc but there are
+ * too few of them to describe it. One-sided loss is a different failure with a
+ * different magnitude and it is caught by `TPI_MAX_CENTROID_OFFSET_FRACTION`,
+ * not here. Neither test implies the other.
+ */
+export const TPI_MIN_DATA_FRACTION = 0.5;
+
+/**
+ * How far the centroid of the surviving cells may sit from the cell being
+ * described, as a fraction of the window radius, before TPI abstains.
+ *
+ * ## The failure (`R59`)
+ *
+ * TPI is `z(c) − mean(z over the survivors)`. On a plane of gradient `∇z` that
+ * is exactly
+ *
+ *     TPI = −∇z · d          d = centroid of the survivors, relative to c
+ *
+ * so a complete (symmetric) window gives 0 and a one-sided one gives a
+ * **first-order** term in the gradient — on a uniform hillside, the largest
+ * quantity anywhere in the neighbourhood. A coverage quorum cannot see this. For
+ * the canonical straight void edge the survivors run `−r … m` and `d = (m−r)/2`,
+ * so the *worst* case sits at exactly `d = −r/2`, whose coverage is
+ * `(r+1)/(2r+1)` — a number that tends to 0.5 **from above** at every radius.
+ * `TPI_MIN_DATA_FRACTION = 0.5` therefore does not merely miss this case, it can
+ * never catch it.
+ *
+ * Measured, on a uniform 15° plane with one neighbour tile absent, 10 m cells:
+ * TPI at r=20 ramps from 0 to **+26.79 m** across the outer 20 columns, matching
+ * `∇z·(r/2)·cellSize` to four decimals. `standardize` is scale-free, so that
+ * fabricated relief became the tile's entire variance and z-scored straight past
+ * Weiss's ±1σ thresholds: **512 cells of UpperSlope and 128 of MountainTop, on a
+ * plane.** Those are classes a hunter goes looking for.
+ *
+ * ## The bound, and where 0.05 comes from
+ *
+ * Because the bias is `|∇z|·|d|·cellSize` and the window's own elevation span is
+ * `|∇z|·2r·cellSize`, bounding `|d| ≤ ε·r` bounds the bias at **ε/2 of the
+ * relief the window itself covers** — free of gradient, cell size and radius,
+ * which is why the constant is expressed as a fraction of `r` rather than in
+ * cells. At ε = 0.05 the admitted bias is 2.5% of the window's span: 2.68 m at
+ * r=20 on the 15° plane above, against the 26.79 m the unguarded operator
+ * reported two cells away.
+ *
+ * **Grade the number honestly: the *form* is derived, the *magnitude* is chosen.**
+ * 2.5% is a judgement about how much fabricated relief may reach `standardize`,
+ * not a measurement of deer or of DEMs. What is measured is the cost either side
+ * of it, and that is what should move it: at ε = 0.05 the guard silences a band
+ * `r` cells deep inside a void edge and touches nothing else; a scattered
+ * single-cell void shifts the centroid by at most `r√2/(n−1)` ≈ 0.017 cells and
+ * is nowhere near it.
+ *
+ * ## What it costs, and why that is the right trade here
+ *
+ * A band `r` cells deep — 200 m at r=20 on 10 m cells — greyed inside the edge
+ * of a partially downloaded region. `R40` faced the same choice for the bedding
+ * ring and went the other way, and was right to: `ringSlopeStats` reads a
+ * tile-interior field, so requiring symmetry there would grey a frame around
+ * **every** tile and paint a grid of seams across the whole layer. TPI reads the
+ * halo, so this band appears only where a neighbour is genuinely absent — once,
+ * around the edge of what the user actually downloaded, and never in the
+ * interior of a region. That is the measurement that separates the two cases,
+ * and it is why the same reasoning produces opposite answers.
+ */
+export const TPI_MAX_CENTROID_OFFSET_FRACTION = 0.05;
+
+/**
  * TPI = z(cell) − mean(z) over the neighbourhood.
  *
  * Implemented with a summed-area table so cost is O(n) regardless of radius —
@@ -48,45 +154,149 @@ export interface TpiOptions {
  * which approximates a ring with squares. That approximation is standard
  * practice (Jenness' TPI toolbox does the same) and the classification
  * thresholds are z-scored afterwards, so the shape bias washes out.
+ *
+ * ## No-data, and why this one has the widest blast radius in the package
+ *
+ * The mean used to be taken over the raw buffer, sentinels included. `NODATA` is
+ * −32768, so a single unreadable cell drags the mean of a 41x41 window down by
+ * ~19 m and a 3x3 void drags it down by ~178 m. Measured on a 15° plane, one
+ * void 3 cells away moved TPI at r=8 from its closed-form **0.028 m** to
+ * **115 m** — and *every* cell within `radius` of the void was shifted, so one
+ * missing 3x3 patch corrupted a 41-cell-wide (≈400 m at z13) disc of Weiss
+ * classification around it. Unlike the 1-cell fringe the Horn kernels produced,
+ * that is a landscape-scale error, and it was invisible because the classes it
+ * produces are ordinary ones.
+ *
+ * Now the sentinel is excluded from both the numerator and the count, and the
+ * cell abstains below `TPI_MIN_DATA_FRACTION` of the window. Two counts are kept
+ * apart on purpose, exactly as `RingSlopeStats` does (`R40`):
+ *
+ *  - the window is **clipped** to the padded region, and clipped-away cells are
+ *    outside the denominator entirely. In practice this never fires: the padding
+ *    is exactly `r`, so an interior cell's window always fits, and `get`
+ *    edge-replicates past the buffer rather than returning the sentinel. It is
+ *    kept because the alternative — counting a clip as missing — would grey a
+ *    `radius`-wide frame around every tile.
+ *  - cells **inside** the region carrying `NODATA` are counted in the
+ *    denominator and not the numerator. That is ground the engine cannot see,
+ *    and it is what drives the abstention.
+ *
+ * ## …and *where* the survivors are, not just how many (`R59`)
+ *
+ * A count is not enough. TPI compares a cell against the mean of a
+ * neighbourhood, and a mean over a lopsided sample of a sloping neighbourhood is
+ * biased by `−∇z·d` for a centroid offset `d` — first order in the gradient, and
+ * large. The quorum above cannot catch it, because the worst one-sided case sits
+ * at 50.x% coverage for every radius. So the survivors' centroid is tested as
+ * well; see `TPI_MAX_CENTROID_OFFSET_FRACTION` for the closed form and for the
+ * grey band it costs.
  */
 export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array {
   const { width, height } = grid;
   const r = Math.max(1, Math.round(options.radius));
   const inner = Math.max(0, Math.round(options.annulusInner ?? 0));
 
-  // Summed-area table over the padded region we can legally read.
+  // Two summed-area tables over the padded region we can legally read: one of
+  // elevations (no-data contributing zero) and one of data counts. A single SAT
+  // cannot express "mean over the cells that answered" — that is the bug.
+  //
+  // The count table is only built when it can matter. Scanning the padded buffer
+  // once for a sentinel is a contiguous read costing well under a tenth of a
+  // millisecond, and it buys back the whole cost of the fix on the overwhelmingly
+  // common case of a fully covered tile: a second Float64 table at r=20 is
+  // ~700 kB of extra allocation and write bandwidth per call, and `classifyWeiss`
+  // calls this twice per tile. Without the fast path TPI ran +50%; with it, a
+  // clean tile is unchanged and only tiles that actually contain a void pay.
   const pad = r;
   const sw = width + 2 * pad;
   const sh = height + 2 * pad;
-  const sat = new Float64Array((sw + 1) * (sh + 1));
-  for (let y = 0; y < sh; y++) {
-    let rowSum = 0;
-    for (let x = 0; x < sw; x++) {
-      rowSum += grid.get(x - pad, y - pad);
-      sat[(y + 1) * (sw + 1) + (x + 1)] = sat[y * (sw + 1) + (x + 1)] + rowSum;
+  const rowStride = sw + 1;
+  const satZ = new Float64Array(rowStride * (sh + 1));
+  const buf = grid.data;
+  let anyVoid = false;
+  for (let k = 0; k < buf.length; k++) {
+    if (!(buf[k] > NODATA_FLOOR)) {
+      anyVoid = true;
+      break;
+    }
+  }
+  // A grid with no sentinel anywhere in it cannot produce one through `get`,
+  // which either indexes the buffer or clamps to a cell of it.
+  const satN = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
+  // First moments of the data mask, for the centroid test. Gated behind the same
+  // `anyVoid` flag as `satN` and for the same reason: with no sentinel in the
+  // grid every window is complete and perfectly symmetric, so the centroid is
+  // provably (0, 0) and two more ~700 kB Float64 tables per call would be pure
+  // cost on the overwhelmingly common case. `classifyWeiss` calls this twice.
+  // Float64 rather than Float32 because these are running sums of padded indices
+  // — ~1.3e7 on a 256² tile at r=20, past Float32's 2^24 exact-integer range.
+  const satMx = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
+  const satMy = anyVoid ? new Float64Array(rowStride * (sh + 1)) : null;
+
+  if (satN === null || satMx === null || satMy === null) {
+    for (let y = 0; y < sh; y++) {
+      let rowZ = 0;
+      for (let x = 0; x < sw; x++) {
+        rowZ += grid.get(x - pad, y - pad);
+        const o = (y + 1) * rowStride + (x + 1);
+        satZ[o] = satZ[y * rowStride + (x + 1)] + rowZ;
+      }
+    }
+  } else {
+    for (let y = 0; y < sh; y++) {
+      let rowZ = 0;
+      let rowN = 0;
+      let rowMx = 0;
+      let rowMy = 0;
+      for (let x = 0; x < sw; x++) {
+        const v = grid.get(x - pad, y - pad);
+        if (v > NODATA_FLOOR) {
+          rowZ += v;
+          rowN += 1;
+          // Moments in *padded* coordinates; the centre is subtracted per cell
+          // below. Accumulating raw indices keeps the table independent of which
+          // window reads it, which is what makes a SAT applicable at all.
+          rowMx += x;
+          rowMy += y;
+        }
+        const o = (y + 1) * rowStride + (x + 1);
+        const u = y * rowStride + (x + 1);
+        satZ[o] = satZ[u] + rowZ;
+        satN[o] = satN[u] + rowN;
+        satMx[o] = satMx[u] + rowMx;
+        satMy[o] = satMy[u] + rowMy;
+      }
     }
   }
 
-  const boxSum = (x0: number, y0: number, x1: number, y1: number): number => {
+  const box = (sat: Float64Array, x0: number, y0: number, x1: number, y1: number): number => {
     // Inclusive interior coords → SAT coords.
     const ax = clampInt(x0 + pad, 0, sw);
     const ay = clampInt(y0 + pad, 0, sh);
     const bx = clampInt(x1 + pad + 1, 0, sw);
     const by = clampInt(y1 + pad + 1, 0, sh);
     return (
-      sat[by * (sw + 1) + bx] -
-      sat[ay * (sw + 1) + bx] -
-      sat[by * (sw + 1) + ax] +
-      sat[ay * (sw + 1) + ax]
+      sat[by * rowStride + bx] -
+      sat[ay * rowStride + bx] -
+      sat[by * rowStride + ax] +
+      sat[ay * rowStride + ax]
     );
   };
-  const boxCount = (x0: number, y0: number, x1: number, y1: number): number => {
+  /** Cells of the window that lie inside the readable region — the denominator. */
+  const boxArea = (x0: number, y0: number, x1: number, y1: number): number => {
     const ax = clampInt(x0 + pad, 0, sw);
     const ay = clampInt(y0 + pad, 0, sh);
     const bx = clampInt(x1 + pad + 1, 0, sw);
     const by = clampInt(y1 + pad + 1, 0, sh);
     return Math.max(0, bx - ax) * Math.max(0, by - ay);
   };
+
+  // Hoisted out of the per-cell loop — the `R30`/`R49` lesson again: these are
+  // module bindings, and this loop runs once per interior cell.
+  const minFraction = TPI_MIN_DATA_FRACTION;
+  // Squared, so the centroid test is a comparison against a squared magnitude
+  // and never takes a square root.
+  const maxOffsetSq = (TPI_MAX_CENTROID_OFFSET_FRACTION * r) ** 2;
 
   const out = new Float32Array(width * height);
   for (let y = 0; y < height; y++) {
@@ -96,13 +306,45 @@ export function computeTpi(grid: HeightGrid, options: TpiOptions): Float32Array 
         out[i] = NaN;
         continue;
       }
-      let sum = boxSum(x - r, y - r, x + r, y + r);
-      let count = boxCount(x - r, y - r, x + r, y + r);
+      let sum = box(satZ, x - r, y - r, x + r, y + r);
+      let area = boxArea(x - r, y - r, x + r, y + r);
+      // With no sentinel in the grid, every in-region cell answered, so the
+      // count *is* the area and both tests below are trivially satisfied.
+      let count = satN === null ? area : box(satN, x - r, y - r, x + r, y + r);
       if (inner > 0) {
-        sum -= boxSum(x - inner, y - inner, x + inner, y + inner);
-        count -= boxCount(x - inner, y - inner, x + inner, y + inner);
+        sum -= box(satZ, x - inner, y - inner, x + inner, y + inner);
+        const innerArea = boxArea(x - inner, y - inner, x + inner, y + inner);
+        count -= satN === null ? innerArea : box(satN, x - inner, y - inner, x + inner, y + inner);
+        area -= innerArea;
       }
-      out[i] = count > 0 ? grid.get(x, y) - sum / count : 0;
+      // `count > 0` is not enough: a mean over the two corners of a window that
+      // is otherwise a lake is not a description of landscape position.
+      if (!(count > 0 && count >= area * minFraction)) {
+        out[i] = NaN;
+        continue;
+      }
+      // Nor is *how many* enough on its own. A window that lost its whole
+      // eastern half still clears 50%, and the mean of what is left is taken
+      // over ground that sits, on average, half a radius west of this cell — on
+      // a slope that is a first-order error (`R59`). `count !== area` is the
+      // fast path out: a complete window is symmetric by construction, so every
+      // cell of a well-covered tile pays one integer compare and nothing else.
+      if (count !== area && satMx !== null && satMy !== null) {
+        let mx = box(satMx, x - r, y - r, x + r, y + r);
+        let my = box(satMy, x - r, y - r, x + r, y + r);
+        if (inner > 0) {
+          mx -= box(satMx, x - inner, y - inner, x + inner, y + inner);
+          my -= box(satMy, x - inner, y - inner, x + inner, y + inner);
+        }
+        // Moments are in padded coordinates; this cell sits at (x+pad, y+pad).
+        const dx = mx / count - (x + pad);
+        const dy = my / count - (y + pad);
+        if (dx * dx + dy * dy > maxOffsetSq) {
+          out[i] = NaN;
+          continue;
+        }
+      }
+      out[i] = grid.get(x, y) - sum / count;
     }
   }
   return out;
@@ -227,7 +469,17 @@ export function classifyWeiss(
   for (let i = 0; i < sn.length; i++) {
     const s = sn[i];
     const l = ln[i];
-    if (!Number.isFinite(s) || !Number.isFinite(l)) {
+    // Slope is checked here even though only one branch below reads it, for two
+    // reasons (`R49`). The narrow one: `NaN <= plainSlope` is `false`, so an
+    // unmeasurable cell in the middle band used to fall through to "Open slope"
+    // — a definite class produced by a comparison against NaN. The broader one:
+    // this file's contract is that Weiss and Wood are "directly comparable
+    // cell-for-cell", and they only are if they abstain on the same cells.
+    // Without this, a fringe cell whose own 3x3 window is void could still
+    // reach TPI quorum from the half of its neighbourhood that survived, and
+    // the map grew a one-cell band of *Canyon / incised drainage* along every
+    // missing-tile edge — a thermal sink and travel route, invented.
+    if (!Number.isFinite(s) || !Number.isFinite(l) || !Number.isFinite(surface.slope[i])) {
       out[i] = WeissLandform.Unknown;
       continue;
     }
@@ -262,6 +514,17 @@ export enum WoodFeature {
   Pass = 3,
   Ridge = 4,
   Peak = 5,
+  /**
+   * The window could not be measured — a DEM void, a lake, a neighbour tile that
+   * 404'd. Distinct from `Planar`, which is a *finding*: "we looked, and this
+   * cell is an unremarkable slope".
+   *
+   * Appended as 6 rather than renumbered to 0, because these ids are persisted
+   * on observation rows (`morphometry`) and shifting them would silently
+   * relabel every record ever written. `WeissLandform` has had its own
+   * `Unknown` since it was written; this is Wood catching up.
+   */
+  Unknown = 6,
 }
 
 export const WOOD_LABELS: Record<WoodFeature, string> = {
@@ -271,6 +534,7 @@ export const WOOD_LABELS: Record<WoodFeature, string> = {
   [WoodFeature.Pass]: 'Saddle (pass)',
   [WoodFeature.Ridge]: 'Ridge / spur',
   [WoodFeature.Peak]: 'Peak / knob',
+  [WoodFeature.Unknown]: 'Not measurable',
 };
 
 export interface WoodOptions {
@@ -354,13 +618,20 @@ export function classifyWood(
 
   for (let i = 0; i < n; i++) {
     const slope = surface.slope[i];
-    if (!Number.isFinite(slope)) {
-      out[i] = WoodFeature.Planar;
-      continue;
-    }
     const cross = curvature.crossSectional[i];
     const maxC = curvature.maxCurvature[i];
     const minC = curvature.minCurvature[i];
+    // Unknown is its own class, not `Planar`. `Planar` renders transparent, so
+    // the old fallback looked harmless on the map — but it is also the value the
+    // point-query returns as "Planar slope" and the value a saved filter
+    // `wood ∈ {Planar}` selects on, so the engine was answering a question about
+    // ground it had never seen. Curvature is checked alongside slope because the
+    // two operators can disagree at a window's edge only if one of them is
+    // broken, and if they ever do, abstaining is the safe direction.
+    if (!Number.isFinite(slope) || !Number.isFinite(cross) || !Number.isFinite(maxC)) {
+      out[i] = WoodFeature.Unknown;
+      continue;
+    }
 
     if (slope > slopeTol) {
       // On a real slope, the across-slope curvature decides: convex across the
@@ -391,6 +662,60 @@ export function classifyWood(
 // Benches
 // ---------------------------------------------------------------------------
 
+/**
+ * The three answers `detectBenches` can give about a cell.
+ *
+ * Three, not two, and the third one is the whole point (`R69`). The array used
+ * to be a plain 0/1 mask, so a cell the engine could not measure carried the
+ * **same byte** as a measured 30° sidehill. `terrainFilter`'s bench branch reads
+ * `(flag[i] === 1) === predicate.isBench`, which made the editor's *"Not on a
+ * bench"* button true on every DEM void in the viewport — in the painted layer
+ * and in the match-share percentage alike. On a uniform 25° plane with a 13x13
+ * void, that predicate claimed **100.0% of the tile**, 6.05 points of which the
+ * engine had never seen.
+ *
+ * **Appended, never renumbered**, exactly as `WoodFeature.Unknown = 6` was.
+ * `0` and `1` keep the meanings they have always had, so every existing
+ * `bench[i] === 1` reader — the point query, the render mask, denormalised
+ * observation rows — stays correct without being touched. Anything that tested
+ * *truthiness* rather than `=== 1` is the thing to find, and there was exactly
+ * one: `renderMask`, fixed in the same commit.
+ *
+ * A `Uint8Array` carries this cleanly; no wider or parallel array is needed.
+ */
+export enum BenchFlag {
+  /** Measured, and it is not a bench. */
+  NotBench = 0,
+  /** Measured, and it is a bench. */
+  Bench = 1,
+  /**
+   * Not measurable — the cell's own 3x3 window had no data, or its surround
+   * ring was mostly void. Not an answer about the ground; the absence of one.
+   */
+  Unknown = 2,
+}
+
+/**
+ * Hoisted out of the enum object for the inner loop.
+ *
+ * A TypeScript enum compiles to a runtime object, so `BenchFlag.Unknown` inside
+ * a per-cell loop is a property load — the identical trap `R30` measured at
+ * 880 ms/tile and `R49` measured at +58% on `computeSurface`. ~65k cells per
+ * tile is not the place to find out again.
+ */
+const BENCH_BENCH = BenchFlag.Bench;
+const BENCH_UNKNOWN = BenchFlag.Unknown;
+
+/**
+ * Ring directions that must answer before the surround is called measured.
+ *
+ * Named because it is now load-bearing twice: it decides `Bench` vs `NotBench`,
+ * and — against `samples + missing` — it decides whether the cell is answerable
+ * at all. See the abstention note on `detectBenches`.
+ */
+const MIN_RING_SAMPLES = 8;
+const RING_DIRECTIONS = 16;
+
 export interface BenchOptions {
   /** A bench cell must itself be gentler than this (degrees). */
   maxBenchSlopeDeg?: number;
@@ -413,6 +738,31 @@ export interface BenchOptions {
  * rejects valley floors (gentle cell, gentle ring) and ridge tops (gentle cell,
  * but the ring is gentle on at least one side too, once `ringRadius` is large
  * enough to reach past the crest).
+ *
+ * Returns a `BenchFlag` per cell — `Bench`, `NotBench` or `Unknown`. Read it
+ * with `=== BenchFlag.Bench`, never as a truthy mask.
+ *
+ * ## When this abstains (`R69`)
+ *
+ * Two cases, and they are different from each other:
+ *
+ *  - **The cell's own slope is `NaN`.** Its 3x3 window was not fully measurable,
+ *    so there is no pad to judge. This used to leave the zero-initialised
+ *    `NotBench`, i.e. the engine reported "we looked, there is no shelf here"
+ *    about ground it had never seen.
+ *  - **Voids ate the surround ring.** Fewer than `MIN_RING_SAMPLES` of the 16
+ *    directions answered *and* the missing ones were inside the grid. A ring
+ *    characterised from three surviving directions is not a measurement of the
+ *    surround.
+ *
+ * And one case that deliberately does **not** abstain: a ring that runs off the
+ * edge of `SurfaceField`. `RingSlopeStats` reports those separately from
+ * `missing` precisely so this decision can be made — the ground is there, it is
+ * just not in this array, and greying it would paint a `ringRadius`-wide seam
+ * grid around every tile in the layer. That is the more visible defect of the
+ * two, and the trade is documented at `TPI_MIN_DATA_FRACTION`: at a tile border
+ * benches fall silent while TPI speaks, because TPI reads the halo and this
+ * cannot.
  */
 export function detectBenches(
   grid: HeightGrid,
@@ -421,43 +771,239 @@ export function detectBenches(
 ): Uint8Array {
   const maxBench = options.maxBenchSlopeDeg ?? 8;
   const minSurround = options.minSurroundSlopeDeg ?? 18;
-  const ring = Math.max(2, Math.round(options.ringRadius ?? 8));
+  const ring = Math.max(2, Math.round(options.ringRadius ?? DEFAULT_RING_RADIUS_CELLS));
   const minCells = options.minCells ?? 6;
 
   const { width, height } = grid;
   const flag = new Uint8Array(width * height);
+  let anyUnknown = false;
+  // One reused stats object: this is a per-cell inner loop in a render budget.
+  const r: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN };
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
       const s = surface.slope[i];
-      if (!Number.isFinite(s) || s > maxBench) continue;
-
-      // Sample the ring in 16 directions rather than every cell in the annulus:
-      // 16 samples is enough to characterise the surround and keeps this within
-      // a render budget.
-      let steepCount = 0;
-      let samples = 0;
-      for (let k = 0; k < 16; k++) {
-        const ang = (k / 16) * Math.PI * 2;
-        const sx = Math.round(x + Math.cos(ang) * ring);
-        const sy = Math.round(y + Math.sin(ang) * ring);
-        if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
-        const rs = surface.slope[sy * width + sx];
-        if (!Number.isFinite(rs)) continue;
-        samples++;
-        if (rs >= minSurround) steepCount++;
+      if (!Number.isFinite(s)) {
+        // No pad to judge. This is the absence of an answer, not the answer
+        // "no bench" — the two used to be the same byte (`R69`).
+        flag[i] = BENCH_UNKNOWN;
+        anyUnknown = true;
+        continue;
       }
-      // At least half the ring must be steep — a shelf is steep above and below
-      // but typically open along the contour.
-      if (samples >= 8 && steepCount / samples >= 0.5) flag[i] = 1;
+      // Measured and too steep to be a shelf: a real, negative answer. Decided
+      // before the ring so the common case still costs nothing.
+      if (s > maxBench) continue;
+
+      ringSlopeStats(surface, x, y, ring, minSurround, RING_DIRECTIONS, r);
+      if (r.samples >= MIN_RING_SAMPLES) {
+        // At least half the ring must be steep — a shelf is steep above and
+        // below but typically open along the contour.
+        if (r.steepCount / r.samples >= 0.5) flag[i] = BENCH_BENCH;
+      } else if (r.samples + r.missing >= MIN_RING_SAMPLES) {
+        // The ring was there and could not be read: void, lake, 404'd
+        // neighbour. Falling through to `NotBench` here would describe the
+        // surround from whatever handful of directions happened to survive.
+        // (If `samples + missing` is itself short, the ring simply ran off the
+        // tile — a border artefact, not missing ground. See the doc comment.)
+        flag[i] = BENCH_UNKNOWN;
+        anyUnknown = true;
+      }
     }
   }
 
-  return minCells > 1 ? removeSmallBlobs(flag, width, height, minCells) : flag;
+  if (minCells <= 1) return flag;
+  const cleaned = removeSmallBlobs(flag, width, height, minCells);
+  // `removeSmallBlobs` is a strict 0/1 operator writing into a fresh zeroed
+  // array, so the third state has to be restamped or it collapses straight back
+  // into `NotBench` one line after being introduced. Guarded by `anyUnknown`
+  // because a tile whose neighbours all arrived has no unknowns at all, and
+  // that is the overwhelmingly common case in a render loop — it should not pay
+  // a second full pass for a state it does not contain.
+  if (!anyUnknown) return cleaned;
+  for (let i = 0; i < flag.length; i++) {
+    if (flag[i] === BENCH_UNKNOWN) cleaned[i] = BENCH_UNKNOWN;
+  }
+  return cleaned;
 }
 
-/** Drop connected components smaller than `minCells` (4-connectivity). */
+/** Cell counts by `BenchFlag`. */
+export interface BenchCounts {
+  bench: number;
+  notBench: number;
+  unknown: number;
+}
+
+/**
+ * Tally a bench field by state.
+ *
+ * Exists because summing the bytes is now wrong in a way that reads as right:
+ * `Unknown` is 2, so `flag.reduce((a, b) => a + b)` counts every void as two
+ * benches and can push a "share" past 100%. Any caller that wants a count must
+ * come through here.
+ */
+export function benchCounts(flag: Uint8Array): BenchCounts {
+  let bench = 0;
+  let notBench = 0;
+  let unknown = 0;
+  for (let i = 0; i < flag.length; i++) {
+    const v = flag[i];
+    if (v === BENCH_BENCH) bench++;
+    else if (v === BENCH_UNKNOWN) unknown++;
+    else notBench++;
+  }
+  return { bench, notBench, unknown };
+}
+
+/**
+ * Bench share of **measured** ground, or `NaN` if nothing was measured.
+ *
+ * The denominator is the availability question the rest of the product already
+ * answers this way: `shareOf` in the analytics module excludes non-finite cells,
+ * and a `TerrainProfile` that reports `benchShare` over every cell in a bounding
+ * box is not comparable with the `slopeShares` sitting beside it. `NaN` rather
+ * than 0 when there is no measured ground, because "no benches" and "no data"
+ * are the distinction this whole function exists to keep.
+ */
+export function benchShareOfMeasured(flag: Uint8Array): number {
+  const { bench, notBench } = benchCounts(flag);
+  const measured = bench + notBench;
+  return measured === 0 ? NaN : bench / measured;
+}
+
+/**
+ * Default ring radius in cells for "is this pad embedded in steep ground?".
+ *
+ * Shared by `detectBenches` and the bedding slope term so the two layers cannot
+ * disagree about what counts as a shelf. They did disagree once — bedding peaked
+ * at a uniform 22° sidehill while `detectBenches` required a ≤8° pad inside a
+ * ≥18° ring — which put the flagship bedding layer's maximum on exactly the
+ * ground the bench layer rejects.
+ */
+export const DEFAULT_RING_RADIUS_CELLS = 8;
+
+export interface RingSlopeStats {
+  /** Ring directions that landed inside the grid and had data. */
+  samples: number;
+  /**
+   * Ring directions that landed **inside** the grid but carried no data.
+   *
+   * Reported separately from the directions that fell outside the grid because
+   * the two mean opposite things and callers must not conflate them (`R40`):
+   *
+   *  - *outside the grid* is a tile-border artefact of `SurfaceField` covering
+   *    only the interior. The ground is there, it is simply not in this array,
+   *    and abstaining on it would grey a `radiusCells`-wide border around every
+   *    tile — a visible grid of seams across the whole layer.
+   *  - *inside the grid with no data* is ground the engine genuinely cannot see:
+   *    a DEM void, a lake, a neighbour tile that 404'd. A ring characterised from
+   *    the two directions that happen to have data is not a measurement of the
+   *    surround, and reporting it as one is how "unknown" becomes a confident
+   *    number.
+   *
+   * `samples + missing` is therefore the size of the ring actually available to
+   * speak about, and `samples / (samples + missing)` is how much of it answered.
+   */
+  missing: number;
+  /** How many of those were at or above the steep threshold. */
+  steepCount: number;
+  /** Mean slope over the sampled directions, degrees; NaN when `samples` is 0. */
+  meanSlopeDeg: number;
+}
+
+/**
+ * Slope statistics on a ring of radius `radiusCells` around (x, y).
+ *
+ * Samples 16 directions rather than every cell in the annulus: 16 is enough to
+ * characterise the surround and keeps this inside a per-tile render budget
+ * (a full annulus at r=8 is 200+ reads per cell).
+ *
+ * **Edge behaviour.** `SurfaceField` covers the tile interior only, so ring
+ * samples that fall outside it are dropped rather than read from the halo. The
+ * result is a `radiusCells`-wide border where the ring is characterised from
+ * fewer directions. That is a real (pre-existing) limitation shared by every
+ * consumer, and it is why callers get `samples` back and decide for themselves
+ * whether they have enough to speak.
+ *
+ * **No-data behaviour.** A direction that lands inside the grid on a cell with
+ * no slope is counted in `missing`, not silently forgotten. See the field's own
+ * note: without that count a caller cannot tell "I saw two of sixteen directions
+ * because fourteen are off the tile" from "…because fourteen are a lake".
+ */
+export function ringSlopeStats(
+  surface: SurfaceField,
+  x: number,
+  y: number,
+  radiusCells: number,
+  steepDeg: number,
+  directions = 16,
+  out: RingSlopeStats = { samples: 0, missing: 0, steepCount: 0, meanSlopeDeg: NaN },
+): RingSlopeStats {
+  const { width, height, slope } = surface;
+  const offsets = ringOffsets(radiusCells, directions);
+  let samples = 0;
+  let missing = 0;
+  let steepCount = 0;
+  let sum = 0;
+  for (let k = 0; k < directions; k++) {
+    const sx = x + offsets[k * 2];
+    const sy = y + offsets[k * 2 + 1];
+    if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
+    const rs = slope[sy * width + sx];
+    if (!Number.isFinite(rs)) {
+      missing++;
+      continue;
+    }
+    samples++;
+    sum += rs;
+    if (rs >= steepDeg) steepCount++;
+  }
+  out.samples = samples;
+  out.missing = missing;
+  out.steepCount = steepCount;
+  out.meanSlopeDeg = samples > 0 ? sum / samples : NaN;
+  return out;
+}
+
+/**
+ * Rounded (dx, dy) cell offsets for the ring directions, memoised on the last
+ * (radius, directions) pair used.
+ *
+ * Called once per cell, so computing 16 sin/cos here costs a million transcendental
+ * calls per 256² tile — measurably the most expensive thing in the bedding layer
+ * before it was hoisted, and this runs per tile inside a render loop. The cache
+ * is a pure memoisation of a deterministic function of its two arguments: a
+ * caller interleaving two radii only loses the speed-up, never correctness.
+ */
+let cachedRingRadius = -1;
+let cachedRingDirections = -1;
+let cachedRingOffsets = new Int32Array(0);
+function ringOffsets(radiusCells: number, directions: number): Int32Array {
+  if (radiusCells === cachedRingRadius && directions === cachedRingDirections) {
+    return cachedRingOffsets;
+  }
+  const offsets = new Int32Array(directions * 2);
+  for (let k = 0; k < directions; k++) {
+    const ang = (k / directions) * Math.PI * 2;
+    offsets[k * 2] = Math.round(Math.cos(ang) * radiusCells);
+    offsets[k * 2 + 1] = Math.round(Math.sin(ang) * radiusCells);
+  }
+  cachedRingRadius = radiusCells;
+  cachedRingDirections = directions;
+  cachedRingOffsets = offsets;
+  return offsets;
+}
+
+/**
+ * Drop connected components smaller than `minCells` (4-connectivity).
+ *
+ * **Strictly a 1-means-match operator.** Any other value — including a
+ * `BenchFlag.Unknown` — is background: it does not join a component, it cannot
+ * bridge two sub-threshold blobs into a surviving one, and it does not appear in
+ * the output. Callers carrying a third state must restamp it (`detectBenches`
+ * does). Testing truthiness here would have quietly promoted every DEM void into
+ * whatever blob it touched.
+ */
 export function removeSmallBlobs(
   mask: Uint8Array,
   width: number,
@@ -470,7 +1016,7 @@ export function removeSmallBlobs(
   const component: number[] = [];
 
   for (let start = 0; start < mask.length; start++) {
-    if (!mask[start] || seen[start]) continue;
+    if (mask[start] !== 1 || seen[start]) continue;
     component.length = 0;
     stack.length = 0;
     stack.push(start);
@@ -494,7 +1040,7 @@ export function removeSmallBlobs(
   return out;
 
   function pushIf(j: number): void {
-    if (mask[j] && !seen[j]) {
+    if (mask[j] === 1 && !seen[j]) {
       seen[j] = 1;
       stack.push(j);
     }

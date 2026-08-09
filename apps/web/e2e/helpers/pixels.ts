@@ -64,6 +64,75 @@ export async function samplePixels(page: Page, points: Point[]): Promise<RGBA[]>
 }
 
 /**
+ * Fraction of pixels inside `rect` (CSS px, converted to device px via
+ * `devicePixelRatio`) whose rendered colour is saturated — `max(r,g,b) -
+ * min(r,g,b) > saturationThreshold`. Returns a percentage, 0..100.
+ *
+ * This is the direct, rendered-pixel check for "a layer painted something",
+ * as opposed to "a layer's DOM checkbox is checked" or "the worker returned a
+ * non-empty buffer" — both of those were true the day `BACKLOG R32` shipped a
+ * bedding layer that covered 0.00% of the canvas, because every value in its
+ * output landed in the near-transparent bottom slice of an absolute `[0, 1]`
+ * ramp. A greyscale hillshade or a neutral basemap patch has `max == min`
+ * (or very close to it) at every pixel, so this threshold does not fire on
+ * imagery or relief alone — it fires only where a colour ramp actually
+ * painted a hue, which is what "the layer is visible" means to a hunter
+ * looking at the screen.
+ */
+export async function canvasSaturationCoverage(
+  page: Page,
+  rect: { x: number; y: number; width: number; height: number },
+  saturationThreshold = 25,
+): Promise<number> {
+  const buffer = await page.screenshot();
+  const dataUrl = `data:image/png;base64,${buffer.toString('base64')}`;
+
+  return page.evaluate(
+    async ({
+      dataUrl,
+      rect,
+      saturationThreshold,
+    }: {
+      dataUrl: string;
+      rect: { x: number; y: number; width: number; height: number };
+      saturationThreshold: number;
+    }) => {
+      const img = new Image();
+      img.src = dataUrl;
+      await img.decode();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) throw new Error('2D canvas context unavailable while measuring saturation coverage');
+      ctx.drawImage(img, 0, 0);
+
+      const dpr = window.devicePixelRatio || 1;
+      const x0 = Math.max(0, Math.round(rect.x * dpr));
+      const y0 = Math.max(0, Math.round(rect.y * dpr));
+      const w = Math.max(0, Math.min(canvas.width - x0, Math.round(rect.width * dpr)));
+      const h = Math.max(0, Math.min(canvas.height - y0, Math.round(rect.height * dpr)));
+      if (w === 0 || h === 0) return 0;
+
+      const { data } = ctx.getImageData(x0, y0, w, h);
+      let saturated = 0;
+      const total = w * h;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        if (max - min > saturationThreshold) saturated++;
+      }
+      return (saturated / total) * 100;
+    },
+    { dataUrl, rect, saturationThreshold },
+  );
+}
+
+/**
  * Points on an evenly spaced grid across a rect, in CSS pixels.
  *
  * Used to sample many points inside a text element's own box rather than one

@@ -24,6 +24,7 @@
   --color-warn: #e0b64a;
   --color-blaze: #ff5a1f;
   --color-info: #5b9dd9;
+  --color-critical: #d67862;
 
   /* map */
   --map-slope-flat: #3d7fa6;
@@ -45,6 +46,11 @@
   --glass-blur: blur(18px) saturate(140%);
   --glass-border: rgb(255 255 255 / 0.09);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
+
+  /* plate */
+  --plate-bg: rgb(15 19 20 / 0.94);
+  --plate-border: #3a4a4d;
+  --plate-divider: #29373a;
 
   /* space */
   --space-0: 0;
@@ -107,6 +113,9 @@
   --layout-sheet-max-height: 62vh;
   --layout-rail-gap: 12px;
   --layout-breakpoint-compact: 860px;
+  --layout-conditions-bar-height: 56px;
+  --layout-command-bar-height: 48px;
+  --layout-tabbar-height: 45px;
 
   /* motion */
   --motion-fast: 120ms;

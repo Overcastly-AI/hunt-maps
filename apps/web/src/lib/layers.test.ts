@@ -103,4 +103,33 @@ describe('layer catalogue', () => {
     expect(layerById('slope')?.label).toBe('Slope angle');
     expect(layerById('nope')).toBeUndefined();
   });
+
+  // BACKLOG R61 — the regression gate the plan asks for. `Confidence` reached
+  // zero real usages last time nothing enforced it, so this is not optional:
+  // a layer added with a modelled biological parameter and no `grade` should
+  // fail CI, not silently ship ungraded, and a layer built on published,
+  // measured geometry should never gain one by accident either.
+  describe('evidence grading (BACKLOG R61)', () => {
+    // Horn slope, aspect, Weiss landform class, Wood morphometric features and
+    // bench detection are peer-reviewed algorithms validated against
+    // closed-form analytic surfaces (CLAUDE.md non-negotiable #2) — a `grade`
+    // on any of them implies a doubt that does not exist.
+    const measuredGeometry = ['slope', 'aspect', 'weiss', 'wood', 'bench', 'multiHillshade'];
+
+    it('never grades measured geometry', () => {
+      for (const id of measuredGeometry) {
+        expect(layerById(id)?.grade, id).toBeUndefined();
+      }
+    });
+
+    it('grades bedding — and only bedding — as an assumption', () => {
+      for (const l of LAYERS) {
+        if (l.id === 'bedding') {
+          expect(l.grade).toBe('assumed');
+        } else {
+          expect(l.grade, l.id).toBeUndefined();
+        }
+      }
+    });
+  });
 });

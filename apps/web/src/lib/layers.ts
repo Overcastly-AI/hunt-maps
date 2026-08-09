@@ -18,7 +18,7 @@
  */
 
 import type { AnalysisLayer } from '@hunt-maps/terrain';
-import { mapColor } from '@hunt-maps/design';
+import { mapColor, type EvidenceGrade } from '@hunt-maps/design';
 
 export type LayerGroup = 'base' | 'relief' | 'analysis' | 'hunting' | 'saved';
 
@@ -36,6 +36,22 @@ export interface LayerDefinition {
   /** Depends on the selected date/time. */
   requiresTime?: boolean;
   legend?: Array<{ swatch: string; label: string }>;
+  /**
+   * How well-supported the layer's underlying parameter is, per
+   * `docs/EVIDENCE.md`. Renders as a `Confidence` chip once the layer is
+   * active (`BACKLOG R61`).
+   *
+   * **Never set this for measured geometry** — Horn slope, aspect, a Weiss
+   * landform class, a Wood morphometric feature. Those are published,
+   * peer-reviewed algorithms validated against closed-form analytic surfaces;
+   * a grade chip on one implies a doubt that does not exist, and grading
+   * everything is identical to grading nothing. This exists for the layers
+   * built on a *modelled* biological parameter instead — today, only
+   * `bedding`'s `idealSlopeDeg: 22°`, which `docs/EVIDENCE.md` grades 🔴
+   * Assumed. A test in `LayersSheet.test.tsx` iterates this array and fails
+   * CI if a future layer's `Confidence` chip drifts from what is set here.
+   */
+  grade?: EvidenceGrade;
 }
 
 export const LAYERS: LayerDefinition[] = [
@@ -144,6 +160,16 @@ export const LAYERS: LayerDefinition[] = [
     defaultOpacity: 0.6,
     exclusive: true,
     requiresWind: true,
+    // Leeward aspect and upwind shelter are geometry, but the terms that turn
+    // slope into a bedding score are not: `docs/EVIDENCE.md`'s "Bedding-model
+    // parameters shipped by R11/R21/R22" grades most of the live constants
+    // (BEDDING_RING_MIN_SLOPE_DEG, BEDDING_VRM_FULL_COVER, the cover/shelter
+    // term floors, the ring radius) 🔴 Assumed — no source nominates a value,
+    // only a defensible scale argument. Only the pad half-max is 🔵 Inferred.
+    // The layer's grade is the weaker of the two, per the same rule
+    // `Confidence` applies everywhere else: a claim is only as strong as its
+    // weakest input.
+    grade: 'assumed',
   },
 ];
 
@@ -185,10 +211,7 @@ export function layerById(id: string): LayerDefinition | undefined {
 }
 
 /** Anything the current selection needs but the user has not supplied yet. */
-export function missingInputs(
-  active: Set<string>,
-  windFromDeg: number | null,
-): string[] {
+export function missingInputs(active: Set<string>, windFromDeg: number | null): string[] {
   const missing: string[] = [];
   for (const id of active) {
     const def = layerById(id);

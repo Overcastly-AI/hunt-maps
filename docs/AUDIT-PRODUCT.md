@@ -8,6 +8,545 @@ switch to this and never go back?**
 
 ---
 
+# 2026-08-07 — The left-hand chrome: rails, grouping, and growth
+
+**Scope:** the floating map controls — `apps/web/src/App.tsx:250-307`,
+`apps/web/src/index.css:37-171`, and `.rl-rail` / `.rl-conditions` /
+`.rl-sheet--drawer` in `packages/design/src/styles.css`. Prompted by a direct
+usability complaint from the founder, who uses this daily: *"Left side bar is
+really hard to work with. If a full left hand nav design revamp is needed then
+let's do it."* Treated as a finding to explain, not a hypothesis to test.
+
+**Relationship to the 2026-08-06 pass below.** That pass's §3 *"Transient
+controls vs persistent panels"* and its recommendation #5 *"Uncouple wind/time
+from the layers sheet"* cover adjacent ground and were **landed** — `App.tsx`
+now tracks sheet and popover state independently (`App.tsx:42-54`). This
+section **extends** §3 to the controls themselves rather than the panels they
+open, and reports that recommendation #5's stated goal — layer list and wind
+editor usable at once — **is still not achieved on a phone**, for a layout
+reason §3 did not examine. Recommendation #9 ("delete the fake grip") is
+unrelated and stands. Where this section and §3 disagree on where a control
+should live, this section supersedes.
+
+**Verdict: the founder is right, and the complaint is bigger than the rail.
+Revamp — but it is a re-container, not a rewrite** (one new primitive in
+`packages/design`, ~40 lines of `App.tsx`, one CSS constant deleted).
+
+## Sourcing note
+
+`WebSearch` worked this session. `WebFetch` was **egress-blocked on every
+competitor domain** — `support.onxmaps.com`, `help.gaiagps.com`,
+`blog.caltopo.com`, `osmand.net` and `www.onxmaps.com/pdf` all returned
+`EGRESS_BLOCKED`, and `raw.githubusercontent.com` returned 200. So the channel
+map from the prior pass still holds, with one addition: **search works even
+where fetch does not.**
+
+Two tiers of citation, tagged inline and never mixed:
+
+- **Primary, read from source.** `NWACus/avy` (cloned, `--depth 1
+  --filter=blob:none`, grepped) and `osmandapp/OsmAnd` (layout XML via
+  `raw.githubusercontent.com`, HTTP 200 confirmed).
+- **`[snippet]`.** Vendor support-article text surfaced in search results but
+  **not fetched and not read in full** — onX Hunt, Gaia GPS, HuntStand,
+  CalTopo. Treat as a design prompt. A `[snippet]` is *not* grounds for a build
+  decision on its own, and no recommendation below rests on one.
+
+Nothing here is `[recalled]`. Every claim I could not source to one of those two
+tiers was dropped rather than softened — including the entire CalTopo redesign
+rationale, which is blocked and whose search snippet was too thin to use.
+
+## The finding that matters most — and it was not on the brief
+
+**On a phone, opening Layers hides wind, time and thermals. The product's
+flagship interaction is therefore unavailable on the primary field device — and
+the invariant suite records that as intentional.**
+
+`apps/web/screenshots/07-mobile-sheet.png` shows it at 390px: the sheet is open,
+and the `ConditionsBar` and the entire bottom-left rail are gone underneath it.
+
+Three things make this invisible to the team rather than obvious:
+
+1. `apps/web/src/index.css:161-170` documents the occlusion as *"a deliberate,
+   temporary occlusion by a panel the user can dismiss"* — true as a statement
+   about z-order, wrong as a product decision, because the thing occluded is the
+   one control the panel's own content depends on.
+2. `apps/web/e2e/ui-invariants.spec.ts:140-148` **whitelists** it in the
+   hit-testability audit: an element covered by the open sheet is skipped rather
+   than failed.
+3. Invariant **group 4 (no chrome collisions) is desktop-only by construction**
+   — `ui-invariants.spec.ts:399`, `test.describe('4. No chrome collisions
+   (desktop)')`. Nothing measures the mobile arrangement at all.
+
+So three separate mechanisms each independently decided this was fine.
+
+`App.tsx:42-53` states the opposite intent in a doc comment: the sheet and the
+popovers were deliberately decoupled because the flagship move — *"sweeping the
+wind dial and watching leeward bedding likelihood repaint live"* — "needs the
+layer toggle and the wind editor open at once." On desktop that half-works;
+`apps/web/screenshots/04b-desktop-wind-popover.png` shows the wind popover
+covering the Topo row, the LiDAR relief row and the Terrain Analysis heading
+anyway. On mobile it does not work at all.
+
+### The eight-interaction walkthrough
+
+New user, phone, wants leeward bedding — the one thing no competitor has:
+
+1. Sheet is open on load (`App.tsx:64`, `sheetOpen` defaults `true`). Scroll
+   past Satellite / Topo / LiDAR relief. `07-mobile-sheet.png` shows only ~2.5
+   rows fit — the sheet is capped at `62vh` (`packages/design/src/tokens.ts:236`,
+   `layout['sheet-max-height']`).
+2. Reach Terrain Analysis. Bedding is disabled with *"Set a wind direction first
+   — without one this layer would render against a default, which would be
+   misleading rather than merely wrong."*
+   (`apps/web/src/components/LayersSheet.tsx:128-130`). **This is correct and
+   honest and is the best moment in the app.**
+3. The wind control is underneath the sheet you are reading.
+4. **Close the sheet.** Forced, and forced only by this layout.
+5. Tap Wind. 6. Set NW. 7. Dismiss popover.
+8. Tap Layers, scroll back down, toggle bedding.
+
+Eight interactions with a mandatory panel-close in the middle. On desktop the
+same journey is five with no close.
+
+**This is the argument that the layout is not cosmetic.** It is costing the
+product its time-to-first-insight moment on the device it is actually used on,
+and the moment it costs is the one the whole product exists for. The prior
+pass's §5 identified time-to-first-insight as "the finding that matters most";
+this is the same finding, reached from the chrome instead of the content.
+
+## Ratings (hunter's perspective, /10)
+
+| Dimension | Desktop | Mobile |
+| --- | --- | --- |
+| Discoverability of the three controls | 4 | **2** |
+| Grouping / information architecture | 3 | 3 |
+| Reachability one-handed at 05:30 | 6 | **2** |
+| Map area preserved (the map is the product) | 6 | **2** |
+| Honesty of the state shown | 4 | 4 |
+| Survives roadmap growth to nine controls | **1** | **1** |
+| **Overall left-hand chrome** | **4** | **2** |
+
+`ConditionsBar`, by contrast, rates a **9**. It is the best-designed element in
+the app and it is the template for the fix, not a thing to change.
+
+## Findings
+
+### F1 — The "rail" is not a rail. It is the orphaned bottom of the Layers drawer.
+
+`.rl-sheet--drawer` sits at `left: var(--space-3)`
+(`packages/design/src/styles.css:185`). `.chrome-bottomleft` is `justify-self:
+start` inside a `.map-chrome` with `padding: var(--space-3)`
+(`apps/web/src/index.css:42,63-66`). **Identical left edge, 12px apart
+vertically.** In `04b-desktop-wind-popover.png` the sheet's left edge and the
+rail's left edge are the same pixel column.
+
+To a user this is not "a drawer and a rail." It is one object roughly 850px tall
+running floor-to-ceiling down the left side. The founder's phrase — "left side
+bar" — is literally accurate: there is no separate rail in the perceived UI, and
+any fix framed as "redesign the rail" will miss what he is looking at.
+
+### F2 — On mobile the rail is a full-width slab that is 88% empty and eats map pans.
+
+`apps/web/src/index.css:154-159` sets `flex-direction: column-reverse;
+align-items: stretch; justify-self: stretch`. `.rl-rail__btn` is fixed at `width:
+var(--space-touch)` (`packages/design/src/styles.css:140`).
+
+Result, plainly visible in `apps/web/screenshots/08-mobile-map.png`: a 366×134px
+glass panel with three 44px icons pinned to its left edge and **322px (88%) of
+dead glass**. `.map-chrome > * { pointer-events: auto }`
+(`apps/web/src/index.css:54`) makes the whole slab hit-testable, so the bottom
+quarter of the screen — exactly where a thumb rests — cannot pan the map.
+
+Total bottom chrome at the suite's own `MOBILE` viewport of 390×844
+(`apps/web/e2e/helpers/settle.ts:16`):
+
+```
+12px  padding-bottom       (--space-3)
+134px rail                 (3 x 44px buttons + 2 x 1px gap)
+12px  gap                  (--space-3)
+58px  ConditionsBar
+= 216px = 25.6% of the viewport
+```
+
+A quarter of the screen, to show three unlabelled glyphs and three readouts.
+
+### F3 — The mobile stacking order contradicts its own comment.
+
+`apps/web/src/index.css:143-146` states: *"Wind and time are the two things a
+hunter re-checks constantly, so they get the bottom edge — the only part of a
+large phone a thumb reaches reliably."*
+
+`column-reverse` places the **first** DOM child last. `App.tsx:266` renders
+`<Rail>` first and `<ConditionsBar>` second. So **the rail gets the bottom edge
+and the ConditionsBar sits above it** — confirmed in `08-mobile-map.png`, where
+the conditions row is at y≈1258-1375 and the rail slab is below it at
+y≈1390-1660 (2× device pixels).
+
+The stated field rationale is inverted in practice. No test covers it, because
+group 4 is desktop-only.
+
+### F4 — Icon-only, and the only affordance is a `title` that never fires on touch.
+
+`packages/design/src/components/primitives.tsx:49-50` sets both `aria-label` and
+`title`, with the comment *"the tooltip is what makes them learnable for
+everyone else."* `title` is correct for a mouse and is **inert on every touch
+device**. In the field the user has three unlabelled glyphs and no way to learn
+them.
+
+The download glyph is the dangerous one. An arrow-into-a-tray, floating over a
+map, reads equally as "download this map for offline" (right), "export a GPX"
+(wrong), or "collapse this panel" (wrong). Getting it wrong costs either a
+20-minute download you did not want or — worse — *not* starting the one you did.
+
+Every source I could actually read writes the word:
+
+- **NWACus/avy** — the NWAC avalanche app; safety-critical, offline-capable,
+  used in the field on a phone — renders a literal `<Text style={styles.label}>
+  {label}</Text>` under every tab icon at `fontSize: 10`
+  (`components/content/navigation/AnimatedBottomTabBar.tsx:26,101-102`) for its
+  three tabs Map / Observations / Weather
+  (`components/screens/navigation/BottomTabs.tsx:64,78,92`). It also passes
+  `tabBarHeight` down into the map view (`BottomTabs.tsx:131`) so the map knows
+  how much of itself the chrome is occupying — a detail Ridgeline has no
+  equivalent of. *(primary source, cloned and read)*
+- **osmandapp/OsmAnd** — `OsmAnd/res/layout/map_hud_bottom.xml` is a
+  `bottom_controls_container` of stacked `<include>` slots, i.e. the bottom edge
+  is the app's real control surface. *(primary source, fetched and read)*
+- **Gaia GPS** ships a user-facing setting literally named **"Add Menu Button
+  Labels"** — labels are a shipped feature, not an oversight. `[snippet]`
+- **onX Hunt**'s mobile bottom toolbar is four named items: Location, Offline
+  Maps, My Content, Tools. `[snippet]`
+- **HuntStand** uses a labelled `TOOLS` entry alongside a `+`. `[snippet]`
+
+### F5 — Three different verbs share one undifferentiated column, and the active state lies.
+
+`App.tsx:267-293` puts three categorically different things into identical 44px
+squares with identical `aria-pressed` amber treatment
+(`packages/design/src/styles.css:155-158`):
+
+- **a panel toggle** — Layers
+- **an armed map tool** — Add waypoint
+- **a long-running background task** — Save this area for offline use
+
+The task is the honesty failure. `regions.active` — the download running *right
+now* — is passed **only** to `RegionPicker` (`App.tsx:328`), which unmounts when
+`pickerOpen` is false (`App.tsx:323`). Close the panel and a twenty-minute
+download has **zero presence anywhere in the UI**. Meanwhile the rail button
+glows amber for `active={pickerOpen}` (`App.tsx:286`) — which means *panel is
+open*, not *download is running*. The one persistent signal the user gets about
+the download is reporting the wrong variable.
+
+Set against `CLAUDE.md`'s own line — *"Losing a region the user waited twenty
+minutes for, discovered blank in the field, is the worst failure this product
+has"* — the chrome currently gives that task no surface at all. The prior pass's
+§4 audited the download *flow*; this is about its absence from the chrome once
+the flow's panel is dismissed.
+
+### F6 — The dead button, and it is the middle one.
+
+`App.tsx:281-283`:
+
+```tsx
+<RailButton label="Add waypoint" onClick={() => undefined}>
+  <PinIcon />
+</RailButton>
+```
+
+No `disabled`, no `aria-disabled`, full hover styling
+(`packages/design/src/styles.css:150-153`), full 44px target, and a `title` that
+promises "Add waypoint." `PinIcon` has no other consumer in `apps/web`.
+
+It sits **between** the two live controls, so the natural middle-of-the-stack
+first tap is the one that does nothing. In a product whose second
+non-negotiable is *"never be confidently wrong about terrain,"* a control that
+claims a capability it does not have is that same defect class relocated from
+the map to the chrome — and it is the second thing a new user touches.
+
+### F7 — The rail cannot grow, and its height is a magic constant in a different file.
+
+`apps/web/src/index.css:106-109`:
+
+```css
+@media (min-width: 861px) {
+  .rl-sheet--drawer {
+    bottom: calc(var(--space-touch) * 3 + var(--space-6) * 2);
+  }
+```
+
+The `* 3` **is** "three buttons," encoded in a file that does not contain the
+buttons. Adding a fourth silently overlaps the drawer with the rail unless
+someone remembers to edit an unrelated rule in an unrelated package's consumer.
+The file's own comment acknowledges the coupling — *"This app's own rail stacks
+three buttons in that corner"* — which makes it documented, not fixed.
+
+`docs/ROADMAP.md:115-117` adds property-boundary drawing, waypoint placement and
+observation capture. Corridor solve and saved-filter editing follow. Nine
+buttons is `9 × 44 + 8 × 1 = 404px`:
+
+- Desktop 900px: the drawer drops from 708px to ~470px of usable height.
+- Mobile 390×844: a full-width 404px slab is **48% of the phone**.
+
+The rail does not survive nine. It does not survive four.
+
+The only app I could read that has genuinely faced this abandoned fixed stacks:
+**OsmAnd** anchors map buttons to the four screen corners on an auto-arranging
+grid, lets users drag them, and lets users add their own `[snippet]` —
+corroborated as a direction by the stacked-slot structure of
+`map_hud_bottom.xml` *(primary)*. That is an escape hatch from a layout problem,
+not a solution to it; see "What NOT to build."
+
+### F8 — Top-right is the wrong corner for the most-used field control.
+
+`App.tsx:251-263`. "Go to my location" is the one control pressed while walking,
+in the dark, one-handed, possibly holding a bow. It is in the hardest corner of a
+6.7" phone to reach with either thumb.
+
+Meanwhile zoom `+`/`−` on a touch map are near-dead weight — pinch is the
+gesture, and MapLibre already handles it — and they are occupying the
+second-best real estate on the screen. onX puts Location in the **bottom**
+toolbar `[snippet]`; Gaia lets the user move its add button to whichever side
+they hold the phone `[snippet]`.
+
+### F9 — Drift markers: a dead slot and a dead token.
+
+- `.chrome-bottomright` is fully styled (`apps/web/src/index.css:73-77`)
+  including a mobile `display: none` (`index.css:168-170`) and a reserved grid
+  area (`index.css:48-51`), and is **never rendered** — no `chrome-bottomright`
+  appears in any `.tsx` in `apps/web/src`.
+- `--layout-rail-gap: 12px` (`packages/design/src/tokens.ts:237`,
+  `packages/design/src/tokens.css:108`) has **zero consumers**; `.rl-rail`
+  hardcodes `gap: 1px` (`packages/design/src/styles.css:131`).
+
+Individually trivial. Together they say the chrome layer was designed once and
+never revisited while four features landed on top of it — which is the actual
+root cause of everything above.
+
+## Recommendation: revamp, and here is the structure
+
+I costed the timid option honestly: label the three buttons, delete the dead
+one, fix the mobile full-width slab, fix the column order. That is an afternoon
+and it fixes F2, F3, F4 and F6.
+
+**I am rejecting it**, for exactly one reason: it does not touch F7. The rail's
+height remains a function of the feature count, so the same complaint returns at
+feature four, five and six, and each return costs another hand-edit to
+`index.css:108`. Fix the container, not the symptoms.
+
+**The principle.** `ConditionsBar` already solved this problem correctly: a
+horizontal bar of labelled cells **whose height does not depend on how many
+cells it has**, always visible, stating its value, saying "Not set" when it does
+not know. Give the other three kinds of thing the same treatment and delete the
+rail.
+
+### The information architecture — three kinds, three containers, not one column
+
+| Kind | Members (today → roadmap) | Container |
+| --- | --- | --- |
+| **Panels** | Layers, Offline → Filters, Property | **One** drawer button; tabs *inside* the drawer |
+| **Map tools** (armed, modal) | *(none live)* → Waypoint, Boundary, Observation, Corridor | **One** primary action → tray |
+| **Background tasks** | Region download | Not a button. A status cell, present only when running |
+| **Conditions** | Wind, Time, Thermals | `ConditionsBar` — unchanged |
+
+Three controls today. Three controls at nine features. That is the whole point,
+and it is the part the "four fixes" option cannot deliver.
+
+This respects the drawer-slot invariant at `App.tsx:272-276` — one `.rl-sheet`
+at a time, tabs *inside* it rather than a second sheet — and the tool tray is
+deliberately not a `.rl-sheet`, so the `elementFromPoint` trap that comment
+guards against cannot be reintroduced from this direction.
+
+### Mobile — 390 × 844
+
+```
+┌──────────────────────────────────────────┐
+│                                          │
+│                  MAP                     │  ← +78px reclaimed
+│                                          │
+│                                    ( ⌖ ) │  ← locate, right edge, y≈62%
+│                                          │
+├──────────┬──────────────┬────────────────┤
+│   [≡]    │     [+]      │      [↓]       │  Command bar     56px
+│  LAYERS  │    MARK      │  OFFLINE 43%   │  3 cells @ 122px
+├──────────┴──────────────┴────────────────┤  gap             12px
+│ ◈ WIND FROM │ DATE & TIME │   THERMALS   │  ConditionsBar   58px
+│   315° NW   │ Aug 6 6:04  │    Rising    │  ← bottom edge (F3 fixed)
+└──────────────────────────────────────────┘
+```
+
+- Bottom chrome **~138px vs 216px today — 78px of map returned** — while every
+  control *gains* a word.
+- Cells 122 × 56px. Comfortably over the 44px gloved floor
+  (`packages/design/src/tokens.ts:160`), and wide enough that the label is real
+  text rather than a truncation.
+- Labels use `--text-xs` / `--font-condensed` / uppercase / `--track-label` —
+  deliberately the same recipe as `.rl-conditions__label`
+  (`packages/design/src/styles.css:332-338`) so the two rows read as one system
+  rather than two bolted-together widgets. No new visual values; all tokens.
+- **Zoom `+`/`−` removed below 861px.** Pinch is the gesture. This deletes the
+  mobile top-right rail entirely.
+- **Locate** becomes a single 56px circular button on the **right edge at ~62%
+  viewport height** — inside the right-thumb arc, clear of the sheet, clear of
+  the command bar. Deliberately above the 44px floor because it is pressed while
+  moving.
+- **The sheet must stop covering the ConditionsBar.** Cap
+  `--layout-sheet-max-height` so the sheet's top edge clears the 58px conditions
+  row instead of running to `bottom: 0`
+  (`packages/design/src/styles.css:230-237`). This single change is what makes
+  the wind-sweep flagship possible on a phone.
+
+### Desktop — 1440 × 900
+
+Same command bar, one horizontal row, inside the existing `.chrome-bottomleft`
+flex row alongside the ConditionsBar:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ ┌──────────┐                                                    ┌────┐ │
+│ │  LAYERS  │                                                    │ +  │ │
+│ │  DRAWER  │                    MAP                             │ −  │ │
+│ │  (360px) │                                                    │ ⌖  │ │
+│ │          │                                                    └────┘ │
+│ │          │                                                           │
+│ └──────────┘                                                           │
+│ ┌──────────┬────────┬─────────────┐ ┌───────────┬───────────┬────────┐ │
+│ │ ≡ LAYERS │ + MARK │ ↓ OFFLINE   │ │ ◈ WIND    │ DATE&TIME │THERMALS│ │
+│ └──────────┴────────┴─────────────┘ └───────────┴───────────┴────────┘ │
+└────────────────────────────────────────────────────────────────────────┘
+                        56px, one row, forever
+```
+
+- Command-bar height **56px, one row, independent of control count**.
+- `.rl-sheet--drawer`'s bottom offset drops from `calc(var(--space-touch) * 3 +
+  var(--space-6) * 2)` = 180px to `calc(56px + var(--space-6))` ≈ 80px. **The
+  drawer gains ~100px of height and the `* 3` magic constant dies** — F7 fixed
+  structurally rather than by discipline.
+- Top-right rail keeps `+` / `−` / locate on desktop. Mouse users expect it and
+  it costs nothing there.
+- Trigger stability (`ui-invariants.spec.ts` group 2) is preserved by
+  construction: the command bar reserves its own fixed height and nothing
+  translates, which is the property `index.css:79-104` fought to establish.
+
+### The tool tray, and the one detail that beats onX on the ground
+
+`MARK` opens a tray — **not** the drawer — containing Waypoint · Boundary ·
+Observation · Corridor. Every future map tool goes there and the bar's width
+never changes.
+
+When a tool is armed, **the map shows a fixed centre crosshair** and the command
+bar is replaced by a two-cell strip: `PLACE HERE` (primary) / `CANCEL`.
+
+Centre-crosshair placement, **not** tap-to-place. onX and HuntStand both appear
+to use tap-to-place `[snippet]`, and tap-to-place has a defect nobody markets:
+**your finger covers the pixel you are aiming at**, and a gloved fingertip
+occludes roughly 20mm of screen. Dragging the map under a fixed crosshair keeps
+the target in clear sight and turns the commit into a large, unambiguous,
+gloved-thumb button. This is the detail that makes the revamp worth doing rather
+than merely tidy, and it is a genuine on-the-ground improvement over the
+incumbents rather than a copy of them.
+
+### The download, as a task rather than a button
+
+The `OFFLINE` cell states its own truth: idle → `OFFLINE`; running → progress
+ring plus `43%`; just finished → `SAVED`; failed → `FAILED` in warn tone. That
+gives a running download the persistent surface it has none of today (F5),
+removes the misleading `active={pickerOpen}` amber (F5), and reuses the existing
+`Chip` tone vocabulary in `packages/design`.
+
+## What NOT to build
+
+Being explicit, because two of these are tempting and one is already half-built:
+
+- **User-repositionable buttons (the OsmAnd answer).** A settings screen, a
+  persistence model and a collision solver, to work around a layout that is
+  wrong. Ridgeline has one screen and one job. Get the layout right instead.
+- **A hamburger / main menu (onX's top-left `[snippet]`).** There is nothing to
+  put in it. Ridgeline is a map, not an account portal.
+- **Long-press tooltips as the answer to icon-only.** A workaround for the wrong
+  decision. Write the word under the icon.
+- **A permanent desktop sidebar.** `packages/design/src/components/
+  primitives.tsx:70-76` already argues this correctly — a permanent sidebar
+  costs a third of the screen forever, and the map is the product. Do not
+  reopen it.
+- **Compass mode, north-up toggle, rangefinder.** Not on the roadmap and not
+  what was complained about.
+- **Zoom buttons on mobile.** Delete them. They cost the best corner on the
+  screen to duplicate a gesture every user already has.
+
+## Prioritised recommendations
+
+Continuing the numbering from the 2026-08-06 pass, which ends at #14.
+
+### 15 — Delete the dead "Add waypoint" button · XS · `frontend-builder`
+
+`App.tsx:281-283`. Fixes **F6**. Ship a real waypoint tool or ship nothing;
+`disabled` with a stated reason would be more honest than today but a hunting
+app's second control being greyed out on first run is a poor first impression.
+Independent of everything else here — do it now.
+
+### 16 — Stop the mobile sheet covering the ConditionsBar, and test it · S · `frontend-builder` + `field-qa`
+
+Fixes **the headline finding** and part of **F2**. Cap
+`--layout-sheet-max-height` so the sheet clears the conditions row
+(`packages/design/src/styles.css:230-237`). **Must land with a mobile collision
+invariant** — group 4 is desktop-only at `ui-invariants.spec.ts:399`, which is
+precisely why this survived. Per `CLAUDE.md`: the fix and the invariant that
+would have caught it are two commits' worth of work. This is the item that
+changes what a hunter can actually do on a phone.
+
+### 17 — `CommandBar` primitive in `packages/design` · M · `frontend-builder`
+
+Labelled cells, horizontal, fixed height, with a task-status cell variant.
+Fixes **F1, F2, F3, F4, F5, F7**. All values from tokens; label typography
+reuses the `.rl-conditions__label` recipe so the two bars read as one system.
+
+### 18 — Replace the rail with `CommandBar`; delete the `* 3` constant · S · `frontend-builder`
+
+`App.tsx:265-294` and `apps/web/src/index.css:106-109`. Fixes **F1, F7**. The
+drawer's bottom offset becomes a function of the bar's fixed height rather than
+of the button count — this is the change that stops the complaint recurring.
+
+### 19 — Mobile: drop zoom buttons, move locate to the right-edge thumb arc · S · `frontend-builder`
+
+`App.tsx:251-263`. Fixes **F8**. 56px circular button, right edge, ~62%
+viewport height.
+
+### 20 — Drawer tabs (Layers / Offline) inside the single drawer slot · M · `frontend-builder`
+
+Fixes the panel half of **F5** and is the growth path for Filters and Property.
+Must preserve the one-sheet-at-a-time invariant at `App.tsx:272-276` — tabs
+inside one `.rl-sheet`, never two stacked.
+
+### 21 — Tool tray + centre-crosshair placement · M · `map-builder` + `frontend-builder`
+
+Lands with waypoint capture (`docs/ROADMAP.md:116`). The growth container for
+every future map tool, and the one place this design is better on the ground
+than the incumbents rather than merely equal to them.
+
+### 22 — Delete `.chrome-bottomright` and `--layout-rail-gap`, or use them · XS · `frontend-builder`
+
+`apps/web/src/index.css:73-77,168-170`; `packages/design/src/tokens.ts:237` and
+`tokens.css:108`. Fixes **F9**. Housekeeping, but it is the drift that produced
+everything above.
+
+**Sequencing.** #15 and #16 are independently shippable and worth landing before
+the revamp. #17 → #18 is the structural core. #19-#22 follow in any order.
+
+## Two things that are not criticisms
+
+`ConditionsBar` is genuinely excellent and this work must not touch it. The
+reasoning at `packages/design/src/components/primitives.tsx:122-131` — wind and
+time are not settings, they change what every layer *means*, and burying that in
+a panel would make the map quietly ambiguous — is the best product thinking in
+the repository. The command bar proposed above is a copy of it, not a
+replacement for it.
+
+And **bottom-left for Layers is not the mistake.** HuntStand puts its map-layers
+control in the bottom-left too `[snippet]`. The corner is conventional and fine.
+The mistake is everything that got stacked on top of it without anyone asking
+whether it belonged in the same column.
+
+---
+
 # 2026-08-06 — Interaction patterns from serious outdoor and map applications
 
 **Scope:** what Ridgeline's UI should learn from avalanche forecast products,

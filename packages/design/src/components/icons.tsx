@@ -104,29 +104,25 @@ export const PinIcon = (p: IconProps) => (
 );
 
 /**
- * Wind needle.
+ * Wind needle — a compass dial, not a number.
  *
- * A pointer, not a number. Wind direction is spatial information and a hunter
- * reads it against the map, so the control shows a needle aligned to the map's
- * north — the same way they would read a compass in their hand. The tail is
- * heavier than the head so the direction is unambiguous at a glance in the dark.
+ * Wind direction is spatial information and a hunter reads it against the
+ * map, so the control shows a needle aligned to the map's north — the same
+ * way they would read a compass in their hand. Eight bezel ticks (north
+ * weighted heavier, the way a hand compass's own bezel marks it) stay fixed;
+ * only the needle and its hub rotate, exactly as a real dial works — the
+ * bezel is the fixed frame of reference the needle is read against, so it
+ * cannot itself spin with the reading. The needle's tail is heavier than its
+ * head so direction is unambiguous at a glance in the dark.
  *
- * `fromDeg` is the direction the wind comes FROM, which is how forecasts state
- * it and how hunters talk. The needle points the way the wind is *going*.
+ * `fromDeg` is the direction the wind comes FROM, which is how forecasts
+ * state it and how hunters talk. The needle points the way the wind is
+ * *going*.
  */
-export function WindNeedle({
-  fromDeg,
-  ...rest
-}: IconProps & { fromDeg: number | null }) {
+export function WindNeedle({ fromDeg, ...rest }: IconProps & { fromDeg: number | null }) {
   const rotation = fromDeg === null ? 0 : fromDeg + 180;
   return (
-    <svg
-      viewBox="0 0 32 32"
-      aria-hidden="true"
-      focusable="false"
-      {...rest}
-      style={{ transform: `rotate(${rotation}deg)`, ...rest.style }}
-    >
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" {...rest}>
       <circle
         cx="16"
         cy="16"
@@ -136,28 +132,32 @@ export function WindNeedle({
         strokeWidth="1"
         opacity="0.28"
       />
-      {/* Cardinal ticks, so the dial reads as an instrument. */}
-      {[0, 90, 180, 270].map((a) => (
+      {/* Bezel ticks — fixed to the dial, not the needle. North sits heavier
+          and brighter than the rest so the dial has its own reference point
+          independent of whatever the needle is currently reading. */}
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
         <line
           key={a}
           x1="16"
-          y1="3.5"
+          y1={a === 0 ? '2.5' : '3.5'}
           x2="16"
           y2="6.5"
           stroke="currentColor"
-          strokeWidth="1.25"
-          opacity="0.45"
+          strokeWidth={a === 0 ? '1.75' : '1.1'}
+          opacity={a === 0 ? '0.8' : '0.4'}
           transform={`rotate(${a} 16 16)`}
         />
       ))}
-      {fromDeg === null ? (
-        <circle cx="16" cy="16" r="2.4" fill="currentColor" opacity="0.55" />
-      ) : (
-        <>
-          <path d="M16 6.5 20.5 21 16 18.2 11.5 21Z" fill="currentColor" />
-          <circle cx="16" cy="16" r="1.6" fill="currentColor" opacity="0.5" />
-        </>
-      )}
+      <g style={{ transform: `rotate(${rotation}deg)`, transformOrigin: '16px 16px' }}>
+        {fromDeg === null ? (
+          <circle cx="16" cy="16" r="2.4" fill="currentColor" opacity="0.55" />
+        ) : (
+          <>
+            <path d="M16 6.5 20.5 21 16 18.2 11.5 21Z" fill="currentColor" />
+            <circle cx="16" cy="16" r="1.6" fill="currentColor" opacity="0.5" />
+          </>
+        )}
+      </g>
     </svg>
   );
 }

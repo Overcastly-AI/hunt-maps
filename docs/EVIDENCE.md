@@ -25,14 +25,49 @@ An `Assumed` grade is not a failure. Hiding one is.
 | 🟡 **Doctrine** | Consistent, widely-reported field practice; no measurement behind it |
 | 🔴 **Assumed** | A number chosen because the code needed one |
 
-**Current state: 12 Measured · 6 Inferred · 9 Doctrine · 17 Assumed.**
-*(Pass 2: 10 · 5 · 8 · 18. Net: two rows left red, one row entered it.)*
+**Current state: 14 Measured · 13 Inferred · 10 Doctrine · 29 Assumed.**
+*(Pass 5: 14 · 12 · 9 · 28. Pass 4: 14 · 10 · 9 · 18. Pass 3: 12 · 6 · 9 · 17.
+Pass 2: 10 · 5 · 8 · 18.)*
+
+**Pass 6 was a single-topic pass: the two bedding *floors*** — `shelterTerm =
+0.25 + 0.75·s` and `coverTerm = 0.4 + 0.6·c` — plus the constants `R40` added.
+Both floors stay 🔴 **Assumed** and that is the finding, stated plainly: **they
+are unfalsifiable guesses that nonetheless decide the layer's output**, because
+a floor is the whole statement of how much a missing requirement costs. What
+changed is that they are no longer unfalsifiable *in principle*: `1/floor` is the
+best-vs-worst **selection ratio** the engine asserts (cover **2.5×**, shelter
+**4×**), a quantity `packages/shared` already computes. Three new findings sit
+under Bedding — the never-chosen ordering between them, a contrary measured
+result on thermal cover (Cook et al. 1998), and a shape problem in the cover term
+that contradicts Ridgeline's own leeward rationale.
+
+**The 🔴 count rose by ten and that is the most honest thing in this pass.**
+Nine of those ten are not new guesses — they are constants that shipped last
+night inside `R11`/`R21`/`R22` and had never been written down. The register did
+not get worse; it got accurate. The tenth, `DEFAULT_RING_RADIUS_CELLS = 8`, was
+not named in any backlog row either and was found by reading the source.
 
 Pass 2 wrote one row per number and retracted two citations. Pass 3 reopened
 every row pass 2 had closed as a settled negative and worked them with search
 rather than with memory. Four rows moved up, one negative result was overturned
 outright, and the rows that stayed 🔴 now carry the query list that justifies
 them.
+
+**Pass 5 was a single-topic pass: `R31`, shelter versus solar aspect in severe
+cold**, plus registration of the ten ungraded bedding constants. Its two most
+useful outputs are both negative: **this register had been quoting a mean
+against a maximum** and inflating the aspect mechanism ~2×, and **no study
+exists relating whitetail bed selection to a topographic wind-exposure index**,
+which leaves the term that decides the layer's winter answer uncalibrated. The
+verdict on `R31` is that the row is right that the behaviour is wrong, and wrong
+about why — see its section under Bedding.
+
+**Pass 4 was a single-topic pass: `R9`, rut regionalisation.** It scored the
+shipped `peakBreedingDayOfYear` against **40 published regional peaks**, found
+the mechanism paper behind southern heterogeneity, **corrected an overclaim this
+register itself had made** about restocking genetics, and added seven rows
+(🟢 +2, 🔵 +4, 🔴 +1). The 🔴 it added is the most useful thing in it:
+`rutConfidence` returns a number that is not the probability of anything.
 
 > **Reading conditions.**
 >
@@ -43,9 +78,18 @@ them.
 > - `WebSearch` **works and is the instrument that matters.** It returns
 >   substantive abstract- and body-level content, not just links, including from
 >   open agency PDFs it has indexed.
+> - **`curl` to non-GitHub hosts fails at CONNECT with a proxy 403**, retested in
+>   pass 4 against `georgiawildlife.com` and `myfwc.com`
+>   (`curl (56) CONNECT tunnel failed, response 403`). Open agency PDFs are
+>   therefore reachable **only** through whatever `WebSearch` has indexed of
+>   their text — which for the GA rut map is the first three county rows of the
+>   table, embedded in the result title. Mine the snippets; do not fabricate the
+>   rest.
 > - **No full text was read in any pass so far.** Rows that would change
 >   behaviour are marked *(abstract/index only — verify against full text before
->   implementing)*.
+>   implementing)*. Pass 4 keeps an explicit **"unread at source" ledger** in the
+>   rut section so the next pass knows exactly which five documents to attack
+>   first if the egress situation changes.
 >
 > **Correction to pass 2, recorded because it cost a parameter.** Pass 2 closed
 > `idealSlopeDeg` with the words *"no literature exists … recording that
@@ -352,7 +396,16 @@ model — larger than the Tobler substitution. It also interacts with land cover
 
 ## Bedding
 
-### 🟡 `idealSlopeDeg: 22` — **reopened, and the value is wrong at the top end** *(was 🔴 "settled")*
+### 🟡 `idealSlopeDeg: 22` — ⚠️ **SUPERSEDED, kept as the record of why**
+
+> **Pass 5 status note.** `idealSlopeDeg` and `slopeToleranceDeg` **no longer
+> exist**: `R11` removed them from `BeddingOptions` and replaced the Gaussian
+> with `1/(1+(s/12)²) × sigmoid((ringSlope−15)/4)`. The live parameters are
+> registered under *Bedding-model parameters shipped by `R11`/`R21`/`R22`*
+> below. Everything in this section remains the reasoning that justified the
+> replacement and the evidence the new pad term is graded against — it is
+> retained deliberately, because the next agent who wants to reintroduce a slope
+> optimum needs to read why one was removed.
 
 **What changed.** The narrow claim from pass 2 survives twenty-plus queries:
 *no peer-reviewed study reports a preferred or mean bed-site slope angle for
@@ -473,11 +526,18 @@ What the bed-site literature actually measures, and it is never the gradient:
 - **Cover above the bed.** 140 bed sites vs 100 random: significantly more cover
   immediately above night beds than above random sites.
   [Lang & Gates 1985](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Lang-and-Gates_1985_Selection-of-Sites-for-Winter-Night-Beds-by-White-tailed-Deer.pdf)
-- **Day vs night bed differences and snow depth by aspect** (NE-facing 21.7 cm,
-  SE-facing 18.1 cm). Armstrong, Euler & Racey 1983, *J. Wildl. Manage.*
-  47:880–884
+- **Snow depth by aspect and by topographic position.** ⚠️ **Pass 5 correction —
+  this register previously split one study's numbers across two papers and
+  mis-stated the effect size.** All three figures are Lang & Gates 1985's own
+  study-area means: **bottomland 11.2 cm, SE-facing slope 18.1 cm, NE-facing
+  slope 21.7 cm**; 42.0 cm was the *deepest depth recorded during the study* on
+  the NE slope, i.e. a maximum, not a mean. See the R31 verdict below — the
+  consequence is material. Armstrong, Euler & Racey 1983, *J. Wildl. Manage.*
+  47:880–884 is a real and separate paper on day-vs-night winter beds in central
+  Ontario
   ([PDF](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Armstrong-et-al_1983_Winter-bed-site-selection-by-white-tailed-deer-in-central-Ontario.pdf) —
-  server refused retrieval; abstract-level only).
+  server refused retrieval; **no numeric result from it has ever been read**, and
+  the numbers previously attributed to it here were not its).
 - **Site temperature and canopy closure** were the most influential attributes
   in mule deer bed-site selection across 236 day-beds, 152 forage sites and 439
   random locations. Slope and aspect entered the models but were not the
@@ -601,9 +661,41 @@ winter deer range, which is a *solar* criterion, not a *wind* one:
   optimize warming from the sun."
   [Maine IFW deer habitat management system](https://www.maine.gov/ifw/docs/species_planning/mammals/whitetaileddeer/habitatmanagement.pdf)
 
-And the mechanism is measured, not asserted: snow was **18.1 cm on the SE-facing
-slope against 42.0 cm on the NE-facing slope** in the same study area.
+And the mechanism is measured, not asserted — but ⚠️ **pass 5 found this
+register had overstated it by roughly 2×, and had inverted its own conclusion.**
+
+What Lang & Gates 1985 actually measured across their three study sites:
+
+| Site | Mean snow depth | Ratio vs NE slope |
+|---|---|---|
+| Bottomland (hemlock, low, sheltered) | **11.2 cm** | 0.52 |
+| SE-facing slope (the "warm aspect") | **18.1 cm** | 0.83 |
+| NE-facing slope (the "cold aspect") | **21.7 cm** | 1.00 |
+| NE-facing slope, *deepest single reading of the study* | 42.0 cm | — |
+
 [Lang & Gates 1985](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Lang-and-Gates_1985_Selection-of-Sites-for-Winter-Night-Beds-by-White-tailed-Deer.pdf)
+*(figures quoted consistently by two independent searches of the paper's body
+text; full text still unread — see reading conditions.)*
+
+**Three corrections follow, and they matter:**
+
+1. The previously-cited "18.1 vs 42.0 cm" compares **a mean against a maximum**.
+   The like-for-like aspect effect is 18.1 vs 21.7 cm — a **3.6 cm, 1.20×**
+   difference, not the 2.32× this register and `docs/BACKLOG.md` have been
+   quoting.
+2. In this study the **sheltered bottomland had the shallowest snow of all three
+   sites** — 11.2 cm, a 10.5 cm advantage over the NE slope, **~3× larger than
+   the aspect effect**. The paper cited here as the mechanism for "go to the sun
+   slope" measured topographic position beating aspect on the very variable
+   claimed as the mechanism.
+3. That bottomland figure confounds aspect, canopy (hemlock), elevation and
+   cold-air drainage, so it is **not** a clean topographic-shelter result either.
+   The honest reading is that neither term dominates by the margin anyone here
+   has been asserting.
+
+The prescriptions themselves (four agencies, south/west aspects) are unaffected
+and stand. What does not stand is the claim that a large measured snow-depth gap
+justifies weighting aspect above shelter.
 
 **Assessment and the conflict it creates.** `beddingLikelihood`'s only aspect
 term is `cos(aspect − windFrom)` — pure leeward geometry, season-blind. On a
@@ -620,8 +712,16 @@ mechanism behind them is 🟢.
 Deer select night-bed sites with **decreased wind velocity**, and conifer stands
 buffer convective heat loss.
 [Lang & Gates 1985](https://www.originalwisdom.com/wp-content/uploads/bsk-pdf-manager/2019/04/Lang-and-Gates_1985_Selection-of-Sites-for-Winter-Night-Beds-by-White-tailed-Deer.pdf)
-**Scope: winter, hemlock–northern hardwood, thermal motivation.** It supports
-"deer bed out of the wind"; it does not support "deer bed leeward for scent".
+**Scope: winter, hemlock–northern hardwood, thermal motivation, and — added
+pass 5 — *night* beds specifically.** It supports "deer bed out of the wind"; it
+does not support "deer bed leeward for scent".
+
+⚠️ **It also does not calibrate `terrainShelter()`.** Lang & Gates measured wind
+velocity *at bed sites*; they did not compute a topographic exposure index, and
+this row must not be read as grading the engine's shelter term. Pass 5 searched
+for a study relating whitetail bed selection to topographic wind exposure and
+**found none** — see the `R31` section. The 🟢 here is for the criterion, not for
+any number the engine uses to express it.
 
 ### 🟡 Leeward *aspect geometry* — `cos(aspect − windFrom)`
 The specific "bed on the leeward face to watch downwind and smell upwind"
@@ -728,6 +828,627 @@ deep-snow northern forest range. It supports the date-aware insolation layer
 claim in the Appalachians below the persistent snow line, or anywhere in the
 South. It still stands as a warning against a naive "thermal cover = dense
 conifer" layer, which we have not built and should not.
+
+---
+
+## `R31` — does shelter or solar aspect dominate the cold-season bed? *(pass 5)*
+
+**The question as filed.** With `R22`'s season term live, `beddingLikelihood`
+scores a leeward-shaded plane **0.0214** against a sun-facing exposed plane
+**0.0114** at −12 °C. Aspect swings 1.7×, shelter swings 3.2×, so lee wins by
+1.88×. `R31` asks whether the 0.25 shelter floor should rise, whether the aspect
+weight should rise, or whether the balance is defensible.
+
+### Verdict: the defect is real, but **the framing that produced it was wrong in three ways**, and the fix is much smaller than the row implies
+
+**1. The evidence for "sun beats shelter" is genuinely split, and must be
+recorded as split.** Two peer-reviewed whitetail studies, both northern, point
+in opposite directions:
+
+- **Colder → more open ground.** At all four sites, deer made greater *daytime*
+  use (55 to > 80 % probability) of open vegetation at the **lowest** daily
+  minimum temperatures; use of dense conifer *decreased* as minimum temperature
+  fell on the sites where cover was most available. The authors' own conclusion,
+  near-verbatim: the thermal benefits to free-ranging cervids from increased
+  daytime exposure to solar radiation in open areas "are likely of greater
+  relative value to their energetic balance and fitness than the potential
+  thermal benefits associated with dense cover, **particularly when ambient
+  temperatures are coldest**." 🟢, Minnesota, female, 12 years, VHF + GPS.
+  [PLOS One 2013](https://journals.plos.org/plosone/article?id=10.1371%2Fjournal.pone.0065368) ·
+  [correction 2017](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0178964)
+- **Colder → more thermal cover.** Whitetail on Anticosti Island adjusted
+  within-home-range selection to thermal conditions: they **selected thermal
+  cover during cold-stress periods**, and selection for open areas increased
+  during *warmer* periods. 🟢, Québec, adult females, two contrasted winters.
+  [Courbin, Dussault, Veillette, Giroux & Côté 2017, *Behav. Ecol.* 28:1037–1046](https://academic.oup.com/beheco/article/28/4/1037/3745028)
+  *(abstract-level only.)*
+
+**Do not pick one.** Both are competent whitetail work in deep-snow range and
+they disagree. Anything the engine does here is at best a defensible position
+inside a live disagreement, and the `Confidence` chip must say so.
+
+**2. Three of the four "shelter" citations do not support the engine's shelter
+term, because they are about a different kind of shelter.** This is the error
+that has been propagating.
+
+| Source | What it actually prescribes | Does it support a *terrain* shelter term? |
+|---|---|---|
+| Maine IFW DWA guidelines | Primary Winter Shelter = **softwood crown closure ≥ 70 %**, stand height ≥ 35 ft; Secondary = 50–70 % | **No** — canopy closure, invisible to a DEM |
+| UNH Extension *Good Forestry* 6.9 | "Functional shelter is provided by softwood stands at least 35 feet tall with softwood crown closure between **65 to 70 percent**" | **No** — canopy |
+| Lang & Gates 1985 | Deer select night beds with decreased wind velocity, in hemlock bottomland | Partly — bottomland is topographic, but confounded with hemlock canopy |
+| TOPEX / windthrow literature | The method the engine implements | Yes for the **method**; says nothing about deer |
+
+[Maine DWA guidelines](https://www.maine.gov/ifw/docs/DWA_Guidelines_2.4.10.pdf) ·
+[UNH Extension 6.9 Deer Wintering Areas](https://extension.unh.edu/goodforestry/html/6-9.htm)
+
+**No study was found in this pass that measures whitetail winter bed selection
+against a *topographic* wind-exposure index.** That is a genuine negative
+result, and it means `shelterTerm` — the term currently swinging 3.2× and
+deciding the layer's winter answer — has **no species-specific empirical
+calibration at all**. It is a sound method (TOPEX) measuring a quantity nobody
+has related to deer beds. Queries run: `terrain sheltered site versus canopy
+shelter ungulate winter bed thermal microclimate topographic position lee slope
+measured wind` · `TOPEX topographic exposure wildlife habitat model deer winter
+range wind shelter index validated` · `deer elk bed leeward slope wind direction
+measured selection topographic shelter lee side telemetry study` · `white-tailed
+deer GPS collar winter habitat selection topographic wind exposure index heat
+load index Appalachian` · `deer use of cover increases with wind speed winter
+habitat selection wind chill covariate ungulate GPS` · `deer wintering area
+microclimate wind speed reduction percent conifer canopy versus open measured
+meters per second`.
+
+**3. The single agency source that speaks to *daytime* beds says sun, and
+Ridgeline's bedding layer is a daytime layer.** Every shelter-dominant citation
+in this register is a **night-bed** study (Lang & Gates) or a whole-winter-range
+prescription (Maine, UNH). The one source that separates the two:
+
+> "Hardwood stands on south- to west-facing slopes are important for deer
+> wintering areas. **During the day, deer often bed in these stands to be warmed
+> by the sun's heat.**"
+> — [UNH Extension 6.9](https://extension.unh.edu/goodforestry/html/6-9.htm) 🟡
+
+A hunter sits over this layer during shooting light. Grading a daytime layer
+against night-bed evidence is the scope error underneath `R31`.
+
+### The magnitudes, so the weighting is not chosen by taste
+
+Both effects have been quantified, and they are **the same order**:
+
+| Effect | Magnitude | Grade | Scope |
+|---|---|---|---|
+| Solar radiation reduces metabolic heat production | **29 % and 42 %** at 780 W·m⁻²; solar heat gain = 14–21 % of intercepted radiant energy | 🟢 | **Ground squirrels**, not cervids — [J. Exp. Biol. 198:1499 (1995)](https://journals.biologists.com/jeb/article-abstract/198/7/1499/6924/Effects-of-Solar-Radiation-and-Wind-Speed-on) |
+| Sheltered topography reduces heat loss | **~half** | 🔵 | Red deer; *secondary reporting, primary unread* |
+| Full solar load used in cervid biophysical models | **400 W·m⁻²** | 🟢 | [Parker & Gillingham 1990, *J. Range Manage.*](https://web.unbc.ca/~parker/Pubs/Parker%20and%20Gillingham%201990%20J%20Range%20Manage.pdf) |
+| Wind at 15 m·s⁻¹ collapses the thermoneutral zone to 4–10 °C **"regardless of incident solar levels"** | wind swamps solar at gale strength | 🟢 | Parker & Gillingham 1990, mule deer *(abstract-level only)* |
+
+**Neither dominates.** ~30–50 % versus ~50 % is parity within the uncertainty of
+a cross-species transfer. A model that resolves this into a 1.88× win for either
+face is claiming precision nobody has measured.
+
+Two further physics findings that both cut *against* a large shelter swing in
+deep winter specifically:
+
+- **Wind and solar are not separable, and the engine's multiplicative structure
+  is right about that.** "Realistic estimates of wind chill cannot be obtained
+  unless the effect of solar radiation is taken into account, and failure to
+  include solar radiation results not only in omitting solar warming but also in
+  omitting **the effects of wind in reducing that warming**." 🟢 (caribou-
+  parameterised).
+  [A windchill and solar radiation index for homeotherms, *J. Theor. Biol.* (1974)](https://www.sciencedirect.com/science/article/abs/pii/0022519374902070)
+  *(abstract-level only.)* `aspectTerm × shelterTerm` already encodes this
+  interaction — **this is a point in the current model's favour and should not
+  be refactored away.**
+- **Thick winter pelage blunts wind's marginal effect.** "Forced convection has
+  a more pronounced effect upon the insulation of **thin** pelages than on
+  thicker pelages." A whitetail in December pelage is comparatively
+  wind-resistant relative to the same deer in October. 🔵 for the direction;
+  general mammalian pelage physics, not *Odocoileus*-specific.
+
+### Concrete prescription
+
+**Do NOT raise `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` above 0.75.** Pushing it toward
+1.0 says lee is irrelevant in winter, and Courbin 2017 measures whitetail
+selecting thermal cover *during cold stress*. The lee term must not vanish.
+
+**Do raise the shelter floor, on the ramp that already exists.** Ramp it with
+`coldBlendWeight` so the model has exactly **one** cold ramp and the two cannot
+drift apart:
+
+```
+shelterFloor(T) = 0.25 + (0.65 − 0.25) × coldBlendWeight(T) / 0.75
+shelterTerm     = shelterFloor(T) + (1 − shelterFloor(T)) × clamp01(shelter[i])
+```
+
+| Property | Value |
+|---|---|
+| **Units** | dimensionless multiplier on `beddingLikelihood` |
+| **Bounds** | floor ∈ [0.25, 0.65]; `shelterTerm` ∈ [floor, 1.0] |
+| **Engages at** | +5 °C (`BEDDING_COLD_ONSET_C`), where `coldBlendWeight` is 0 and the floor is exactly 0.25 — a **true no-op** on the warm path, matching `R22`'s pattern |
+| **Saturates at** | −10 °C (`BEDDING_SEVERE_COLD_C`), floor 0.65 |
+| **At −12 °C** | shelter swing falls 3.2× → **1.47×**; aspect swing 1.7× is unchanged; the **sun face wins by ~1.15×** |
+
+**Falsifiable target for the implementing agent.** Back-solving `R31`'s own
+measurement (`shelterTerm` ratio 3.2 with floor 0.25 ⇒ the exposed plane carries
+`shelter ≈ 0.083`), the same two planes at −12 °C with floor 0.65 should give:
+
+| Plane | Today | Predicted after the fix |
+|---|---|---|
+| Leeward, shaded | 0.0214 | **0.0214** *(unchanged — a fully sheltered cell sits at `shelterTerm = 1.0` for any floor)* |
+| Sun-facing, exposed | 0.0114 | **≈ 0.0248** |
+| Ratio | 1.88× **to lee** | **≈ 1.16× to sun** |
+
+If the leeward figure moves at all, the floor was applied to the wrong end of
+the term. If the ratio lands above ~1.3×, the floor was set higher than this
+register supports — that is an overclaim, not a better fix.
+
+**The 1.15× is the point, and it should not be tuned upward.** The evidence
+supports a *narrow* reversal, not a decisive one. On a real sidehill — an SE
+face on a NW wind in January — lee and sun co-vary and that face wins on both
+terms decisively, which is the behaviour the four agencies describe. On the
+pathological opposing-plane case `R31` measured, the honest answer is "these are
+nearly equal, sun slightly ahead in daylight," and 1.15× says that.
+
+**Grades of the prescription, stated separately because they differ:**
+
+- **Direction** (floor rises with cold) — 🔵 **Inferred**: PLOS One 2013's
+  measured increase in open-type daytime use as minimum temperature falls, plus
+  the thick-pelage convection result, plus UNH 6.9 on daytime beds. Recorded
+  against Courbin 2017, which disagrees.
+- **Endpoints 0.25 and 0.65** — 🔴 **Assumed.** Chosen to put the shelter swing
+  at parity with the measured aspect swing, because the physiology says the two
+  effects are the same order. No source sets either number. **A build agent must
+  not present this as a measured calibration.**
+- **Ramp window** — inherits `coldBlendWeight`'s grades below.
+
+### Three findings that must travel with the fix
+
+1. **Sequence after `R27`, not before.** `slopeInsolation()` is the solar input
+   and `castShadows()` is never called (`R27`, verified). A shaded bench
+   currently reads as fully sunlit. **Raising the influence of the solar side of
+   this trade while the solar field ignores terrain shadow amplifies an existing
+   error** — the sun-face score would rise on ground that is in shade at 07:00.
+   Land `R27` first.
+2. **The engine has no wind speed, and this parameter is a wind-speed
+   assumption in disguise.** `windSpeedKph` exists in `packages/shared`
+   (`domain.ts:154`) and never reaches `beddingLikelihood`, which takes only
+   `windFromDeg`. Parker & Gillingham's "regardless of incident solar levels" at
+   15 m·s⁻¹ versus near-irrelevance in calm air means the correct shelter
+   weighting **spans the whole plausible range depending on a variable we do not
+   read**. Any fixed floor — 0.25 or 0.65 — silently assumes one wind speed for
+   every condition. File as the real long-term fix; the floor ramp is the
+   interim.
+3. **`beddingLikelihood` has no day/night switch, and the literature splits on
+   exactly that axis.** Lang & Gates measured *night* beds; UNH 6.9 prescribes
+   south/west slopes for *day* beds. The layer is used in daylight, so the
+   daytime reading is the right default — but that is currently an accident, not
+   a decision, and it should be recorded as one.
+
+---
+
+## Bedding-model parameters shipped by `R11` / `R21` / `R22` *(registered pass 5)*
+
+These landed ungraded because the agent that chose them is forbidden from
+grading its own values. Registered here for the first time.
+
+### 🔵 `BEDDING_PAD_HALF_MAX_SLOPE_DEG = 12` — pad-term half-max, degrees
+`padTerm = 1/(1 + (s/12)²)`, replacing the retracted 22° Gaussian.
+
+**The shape is the strong part and it is 🟢:** Rowland et al. 2018 measured a
+**monotone declining** cervid response to slope with no interior optimum, slope
+the single strongest predictor. A Gaussian peaking at 22° was the wrong
+functional class, not merely mis-centred, and removing it is the most
+consequential bedding correction this register has produced.
+
+**The value 12 is 🔵 by the following inference, stated so it can be attacked:**
+a half-max at 12° puts the term at **0.20 at 24.2°** (top of the BC WHR
+whitetail winter-range band, 10–45 %) and **0.34 at 16.7°** (top of the
+secondary elk daily-use preference band, 15–30 %). The kernel therefore spends
+its mass across exactly the range two independent sources report as used, and is
+nearly exhausted where both report use ceasing. **What this is not:** a measured
+half-max. Converting a reported *use band* into the half-max of a Cauchy kernel
+is a transformation no source performed. Scope: BC interior + Idaho/Montana elk;
+nothing Appalachian.
+
+### 🔴 `BEDDING_RING_MIN_SLOPE_DEG = 15` — surround-slope sigmoid midpoint, degrees
+Nothing measured sets this, and **the justification in the source comment is
+wrong on its own terms.** The comment places 15° at "the bottom of the BC WHR
+band"; that band is 10–45 %, whose bottom is **5.7°** — 15° is its *centre*.
+
+The deeper problem is a category slip that survives fixing the arithmetic: BC
+WHR describes **the slope deer occupy**, not the slope *surrounding* a bed. Using
+a use-band statistic as a surround threshold assumes bed and surround are drawn
+from the same distribution, which is the exact assumption the pad/ring split
+exists to deny. Its sibling `minSurroundSlopeDeg: 18` in `detectBenches` is
+already registered as having nothing behind it; this is the soft version of the
+same unsupported number. Stays 🔴. Ordering (surround steeper than pad) is 🟡
+doctrine and is well supported; the threshold is not.
+
+### 🔴 `BEDDING_RING_SOFTNESS_DEG = 4` — logistic width, degrees
+**Not a biological parameter.** It is a numerical-stability choice preventing
+cell-to-cell flicker along breaks of slope, and the code says so. Registered
+only so it is not mistaken for one. No literature sought or needed; if it is
+ever surfaced in the UI as a biological claim, that is a defect.
+
+### 🔴 `BEDDING_VRM_FULL_COVER = 0.06` — VRM at which the cover term saturates
+Flagged by its own author as geometry, not observation (`R33`), and that
+assessment is correct and is upheld. VRM ≈ σ²/2 for small dispersion, so 0.06 is
+"surface normals vary by roughly ±20° RMS in the window". **A defensible scale
+argument is not a measurement**, and no source relates any VRM value to a deer
+bed. Queries: `vector ruggedness measure VRM values deer bed site selection
+threshold Sappington bighorn 0.06 interpretation`.
+
+**One new observation that sharpens `R33`.** VRM output ranges 0–1 in principle
+but **typical values for natural terrain run 0 to about 0.4**
+([Sappington et al. 2007](https://wildlife.onlinelibrary.wiley.com/doi/10.2193/2005-723)
+and the GRASS/`spatialEco` implementations that follow it). Saturating at 0.06
+therefore pins the cover term at its **ceiling across most real hill country**,
+so a term intended to discriminate concealment is largely constant over the
+ground a hunter is actually looking at — a modelling consequence independent of
+whether 0.06 is the "right" number. Worth measuring on a real tile before the
+ground-truthing work `R33` asks for.
+
+### 🔴 `DEFAULT_VRM_RADIUS_CELLS = 4` — cover-term window radius (9×9, ≈ 90 m at 10 m cells)
+🔵 for the **direction** — "coarser scales of ruggedness may be more related to
+viewsheds and concealment" is already in this register, and 9×9 is properly
+coarser than the 3×3 it replaced. 🔴 for **4**: no source nominates a window
+size for cervid concealment. Sappington et al. 2007 tested multiple window sizes
+for bighorn; **their conclusion on scale is found-but-unread** and is the
+cheapest available upgrade for this row.
+
+### 🔴 `DEFAULT_RING_RADIUS_CELLS = 8` — surround-ring radius (≈ 80 m at 10 m cells)
+Unregistered until now and not named in any backlog row. Same status as the VRM
+radius: a scale choice with no source. Registered so it is not invisible.
+
+### 🔴 The two term floors — cover `0.4`, shelter `0.25` *(full treatment, pass 6)*
+
+`beddingLikelihood` is a product of five requirement terms. Two of them carry a
+**floor**, written as bare literals inside the loop body rather than as named
+constants (`packages/terrain/src/analysis/wind.ts:545` and `:562`):
+
+```
+shelterTerm = 0.25 + 0.75 · clamp01(s)     // s = terrainShelter, 0..1
+coverTerm   = 0.40 + 0.60 · clamp01(c / BEDDING_VRM_FULL_COVER)
+```
+
+A floor is not a tuning knob. In a multiplicative model it is **the entire
+statement of how substitutable a requirement is** — how much a cell is allowed
+to lose for missing it. Because the other terms multiply through unchanged, the
+floor is also what settles which term wins when two disagree, which is the
+mechanism `R31` was actually about. Both are 🔴 **Assumed**, and the rest of this
+section is the case for that grade, the shape critique, and the falsification
+tests.
+
+#### What the floor means in a measurable unit
+
+For `term = f + (1−f)·x` with `x ∈ [0,1]`, the ratio between the best and the
+worst cell **on that axis alone**, all other terms held equal, is exactly `1/f`:
+
+| Floor | Best-vs-worst ratio the engine asserts | Read as |
+|---|---|---|
+| shelter `0.25` | **4.0×** | a fully sheltered bed is at most 4× as good as an identical fully exposed one |
+| cover `0.40` | **2.5×** | a fully concealed bed is at most 2.5× as good as an identical bare one |
+
+That reformulation matters because `1/f` is a **selection ratio**, which is a
+quantity wildlife studies actually report and which
+`packages/shared`'s own selection analytics already compute (Manly ratios against
+a `TerrainProfile` availability distribution). The floors are therefore not
+unfalsifiable in principle — they are unfalsifiable *today* because nobody has
+published the ratio for either axis, and because the engine has no observation
+set to compute it from. That distinction is the difference between a 🔴 with a
+test and a 🔴 without one, and it is the main product of this pass.
+
+#### Finding 1 — the ordering the two literals imply has never been chosen, and the evidence contradicts it
+
+Read together, `0.25 < 0.40` says **wind shelter is a stricter requirement for a
+bed than concealment cover** (4× vs 2.5×). Nobody decided that. It fell out of
+two literals picked independently in different commits. The available evidence
+points the other way on both halves of it:
+
+- **Concealment selection at bed sites is measured, repeatedly, across species.**
+  Bed sites carry more screening cover than paired random points in every
+  bed-site study located this pass (below).
+- **The thermal-shelter benefit is the one that has been tested and *failed*.**
+  See Finding 3.
+
+An ordering that the engine asserts, that no one chose, and that the literature
+leans against, is a defect of exactly the kind this register exists to catch.
+
+#### Finding 2 — what is measured about concealment at bed sites (the cover floor)
+
+All 🟢 for *direction*; none of them yields a substitutability ratio.
+
+| Finding | Value | Species / scope |
+|---|---|---|
+| Bed-site vegetative cover vs paired random | **28.1 % vs 19.9 %** (1991), **36.0 % vs 33.8 %** (1992); veg height 101 cm vs 75 cm | whitetail **fawns**, ponderosa pine, Black Hills SD — [Uresk et al., USFS RMRS](https://www.fs.usda.gov/rm/pubs_other/rmrs_1999_uresk_d001.pdf) *(abstract/snippet level)* |
+| Odds of bed-site selection per 1 cm of understory height | **OR 1.035** (95 % CI 1.008–1.062) | whitetail **neonates**, grassland, Northern Great Plains — [Grovenburg et al. 2010, *JWM*](https://wildlife.onlinelibrary.wiley.com/doi/10.1111/j.1937-2817.2010.tb01245.x) *(abstract-level)* |
+| Visual obstruction at beds consistently exceeds that at 25 m and at random; ~50 % of beds under or beside a woody plant | direction only | ungulate fawn bed-site literature, incl. roe deer — [PMC10682894](https://pmc.ncbi.nlm.nih.gov/articles/PMC10682894/) *(abstract-level)* |
+| Site temperature and canopy closure were the **most influential** bed-site attributes | rank, not magnitude | **mule deer** day-beds, AZ ponderosa pine, 236 beds vs 439 random — [Germaine et al. 2004, *WSB* 32:554](https://wildlife.onlinelibrary.wiley.com/doi/abs/10.2193/0091-7648(2004)32%5B554:COMDDA%5D2.0.CO;2) *(abstract-level)* |
+
+**Two things this does not give us.** First, every one of the numeric rows is
+**fawn or neonate** work; fawn bed-site selection is a hider-strategy problem and
+does not transfer to mature-buck bedding — the transfer is stated here only to be
+refused. Second, and more fundamentally, the *closest* numeric row (Uresk) shows
+bed and random distributions **overlapping heavily** — 28 % vs 20 %, and in the
+second year 36 % vs 34 %, essentially no separation. A covariate whose means
+differ by 1.07–1.41× between used and available sites is not evidence for a 2.5×
+best-vs-worst ratio in either direction; it is evidence that the ratio has not
+been measured on anything resembling the engine's axis.
+
+**The cover floor `0.4` therefore stays 🔴 Assumed.** Nothing found supports 0.4
+over 0.2 or 0.6.
+
+#### Finding 3 — the shelter floor has a *contrary* measured result, and it is the strongest single result in this section
+
+The nearest thing to a test of "how much does missing shelter cost" is the
+thermal-cover literature, and it is negative:
+
+> No positive effect of thermal cover was found on body condition of elk during
+> any of four winter-long and two summer-long experiments. **During winter, the
+> dense cover units actually provided the most costly energetic environments,
+> and the clearcuts the least.** The energetic benefits of thermal cover seem
+> inconsequential.
+> — Cook et al. 1998, *Wildlife Monographs* 141, "Relations of forest cover and
+> condition of elk: a test of the thermal cover hypothesis in summer and winter",
+> as summarised by
+> [PNW *Science Findings* 22](https://www.fs.usda.gov/pnw/sciencef/scifi22.pdf)
+> and [Cook et al. 2004, *Thermal cover needs of large ungulates: a review of
+> hypothesis tests*](https://www.fs.usda.gov/pnw/pubs/journals/pnw_2004_cook001.pdf)
+> *(both abstract/summary level; the monograph itself is found-but-unread)*
+
+Cook et al. 2004 add the methodological point that bears directly on this
+register: *"the majority of empirical support for the thermal cover hypothesis is
+derived from observational studies of habitat selection"*, i.e. the same class of
+evidence the engine's shelter term rests on. And a second, independent negative:
+a LiDAR + GPS study of winter habitat selection found temperature and snow height
+drove cover selection while **wind speed had no influence at all**
+([Ewald et al. 2014, *Forests* 5:1374](https://doi.org/10.3390/f5061374),
+European roe deer, montane, *abstract-level*).
+
+**Four caveats, stated so this is not over-read:**
+
+1. **Species drift.** Cook is elk, Ewald is roe deer. Neither is *Odocoileus
+   virginianus*, and elk are markedly more cold-tolerant.
+2. **Different kind of shelter.** Both measure *canopy* thermal cover. The
+   engine's `terrainShelter` is a **topographic** exposure index. This is the
+   same category slip pass 5 caught in `R31` — recorded here so this pass does
+   not commit it in the opposite direction.
+3. **Benefit ≠ selection.** Cook measured *whether cover helps*. The bedding
+   layer predicts *where deer will be*. An animal can select a resource that
+   confers no measurable fitness benefit, and Cook explicitly notes selection
+   studies show cover use. For a "where is the deer" layer, selection evidence is
+   the right currency and Cook is not decisive.
+4. Against these sit Courbin et al. 2017 (whitetail selecting thermal cover under
+   cold stress) and Lang & Gates 1985 (whitetail night beds in reduced wind), both
+   already in this register.
+
+**Net: the shelter floor `0.25` stays 🔴 Assumed**, and the direction of any
+future change is genuinely contested. What has moved is that there is now a
+peer-reviewed result pushing the floor **up** (toward "missing shelter costs
+little"), which is the same direction `R31` prescribes for cold — reached by a
+completely independent route. That is a modest, real corroboration of `R31`'s
+direction and **not** of its endpoints.
+
+#### Finding 4 — the linear shape is defensible for shelter and probably wrong for cover
+
+`f + (1−f)·x` is a bounded, **partially compensatory** aggregation operator: it
+prevents any one requirement from zeroing the product while still letting it
+dominate. That is a recognised design in habitat modelling — the product /
+geometric-mean family is the standard "limiting factor" aggregator, chosen
+precisely so that a location scores low if any single input is low, in contrast
+to the arithmetic mean, which is fully compensatory
+([USGS OF 2007-1254, HSI assessment](https://pubs.usgs.gov/of/2007/1254/pdf/OF07-1254_508.pdf);
+[Geospatial Suitability Indices toolbox, aggregation methods AM / GM / MLF](https://apps.dtic.mil/sti/trecms/pdf/AD1177555.pdf)
+*(both abstract/snippet level)*). The engine's five-way product sits at the
+non-compensatory end; the floors are the dial that adds compensation back. **The
+existence of floors is 🔵 — sound modelling practice with a real methodological
+literature. The values are 🔴.**
+
+Three specific shape criticisms, in decreasing confidence:
+
+1. **The cover term's monotonicity is contradicted by measurement.** `0.4 + 0.6·c`
+   says more concealment is always better, saturating at
+   `BEDDING_VRM_FULL_COVER`. Two peer-reviewed results say otherwise:
+   - Red deer **select intermediate habitat visibility**, from 3D cumulative
+     viewsheds built from terrestrial + airborne LiDAR — an interior optimum, not
+     a saturating ramp. [Zong, Wang, Skidmore & Heurich 2023, *J. Anim. Ecol.*
+     92:1306–1319](https://besjournals.onlinelibrary.wiley.com/doi/10.1111/1365-2656.13847)
+     *(abstract-level; open-access copy and Dryad data exist and are the cheapest
+     upgrade for this row)*
+   - **Horizontal visibility, not concealment cover, drove bedsite use and
+     predation risk** in whitetail fawns, and a *greater* field of view **lowered**
+     the odds of coyote predation. [Obermoller et al., *JWM*](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.70240)
+     *(abstract-level; fawns, so scope-limited)*
+   - The mechanism is quantified generally: concealment and visibility are
+     **inversely related opposing functional properties of the same cover**
+     ([Camp et al. 2013, *Ecosphere*](https://esajournals.onlinelibrary.wiley.com/doi/10.1890/ES12-00114.1),
+     shrub-steppe, *abstract-level*).
+
+   This is the pass's sharpest finding on shape, and it exposes an **internal
+   contradiction in Ridgeline's own model**: the leeward aspect term is justified
+   in this register by the doctrine that a buck beds to *watch downhill and smell
+   uphill* — which requires a sightline — while the cover term rewards
+   monotonically increasing sightline-breaking ruggedness. The two terms encode
+   opposite preferences about the same variable and multiply together.
+
+   ⚠️ **Do not act on this by inverting the cover term.** VRM is terrain
+   orientation dispersion; the cited work measures *vegetation* visibility. The
+   honest conclusion is that a monotone-increasing terrain-roughness term is an
+   unvalidated proxy for a quantity that is measured to have an interior optimum.
+
+2. **A floor is the right family for shelter.** The requirement is graded (wind
+   loading is continuous, not present/absent), the cost of being wrong is
+   symmetric, and a hard threshold would make the layer flicker along every break
+   of slope — the same argument already recorded for `BEDDING_RING_SOFTNESS_DEG`.
+   Linear-in-`x` specifically is 🔴: it says the marginal value of shelter is
+   constant, whereas the standard RSF form `w(x) = exp(βx)` says it is constant in
+   *log* odds. The two differ most exactly at the exposed end, which is where the
+   floor lives.
+
+3. **Both floors are silently wind-speed assumptions.** Already filed as `R38`;
+   restated here because it is a *shape* claim, not only a value claim. A fixed
+   floor asserts the shelter/solar trade is a constant, when Parker & Gillingham
+   measured wind swamping solar gain at 15 m·s⁻¹ and being near-irrelevant in calm
+   air. The correct object is `f(windSpeedKph)`, not a scalar.
+
+#### What would falsify each — stated so a later pass can settle them
+
+Both floors are, today, **unfalsifiable guesses that nonetheless decide the
+layer's output.** These are the observations that would change that, cheapest
+first:
+
+| Floor | Falsifying observation | Consequence |
+|---|---|---|
+| cover `0.4` | A Manly selection ratio for observed beds across VRM availability bands (this repo already computes these). If used:available for the **top** VRM band ÷ the **bottom** band exceeds **2.5**, the floor is too high; if it is below ~1.3, the term is close to inert and the floor should rise toward 1 or the term be dropped | direct, and computable from Ridgeline's own observation table once enough beds are logged |
+| cover `0.4` | Any published RSF reporting a coefficient for a **continuous concealment covariate at adult** deer beds. `exp(β · range)` is directly comparable to `1/f` | would move the row to 🔵 |
+| cover `0.4` — shape | Confirmation that the response has an **interior optimum** in a terrain-visibility (not vegetation) covariate | would falsify the *functional class*, as Rowland 2018 did for the 22° Gaussian — a bigger correction than the value |
+| shelter `0.25` | Any study relating whitetail bed selection to a **topographic** wind-exposure index (TOPEX/Sx-class). Still none found after this pass's queries plus pass 5's six | would move the row to 🔵 or 🟢 |
+| shelter `0.25` | A measured used-vs-available ratio for leeward vs windward bed positions at matched slope, aspect and cover | if < 4×, the floor is too low |
+| shelter `0.25` | `R38` landing: any demonstration that the ratio varies with wind speed | falsifies the *scalar*, regardless of its value |
+
+**Interim guidance for the build agents, so the 🔴 does not become paralysis:**
+leave both values as they are. Do not tune either one without one of the
+observations above — a floor moved on taste is strictly worse than a floor left
+at a value whose provenance is documented. The two changes that *are* warranted
+now are non-numeric: promote both literals to named exported constants so they
+are greppable and overridable (they are currently invisible to every consumer),
+and make the `Confidence` chip on the bedding layer say that the cover and
+shelter weightings are unmeasured.
+
+**Queries run this pass** (in addition to pass 5's six on topographic shelter),
+so a later pass does not redo them: `white-tailed deer bed site visual
+obstruction horizontal cover measured versus random sites` · `Odocoileus
+virginianus bed site selection concealment cover threshold resource selection
+function` · `threshold response habitat selection ungulate non-linear canopy
+cover breakpoint deer` · `mature male white-tailed deer daytime bed site
+characteristics GPS telemetry measured slope canopy` · `deer bed site logistic
+regression odds ratio visual obstruction per unit increase selection` ·
+`"selection ratio" white-tailed deer bedding cover type use availability Manly
+winter` · `Armstrong Euler Racey 1983 winter bed-site selection central Ontario
+results` · `Cook 1998 Wildlife Monographs test of the thermal cover hypothesis
+findings` · `Mysterud Ostbye 1999 cover as a habitat element for temperate
+ungulates conclusions` · `thermal cover hypothesis rejected ungulate winter
+energetics review` · `ungulate selection leeward slopes wind exposure index GPS
+collars measured` · `deer resting site selection wind speed reduction percent
+selection strength odds ratio winter bed microclimate measured` · `habitat
+suitability index model aggregation arithmetic versus geometric mean limiting
+factor compensatory` · `white-tailed deer habitat suitability index model HSI
+cover component minimum value limiting factor equation` · `hiding cover
+definition vegetation hide 90 percent of adult deer at 61 meters` · `Germaine
+2004 mule deer day-bed sites canopy closure bed versus random values` · `LiDAR
+forest structure GPS telemetry winter habitat selection European roe deer wind
+speed no influence` · `deer bed sites canopy closure percent mean at beds versus
+random points white-tailed daytime` · `Zong 2023 LiDAR intermediate visibility
+forest-dwelling ungulate results` · `deer trade-off concealment versus visibility
+bedding intermediate cover predator detection` · `relative importance thermal
+cover versus security cover ungulate bed site selection compensatory
+substitutable`.
+
+**Found-but-unread, ranked as leads for the next pass:** Cook et al. 1998
+*Wildlife Monographs* 141 (the primary; only agency summaries read here) ·
+Mysterud & Østbye 1999, *Wildl. Soc. Bull.* 27:385–394, *Cover as a habitat
+element for temperate ungulates* (a review written on exactly this question) ·
+Zong et al. 2023 (open-access PDF and **Dryad datasets** both exist — the only
+lead here that could produce a fitted curve rather than a direction) ·
+Armstrong, Euler & Racey 1983, *JWM* 47:880–884, which compared **day and night
+beds** in central Ontario and is therefore the single most relevant unread paper
+to the day-vs-night gap this register logged in pass 5.
+
+#### 🔴 One agency threshold worth recording, because it is *not* our shape
+Hiding cover is defined across USDA/NRCS and state guidance as **vegetation
+capable of hiding 90 % of a standing adult deer from a human at ≤ 200 ft (61 m)**
+([Colorado NRCS mule deer fact sheet](https://efotg.sc.egov.usda.gov/references/public/co/muledeer.pdf),
+[MSU Deer Lab](https://www.msudeer.msstate.edu/habitat-cover.php)). 🟡 **Doctrine**
+— it is a management convention with no measurement behind the 90 %/61 m pair,
+and it is asserted rather than derived in every source found. It is registered
+here for one reason: it is the discipline's own operational definition of cover
+and it is a **step function**, not a ramp. Our cover term is a ramp. Neither is
+measured; they are simply different models, and the ramp is the better choice for
+a rendered surface for the anti-flicker reason above.
+
+### 🔴 `BEDDING_RING_MIN_DATA_FRACTION = 0.5` — ring data quorum *(new, `R40`; registered pass 6)*
+
+**Not a biological parameter, and it must never be presented as one.** It is a
+statistical-honesty threshold: the share of the *in-grid* ring that must carry
+data before the surround term is allowed to speak, below which the cell returns
+`NaN`. It says nothing about deer. Graded 🔴 **Assumed** and registered so that
+it is visible, exactly as `BEDDING_RING_SOFTNESS_DEG` is.
+
+The constant's own doc comment states that 0.5 "is not a free choice" because
+`detectBenches` already requires `samples >= 8` of 16 for the same geometry.
+**Reading both sources, that justification is true in the tile interior and false
+at the tile border**, which is the region it exists to protect:
+
+| | `detectBenches` (`landform.ts:441`) | `beddingLikelihood` (`wind.ts:604`) |
+|---|---|---|
+| test | `samples >= 8` — absolute count | `samples >= 0.5 · (samples + missing)` — fraction of *available* ring |
+| denominator | all **16** directions, including those off the tile | only directions **inside** the grid |
+| at a tile border with 5 in-grid directions, all with data | `5 < 8` → **abstains** | `5 ≥ 0.5 × 5` → **speaks** |
+
+The two coincide only when `samples + missing == 16`. This is not a defect —
+`R40` deliberately chose not to grey a ring-radius seam around every tile, and
+that decision is right and is documented. What is wrong is the *claim of
+equivalence*: the two layers **can** disagree about what a shelf is, along every
+tile edge, by construction. The value 0.5 is a reasonable quorum with no
+derivation; "half the ring answered" is the same convention as `detectBenches`
+by coincidence of arithmetic, not by pinning.
+
+**Recommended, non-urgent:** either restate the comment to say the quorum is
+*conventionally* aligned rather than pinned, or make the alignment real by
+expressing both as a fraction of the available ring. Filed rather than fixed —
+`packages/terrain` is not this agent's territory.
+
+### Cold-blend ramp — `coldBlendWeight`, graded per endpoint
+
+| Constant | Value | Grade | Basis |
+|---|---|---|---|
+| `BEDDING_COLD_ONSET_C` | +5 °C | 🔴 **Assumed** | Above **every** measured cervid lower critical temperature found (below), so the ramp begins while the deer is still thermoneutral. Harmless — the weight is near zero there — and it correctly makes the term a no-op through October. But no source sets +5 °C. A secondary summary asserting deer "benefit from increased direct exposure to sun below 5 °C" surfaced in search and **could not be traced to a primary source**; it is not cited here. |
+| `BEDDING_SEVERE_COLD_C` | −10 °C | 🔵 **Inferred** — *upgraded this pass* | Measured LCT for white-tailed deer fawns **fed a natural browse diet: −11.2 °C** (a 40 % rise in thermoneutral heat production moved it from −0.8 °C fasted to −11.2 °C fed), by indirect respiration calorimetry, 18 fasting + 18 on-feed trials. −10 °C sits **1.2 °C** from a measured physiological threshold for this species: below it a fed fawn must catabolise tissue. [Can. J. Zool. (1999)](https://cdnsciencepub.com/doi/10.1139/z99-111) *(abstract-level only.)* **Caveat: fawns.** Adults have a better surface-to-volume ratio and a lower LCT, so −10 °C is conservative for the mature buck the layer is aimed at. Corroborating band: black-tailed deer winter thermoneutral limits −6 to +18 °C. |
+| `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` | 0.75 | 🔴 **Assumed** | Chosen so lee never disappears. Defensible, unmeasured, and per the `R31` verdict **should not be raised**. |
+| Ramp shape | linear in T | 🔴 **Assumed** | Nothing measured prescribes linearity. Metabolic cost below LCT *is* approximately linear in the temperature deficit, which makes linear a reasonable default — recorded as reasoning, not as a source. |
+
+### Register-vs-source audit — bedding constants, re-read from the code *(pass 6)*
+
+Read directly from `packages/terrain/src/analysis/wind.ts` and
+`.../landform.ts`, not from this register's own account of them.
+
+| Constant | Value in source | Grade | Register accurate? |
+|---|---|---|---|
+| `BEDDING_PAD_HALF_MAX_SLOPE_DEG` | 12 | 🔵 | ✅ value and rationale match |
+| `BEDDING_RING_MIN_SLOPE_DEG` | 15 | 🔴 | ✅ value matches; **the source comment still carries the justification this register retracted in pass 5** (see below) |
+| `BEDDING_RING_SOFTNESS_DEG` | 4 | 🔴 (not biological) | ✅ source explicitly calls it a shape parameter |
+| `BEDDING_VRM_FULL_COVER` | 0.06 | 🔴 | ✅ source flags itself as geometry, not observation |
+| `BEDDING_RING_MIN_DATA_FRACTION` | 0.5 | 🔴 (not biological) | ⚠️ **was unregistered**; now registered above, with its stated pin to `detectBenches` corrected |
+| `BEDDING_COLD_ONSET_C` | 5 | 🔴 | ✅ |
+| `BEDDING_SEVERE_COLD_C` | −10 | 🔵 | ⚠️ value matches, but the **source comment does not carry the LCT citation** that earned the 🔵 — it still reads as an unsupported assertion |
+| `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` | 0.75 | 🔴 | ⚠️ value matches; **the source comment still quotes the retracted 42.0 cm figure** |
+| shelter floor | `0.25` (unnamed literal, `wind.ts:545`) | 🔴 | ⚠️ not a named constant; see the floors section |
+| cover floor | `0.40` (unnamed literal, `wind.ts:562`) | 🔴 | ⚠️ not a named constant; see the floors section |
+
+**Two stale source comments, both retractions this register has already made and
+the code has not.** Neither is a computational defect; both are the kind of
+confidently-wrong provenance that gets copied forward into the next parameter.
+
+1. `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`'s comment reads *"the mechanism is measured:
+   18.1 cm of snow on the SE-facing slope against 42.0 cm on the NE-facing slope
+   in the same study area (Lang & Gates 1985)"*. That is the **mean-versus-maximum
+   comparison retracted in pass 5**. Lang & Gates' three site means are bottomland
+   11.2 / SE 18.1 / NE 21.7 cm — an aspect effect of **1.20×, not 2.32×** — and the
+   sheltered bottomland is the shallowest of the three. This register and
+   `docs/BACKLOG.md`'s `R31` row both state it correctly; **checked this pass and
+   they have not drifted back.** The code comment is the last place the wrong
+   figure survives.
+2. `BEDDING_RING_MIN_SLOPE_DEG`'s comment places 15° "at the bottom of the BC WHR
+   band". That band bottoms at **5.7°**; 15° is its centre. Retracted in pass 5,
+   still in the source.
+
+Both are one-line comment edits owned by whoever next touches
+`packages/terrain/src/analysis/wind.ts`. Filed, not fixed — not this agent's
+territory.
+
+**Also confirmed against the code:** `R31`'s prescribed
+`shelterFloor(T) = 0.25 + 0.40 · coldBlendWeight(T)/0.75` has **not shipped**. The
+shelter floor is still the fixed literal `0.25`, so every statement in the `R31`
+section above remains a prescription rather than a description of the engine.
 
 ---
 
@@ -873,6 +1594,18 @@ ungulate scent human` · `cervid olfactory acuity measurement olfactometer` ·
 
 ## Rut timing
 
+> **Pass 4 (`R9`, rut regionalisation) reworked this whole section.** Passes 2
+> and 3 established that a latitude-monotone peak-breeding function is the wrong
+> functional class and assembled an eight-row seed table. Pass 4 answers the
+> three questions the backlog row actually asked — *where is latitude-only
+> defensible, where is it wrong and by how many days, and what should the model
+> say there* — by scoring the shipped function against **40 published regional
+> peaks** and by finding the mechanism paper. Headline: the shipped function is
+> within **+1 to +7 days** everywhere at ≥ 37°N, and between **−80 and +131
+> days** across the Coastal Plain, the Deep South, Texas and Florida. It is not
+> uniformly biased — **the sign of its latitude gradient is wrong in Georgia,
+> the Carolinas and Florida, and its magnitude is 6× too small in Alabama.**
+
 ### 🟢 Breeding is photoperiod-driven; northern peak is early-to-mid November
 Whitetail breeding is controlled by **decreasing photoperiod**. Fetal-aging work
 across the Midwestern USA put the **mean estimated conception date at 10
@@ -885,44 +1618,323 @@ November**, with adults at **8 November**, yearlings **11 November** and fawns
 Hunting media can support 🟡, never 🟢, and that row was mis-graded on its
 source even though its conclusion was right.
 
+**Pass 4 added the mechanism and two independent stability checks**, so that
+"photoperiod, never lunar" is now supported by physiology and not only by
+correlation:
+
+- **Mechanism.** Day length is transduced by the retina and suprachiasmatic
+  nucleus into a melatonin signal that activates the reproductive axis under
+  short days and inhibits it under long days. Experimentally, artificially long
+  days (16L:8D) in autumn **delayed** onset of puberty in Upper Michigan doe
+  fawns relative to natural-daylight controls, and melatonin dosing advances
+  first oestrus in captive whitetail by **37–119 days**. Photoperiod is
+  therefore the *proximate cause*, not a correlate.
+  [Verme & Ozoga 1987, *J. Mammalogy* 68:107 — photoperiod and puberty in doe fawns](https://academic.oup.com/jmammal/article-abstract/68/1/107/1040922) ·
+  [Out-of-season breeding of captive white-tailed deer, *Theriogenology* (PubMed)](https://pubmed.ncbi.nlm.nih.gov/11071135/) ·
+  [Reproductive management in white-tailed deer, *Agroproductividad*](https://revista-agroproductividad.org/index.php/agroproductividad/en/article/download/2063/1687/8266)
+- **Inter-annual stability.** Ontario deer–vehicle collisions, 29 years
+  (1988–2016), grouped by deer management area: **no evidence of any change in
+  rut timing over 29 years**, and the top model for the date of peak collisions
+  contained **one parameter — the management area.** Growing-degree-day (a
+  weather covariate) was never significant.
+  [Deerly departed, *Ecological Informatics / Sci. Total Env.* 2024](https://www.sciencedirect.com/science/article/pii/S2666900524000042)
+  This is a *northern-range* result and it says two things at once: timing is
+  fixed year to year (photoperiod), **and even in Ontario the only predictor
+  that survives is region.**
+
+### 🟢 How precise a "peak" can honestly be — the two dispersions
+The register previously used "±4 days" for the northern peak without a source.
+It now has one, and the number means something specific.
+
+| Quantity | Value | What it bounds |
+|---|---|---|
+| SD of a **population's annual mean** conception date, year to year | **4 days**, range 12 days | how repeatable *this herd's* peak is — the calibrated case |
+| SD of **individual** conception dates within a wild population | **13.4 days**, mean range **46 days** | how wide the actual breeding spread is — never a "peak day" |
+| SD of individual conception dates, **captive** deer (TX + MS) | 13.6 days, mean range 33 days | captive vs wild dispersion is nearly identical |
+| Fraction of breeding inside a **21-day window** centred on peak | most of it; total duration 30–45 days | the operational rut window |
+
+[Dye et al. 2012, *Wildl. Soc. Bull.* 36:107–114 — Factors affecting conception date variation](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/wsb.98) ·
+[MSU Deer Lab — Ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php)
+
+**Consequence.** A model that has *not* been calibrated to the user's herd
+cannot claim better than the region-to-region spread (below, ~±8 days at
+≥ 37°N). A model that *has* been calibrated from ≥ 3 seasons of the user's own
+observations can claim ±4 days and no better. Any UI that names a single day
+without an interval is overclaiming, in the north as well as the south.
+
 ### 🔴 `peakBreedingDayOfYear` returns **319** at ≥ 40°N — off by ~5 days
 DOY 319 is 15 November. The best measured value at that latitude is **8–10
-November = DOY 312–314**. Recommend **`314`**, uncertainty ±4 days, scope
-"Midwest / northern range". Illinois sits at ~40°N, which is exactly the branch
-boundary, so this is a like-for-like correction.
+November = DOY 312–314**. Recommend **`314`**, scope "interior/upland range,
+≥ 37°N". Illinois sits at ~40°N, which is exactly the branch boundary, so this
+is a like-for-like correction.
 
-### 🔴 Latitude interpolation below 40°N — **downgraded from 🔵; the functional form is wrong**
+**Pass 4: the north is flat in latitude, and 314 is the right constant.** Every
+population mean found at 37.5–43°N clusters inside 2–16 November with **no
+detectable latitude trend**:
+
+| Region | Lat | Population mean / peak | Model | Error |
+|---|---|---|---|---|
+| Alberta / western Canada | 52–54°N | peak breeding **10–21 Nov** (mid 16 Nov) | 15 Nov | −1 d |
+| SW Wisconsin (188 GPS bucks + conception) | 43.0°N | breeding window 23 Oct – 12 Nov | 15 Nov | −5 d |
+| Pennsylvania | 41.0°N | **median conception 11–17 Nov**; 90 % bred 16 Oct – 16 Dec | 15 Nov | ~0 d |
+| New Jersey, northern adults | 40.2°N | 3–23 Nov (mid 13 Nov) | 15 Nov | +2 d |
+| Midwest (IL/OH/IN) | 40.0°N | **10 Nov** | 15 Nov | **+5 d** |
+| West Virginia | 38.8°N | 7–15 Nov | 16 Nov | +5 d |
+| Missouri | 38.5°N | 16 Nov | 17 Nov | +1 d |
+| Virginia | 37.5°N | 16 Nov | 18 Nov | +2 d |
+| Kentucky | 37.5°N | 8–15 Nov | 18 Nov | **+7 d** |
+
+[Hunsaker et al. 2025, *Ecology and Evolution* — breeding season and movement ecology of male whitetail, SW Wisconsin](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589) ·
+[NJDEP — biology of the white-tailed deer](https://dep.nj.gov/njfw/hunting/biology-of-the-white-tailed-deer/) ·
+[VA DWR — fawning dates are key to rut timing](https://dwr.virginia.gov/blog/virginias-deer-with-justin-folks-fawning-dates-are-key-to-rut-timing/) ·
+[PGC — when is the rut](https://www.pa.gov/agencies/pgc/wildlife/discover-pa-wildlife/white-tailed-deer/when-is-the-rut) ·
+[Alberta Wild — white-tailed deer](https://albertawild.com/species/white-tail-deer-hunting/)
+
+**Two rows added in the same pass extend the flat band from 5.5° of latitude to
+17°, which is what makes the constant safe to ship.** The table above originally
+spanned only 37.5–43°N; **Alberta at 52–54°N peaks 10–21 November, i.e. *later*
+than Illinois at 40°N**, and Pennsylvania at 41°N — the largest fetal-aging
+dataset in the northeast, road-killed does 2000–2007 — has a median conception
+of 11–17 November. Across **37°N to 54°N the peak moves by at most about a week
+and does so non-monotonically.** A latitude ramp fitted over that band is
+fitting noise. The Alberta row is the weaker of the two (agency/outfitter
+summary, no n, index-level) and is carried as corroboration, not as an anchor;
+the Pennsylvania row is 🟢 agency fetal aging.
+
+**So the right functional class in the north is a constant, not a latitude
+ramp** — and the shipped code already uses a constant there, which is the one
+part of the function that is structurally correct. Prescription:
+
+```
+lat ≥ 37°N (and not in a South/Coastal-Plain region polygon):
+    peak = DOY 314 (10 Nov)
+    interval = ±8 d   region-to-region spread of population means, from the table above
+    (±4 d if the user has ≥ 3 seasons of their own calibration — Dye et al. 2012)
+```
+The 37°N floor is chosen because every population mean at ≥ 37°N lands inside
+8–16 November, and the first counterexample appears at **34.5–35.7°N** (North
+Carolina, below). 35–37°N is a reduced-confidence band: the interior holds
+(Tennessee 17–25 Nov, E Oklahoma 17 Nov, Arkansas 18 Nov ± 7) but the Atlantic
+Coastal Plain at the same latitude does not.
+[Oklahoma Academy of Science — breeding season of whitetail in eastern Oklahoma](https://ojs.library.okstate.edu/osu/index.php/OAS/article/view/5012/4682)
+
+### 🔴 Latitude interpolation below 40°N — **the functional form is wrong, and pass 4 measured how wrong**
 Current: `319 + (40 − lat)·1.2` down to 34°N, then `326 + (34 − lat)·3.5`.
-The previous register graded this 🔵 on the grounds that "southern herds breed
-later" is widely reported and only the coefficients were ours. **The direction
-is right; latitude is not the predictor.** At comparable latitudes:
+Pass 2 graded this 🔵 on the grounds that "southern herds breed later" is widely
+reported and only the coefficients were ours. Pass 3 downgraded it to 🔴 on the
+functional class. **Pass 4 scored it.**
 
-| Region | ~Lat | Measured peak / mean conception | Our model |
-|---|---|---|---|
-| Midwest | 40°N | **8–10 Nov** | 15 Nov (DOY 319) |
-| Mississippi, statewide | 33°N | **mean 1 January**, SD 13.4 d, mean range 46 d | 26 Nov (DOY 330) |
-| Alabama | 32°N | peak for most populations in **January**; conception dates vary **≥ 60 days between populations within a single county** | 29 Nov (DOY 333) |
-| Texas — Edwards Plateau | 30°N | **7 Nov** (east), **24 Nov** (central), **5 Dec** (west) | 6 Dec (DOY 340) |
-| Texas — Gulf Prairies | 28°N | peaks **30 Sep** (north) and **31 Oct** (south) | 13 Dec (DOY 347) |
+Every published population mean or agency peak found in this pass, with the
+shipped function's error at that location. Positive = model predicts breeding
+**later** than reality. Errors ≤ 7 days are marked ✅.
 
-[MDWFP deer breeding date map](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) ·
+| Region | Lat | Published peak / mean conception | Model | Error (d) |
+|---|---|---|---|---|
+| Midwest (IL/OH/IN) | 40.0 | 10 Nov | 15 Nov | +5 ✅ |
+| Missouri | 38.5 | 16 Nov | 17 Nov | +1 ✅ |
+| West Virginia | 38.8 | 11 Nov | 16 Nov | +5 ✅ |
+| Kentucky | 37.5 | 11 Nov | 18 Nov | +7 ✅ |
+| Virginia | 37.5 | 16 Nov | 18 Nov | +2 ✅ |
+| Tennessee, central | 35.8 | 17 Nov | 20 Nov | +3 ✅ |
+| Tennessee, east | 36.0 | 25 Nov | 20 Nov | −5 ✅ |
+| E Oklahoma (Cookson Hills) | 35.7 | 17 Nov | 20 Nov | +3 ✅ |
+| Arkansas, statewide | 34.8 | 18 Nov | 21 Nov | +3 ✅ |
+| **NC Unit I (west mountains)** | 35.7 | **5 Dec** | 20 Nov | **−15** |
+| NC Unit III | 35.5 | 8 Nov | 20 Nov | **+12** |
+| **NC Unit V (SE coastal)** | 34.5 | **11 Oct** | 22 Nov | **+42** |
+| SC, statewide mean | 33.8 | 30 Oct | 23 Nov | **+24** |
+| SC, Lower Coastal Plain | 33.0 | 25 Oct | 26 Nov | **+32** |
+| GA — Clarke Co | 33.95 | 13 Nov (DVC wk 11/10–11/16) | 22 Nov | +9 |
+| GA — Appling Co | 31.75 | 6 Nov (11/03–11/09) | 30 Nov | **+24** |
+| GA — Bacon Co | 31.55 | 30 Oct (10/27–11/02) | 1 Dec | **+32** |
+| **GA — Atkinson Co** | 31.30 | **23 Oct (10/20–10/26)** | 1 Dec | **+39** |
+| Alabama, north | 34.7 | 19 Nov | 21 Nov | +2 ✅ |
+| **Alabama, southwest** | 31.4 | **1 Feb** | 1 Dec | **−62** |
+| Mississippi, statewide mean | 32.8 | 1 Jan | 26 Nov | **−36** |
+| Mississippi Delta (median) | 33.5 | 27 Dec | 24 Nov | **−33** |
+| **Mississippi, SE coastal** | 31.0 | **mid-Feb** | 3 Dec | **−74** |
+| Louisiana, areas 4/9 (SE) | 30.7 | early–mid Dec | 4 Dec | −6 ✅ |
+| Louisiana, areas 1/5/6 | 31.5 | mid-Jan | 1 Dec | **−45** |
+| TX Pineywoods, north | 32.5 | 22 Nov | 27 Nov | +5 ✅ |
+| TX Pineywoods, south | 31.0 | 12 Nov | 3 Dec | **+21** |
+| TX Cross Timbers, north | 33.5 | 15 Nov | 24 Nov | +9 |
+| TX Post Oak Savannah, central | 31.0 | 10 Nov | 3 Dec | **+23** |
+| TX Edwards Plateau, east | 30.5 | 7 Nov | 4 Dec | **+27** |
+| TX Edwards Plateau, west | 30.0 | 5 Dec | 6 Dec | +1 ✅ |
+| TX Trans-Pecos | 30.5 | 8 Dec | 4 Dec | −4 ✅ |
+| **TX Gulf Prairies, north** | 29.5 | **30 Sep** | 8 Dec | **+69** |
+| TX Gulf Prairies, south | 27.5 | 31 Oct | 15 Dec | **+45** |
+| TX South Texas Brush, east | 27.5 | 16 Dec | 15 Dec | −1 ✅ |
+| TX South Texas Brush, west | 27.5 | 24 Dec | 15 Dec | −9 |
+| FL — Camp Blanding (N) | 29.9 | 2 Nov | 6 Dec | **+34** |
+| **FL — Eglin AFB (NW)** | 30.5 | **22 Feb** | 4 Dec | **−80** |
+| FL — Tosohatchee (central) | 28.5 | 7 Oct | 11 Dec | **+65** |
+| **FL — Rotenberger (S)** | 26.4 | **10 Aug** | 19 Dec | **+131** |
+
+Sources for the rows above, in addition to those already cited:
+[NCWRC peak conception dates (PDF)](https://www.ncwildlife.gov/media/4373/download?attachment=) ·
+[SCDNR peak breeding dates](https://www.dnr.sc.gov/wildlife/deer/reproductionmap.html) ·
+[GA DNR rut map (PDF)](https://georgiawildlife.com/sites/default/files/wrd/pdf/research/Georgia-Rut-Map.pdf) ·
+[MDWFP breeding date map](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) ·
+[MSU Deer Lab — ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php) ·
 [Turner et al. 2019, *Wildl. Soc. Bull.* — Alabama breeding chronology](https://wildlife.onlinelibrary.wiley.com/doi/abs/10.1002/wsb.1031) ·
-[TPWD — the rut in white-tailed deer](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/)
+[Outdoor Alabama / WFF county rut map](https://www.outdooralabama.com/node/3171) ·
+[LDWF estimated deer breeding periods](https://www.wlf.louisiana.gov/page/deer-breeding-periods) ·
+[TPWD — the rut in white-tailed deer](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/) ·
+Richter, A. R. & R. F. Labisky 1985, *J. Wildl. Manage.* 49:964–971 —
+reproductive dynamics among disjunct white-tailed deer herds in Florida
+(**primary; no reachable URL — see the citation-hygiene note under the seed
+table**), reported via
+[UF/IFAS EDIS — White-tailed Deer of Florida](https://journals.flvc.org/edis/article/view/114365)
 
-Two populations at nearly the **same latitude** (Texas Gulf Prairies, 30 Sep;
-Mississippi, 1 Jan) breed **three months apart**. Our model is **36 days early
-in Mississippi and 74 days late on the north Texas coast** — and it cannot be
-both, at any coefficient, because it is monotone in latitude. A monotone function
-of latitude cannot represent this — southern rut timing is driven by herd
-genetics, restocking history and local conditions, not day length, because the
-photoperiod signal itself weakens toward the equator.
+**Three separate ways the function fails, each fatal on its own.**
 
-**Recommendation:** north of ~38°N keep the photoperiod model (DOY 314 ± 4).
-South of it, **stop predicting from latitude**. Ship a region lookup seeded from
-state agency breeding-date data, and make `offsetDays` calibration the primary
-mechanism rather than a refinement. Absent a region match, return the phase as
-*unknown* rather than a wrong date — that is the "say when you do not know" rule
-in `CLAUDE.md`.
+1. **Same latitude, months apart.** At **30.5°N** the published peaks are 7 Nov
+   (TX Edwards Plateau east), 8 Dec (TX Trans-Pecos), ~10 Dec (SE Louisiana) and
+   **22 Feb** (Eglin AFB, Florida panhandle) — a **107-day spread at one
+   latitude**. At **~31°N**: 30 Oct (GA Bacon Co) to **mid-Feb** (SE
+   Mississippi) — **108 days**. At **~33°N**: 25 Oct (SC Lower Coastal Plain) to
+   1 Jan (Mississippi) — **68 days**. At **27.5°N**, three Texas populations at
+   *identical* latitude peak 31 Oct, 16 Dec and 24 Dec — **54 days**. Any
+   function of latitude returns one number for all of these.
+
+2. **The sign of the gradient is wrong in the Atlantic South.** The model
+   assumes southern ⇒ later. In **Georgia** the four county peaks readable from
+   the agency PDF run Atkinson (31.30°N) 23 Oct → Bacon (31.55°N) 30 Oct →
+   Appling (31.75°N) 6 Nov → Clarke (33.95°N) 13 Nov: **+7.9 days per degree
+   *north***, where the model applies **−3.5 days per degree north**. Wrong sign
+   and 11.4 d/° off in magnitude. **North Carolina** is the same: Unit V (SE
+   coastal) 11 Oct → Unit I (west mountains) 5 Dec, i.e. the *lowest*-latitude
+   unit is **55 days earlier** than the highest, inside a state spanning 2.5° of
+   latitude. **South Carolina** likewise runs Lower Coastal Plain 25 Oct → Upper
+   Coastal Plain ~1 Nov → Piedmont mid-Nov. **Florida is the extreme case:** the
+   *northernmost* site sampled (Eglin AFB, 30.5°N) has the **latest** mean
+   breeding date in the state (22 Feb) and the *southernmost* (Rotenberger,
+   26.4°N) the earliest (10 Aug) — **196 days apart, inverted**.
+
+3. **Where the sign is right, the magnitude is 6× too small.** Alabama runs
+   19 Nov in the north (34.7°N) to 1 Feb in the southwest (31.4°N): a real
+   gradient of **−22.4 days per degree north**, against the model's −3.5.
+
+> **The single sentence for the UI, if only one fits:** *South Carolina peaks
+> 30 October and Mississippi peaks 1 January — both at ~33°N, 63 days apart —
+> and inside Florida alone the range is 10 August to 22 February with the
+> northernmost herd the latest of all.*
+
+**Recommendation:** north of **37°N** keep the photoperiod constant (DOY 314,
+±8 d uncalibrated / ±4 d calibrated). South of it, **stop predicting from
+latitude entirely.** Region lookup, or *unknown*. See the prescription block
+below.
+
+### 🔵 Why the South is heterogeneous — **the mechanism, and a correction to this register**
+Pass 3 wrote that southern rut timing "is driven by herd genetics, restocking
+history and local conditions". **That is stronger than the evidence supports and
+is corrected here.** The one study that tested it directly reached a split
+result:
+
+Sumners et al. compared mtDNA and microsatellite differentiation between **6
+pairs of adjacent populations whose breeding dates differ by a mean of 35 days**
+and **4 pairs differing by ≤ 2 days**.
+
+- **Biparental nuclear markers did *not* separate them**: F<sub>ST</sub> = 0.028
+  (SD 0.021) for the similar-date pairs vs 0.047 (SD 0.024) for the
+  different-date pairs, **P = 0.200**. The straightforward "different stock ⇒
+  different rut" story is *not* supported at nuclear loci.
+- **mtDNA lineages did differ more** between geographically proximate
+  populations with differing breeding dates, implying a **maternal** genetic
+  effect maintained by **female philopatry**. The authors advance the restocking
+  legacy as a hypothesis — the paper's title ends in a question mark, and so
+  should ours.
+
+[Sumners et al. 2015, *J. Wildl. Manage.* 79:1213–1225 — Variable breeding dates among populations of white-tailed deer in the southern United States: the legacy of restocking?](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.954)
+
+**Assessment.** The defensible statement is: *the photoperiod cue is universal,
+but the **threshold** at which a given maternal lineage responds to it is
+heritable and locally fixed by doe site-fidelity, so adjacent herds can differ by
+weeks under identical day length.* Graded 🔵 — the differentiation is measured,
+the causal attribution to twentieth-century restocking is inference, and the
+study's own nuclear-marker test came back negative.
+
+Two corroborating, non-genetic contributors are reported by the agencies and
+should be carried as 🟡 rather than dropped: **spring flooding** in the
+Mississippi/Atchafalaya bottomlands selecting for late fawning, and
+**restocking-source folklore** in Alabama. Neither is quantified.
+[MSU Deer Lab — 2011 flood impacts on Delta deer (PDF)](https://www.msudeer.msstate.edu/docs/articles/Potential%20Flood%20Impacts%20on%20Deer%202011%20Flood%20Delta%20Wildlife%20Magazine.pdf) ·
+[MDWFP — what triggers the whitetail rut](https://www.mdwfp.com/wildlife-hunting/private-lands-program/habitat-and-wildlife-information/what-triggers-whitetail-rut)
+
+**What this rules out as a modelling shortcut.** Because the effect is carried in
+maternal lineage rather than in the environment, it is **not recoverable from any
+covariate the engine has** — not latitude, not elevation, not NLCD cover, not
+temperature. There is no clever feature that substitutes for the region table.
+That is worth stating plainly so a future pass does not try.
+
+### 🔵 *Why* the cue loses discriminating power southward — the daylength geometry, computed
+The register asserts in several places that "the photoperiod signal itself
+weakens toward the equator". That was never quantified, and it is quantifiable
+exactly, from spherical astronomy rather than from biology. Computed here for
+sunrise-to-sunset daylength with the standard −0.833° refraction/semi-diameter
+correction:
+
+| Latitude | Annual daylength amplitude (max − min) | Rate of change at the mid-Nov peak |
+|---|---|---|
+| 50°N | **8.30 h** | −2.88 min/day |
+| 45°N | 6.85 h | −2.36 min/day |
+| 40°N | 5.69 h | −1.95 min/day |
+| 36°N | 4.90 h | −1.67 min/day |
+| 32°N | 4.19 h | −1.43 min/day |
+| 28°N | 3.55 h | −1.21 min/day |
+| 25°N | 3.11 h | −1.05 min/day |
+| 18°N | ~2.2 h | ~−0.74 min/day |
+| 10°N | **1.17 h** | −0.39 min/day |
+
+*(Reproducible: declination `23.44° · sin(2π(doy−81)/365.24)`, hour angle from
+the standard sunrise equation. This is geometry, not a literature value, and it
+is stated so it can be checked rather than believed.)*
+
+**What it does and does not explain.** It explains the **southern edge** two rows
+below: at 10°N the entire annual swing is ~70 minutes, so there is almost no
+signal to entrain to, and the Costa Rica result follows. It explains why
+selection on breeding date relaxes southward: the fitness cost of breeding "late"
+falls as winters soften.
+
+**It does *not* explain the Deep South.** At 31°N the annual swing is still
+~4 hours and the daily rate of change in mid-November is still ~1.4 min/day —
+an ample, unambiguous cue. Deer in south Alabama receive a perfectly good
+photoperiod signal and breed in **February** anyway; deer in coastal Georgia
+receive the same signal and breed in **October**. That is the point: the cue is
+present and adequate everywhere north of ~20°N, so the variation must live in the
+*response threshold*, which is the previous row's finding. 🔵 — the geometry is
+exact, the inference drawn from it is ours.
+
+### 🟡 The rival explanation — adult sex ratio and buck age structure — is tested and *contradicted between regions*
+Before accepting the maternal-lineage account above, the standard competing
+hypothesis has to be dealt with, because if a user's own herd management moved
+their peak, no static region table would ever be right for them. The literature
+splits, cleanly and by region:
+
+| Study | Region | Result |
+|---|---|---|
+| Diefenbach et al. 2019, *JWM* 83(6):1368–1376 | Pennsylvania, 1999–2006 | Harvest regulation shifted the ≥2.5-yr : 1.5-yr male ratio from **1:3.7 (2002) to 1:1.59 (2006)** — and there was **no evidence of any change in the timing or variability of conception date**, productivity, or offspring sex ratio |
+| Clemson-lineage work | Southern herds | Unbalanced sex ratios and young buck age structure reported to **delay and protract** breeding; mature bucks said to biostimulate earlier, more synchronous oestrus |
+| Northern Michigan | Northern herds | **No** biostimulation effect found |
+| MSU Deer Lab summary | Mississippi | Shifts of **up to 30 days** in peak breeding date attributed to improved buck:doe ratio and age structure |
+
+[Diefenbach et al. 2019, *J. Wildl. Manage.*](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.21712) ·
+[USGS record](https://pubs.usgs.gov/publication/70228057) ·
+[MSU Deer Lab — ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php)
+
+**Assessment.** Graded 🟡 and explicitly *not* modelled. The best-designed test —
+a real management manipulation with before/after conception data, Pennsylvania —
+found **nothing**, and the effect is claimed only where it cannot be separated
+from the regional heterogeneity of the previous row. **Do not add a sex-ratio or
+age-structure term to the rut model.** Two consequences that *are* actionable:
+
+1. It reinforces the region table rather than undermining it: the one place a
+   30-day management-driven shift is claimed is Mississippi, which is also where
+   the maternal-lineage effect is largest. The two are confounded.
+2. It is a further argument for `offsetDays` calibration being the primary
+   mechanism in the South. If a herd's peak really can move with management, only
+   the user's own observations will catch it.
 
 ### 🟢 Region → peak-breeding lookup — **the seed table, assembled from agency sources**
 Pass 2 established that the latitude-monotone form is wrong but left no
@@ -940,6 +1952,45 @@ agency or peer-reviewed figure; none is interpolated by us.
 | Texas — Gulf Prairies | 28°N | **30 Sep** north, **31 Oct** south | 🟢 agency | TPWD, as above |
 | Florida, by zone | 25–31°N | zone means span **22 Jul – 31 Jan**; within-area conception spread **9–110 days**, mean 45 d, most does within 60 d | 🟢 agency, biological data collected since 2009 | [FWC statewide rut map (PDF)](https://myfwc.com/media/18766/statewide-rut-map.pdf) · [FWC "the truth about Florida's deer rut"](https://content.govdelivery.com/accounts/FLFFWCC/bulletins/22cf0b1) |
 
+**Pass-4 additions to the seed table.** Twelve further rows, at the resolution
+the source publishes. Everything here is fetal-aged conception data unless the
+row says otherwise.
+
+| Region | ~Lat | Peak conception / breeding | Source class | Source |
+|---|---|---|---|---|
+| North Carolina, 5 units | 34–36.5°N | **Unit V 11 Oct · Unit IV 30 Oct · Unit III 8 Nov · Unit II 20 Nov · Unit I 5 Dec**; statewide extremes reported as **4 Oct (east)** to **19 Dec (west)** | 🟢 agency fetal data, county resolution | [NCWRC estimated peak conception dates (PDF)](https://www.ncwildlife.gov/media/4373/download?attachment=) |
+| Virginia, statewide | 37.5°N | peak conception ~**16 Nov**; most does in oestrus **10–25 Nov**; peak fawning 16 Jun (2019 and 2020) | 🟢 agency + VADS telemetry | [VA DWR — fawning dates are key to rut timing](https://dwr.virginia.gov/blog/virginias-deer-with-justin-folks-fawning-dates-are-key-to-rut-timing/) · [Virginia Appalachian Deer Study](https://dwr.virginia.gov/blog/the-virginia-appalachian-deer-study-how-fawns-are-faring-west-of-the-blue-ridge-mountains/) |
+| West Virginia | 38.8°N | most does bred **7–15 Nov** | 🟡 agency summary, no n given | see the state-summary caveat below |
+| Kentucky, statewide | 37.5°N | **8–15 Nov**, tight statewide | 🟡 agency summary of fetal-rate analyses | KDFWR deer-program reports, *seen only in secondary summary — unread* |
+| Tennessee, by region | 35–36.5°N | **west 21 Nov · central 17 Nov · east 25 Nov** | 🟡 agency summary | *unread at source* |
+| Arkansas, statewide | 34.8°N | mean **18 Nov ± ~7 d**; AGFC publishes deer-zone detail | 🟡 agency summary | *unread at source* |
+| E Oklahoma (Cookson Hills, McAlester) | 35.7°N | peak "just prior to **18 Nov**", from testes/epididymal histology, Nov 1972 | 🟢 peer-reviewed | [Oklahoma Acad. Sci.](https://ojs.library.okstate.edu/osu/index.php/OAS/article/view/5012/4682) |
+| Alabama, by county | 30.5–35°N | **north 13–25 Nov**; **Black Belt / central late Dec – mid Jan**; **southwest 25 Jan – 8 Feb**. ≥ **60 days** variation *within* single counties | 🟢 peer-reviewed + agency county map | [Turner et al. 2019](https://wildlife.onlinelibrary.wiley.com/doi/abs/10.1002/wsb.1031) · [Outdoor Alabama — WFF rut map](https://www.outdooralabama.com/node/3171) |
+| Mississippi, by unit | 30.3–35°N | **late Nov** in NW counties → **mid-Feb** in SE counties (~80 d within one state); Delta median **27 Dec**; statewide mean 1 Jan | 🟢 agency, >20 yr of deer health checks | [MDWFP](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) · [MSU Deer Lab](https://www.msudeer.msstate.edu/ecology-of-the-rut.php) |
+| Louisiana, 10 deer areas | 29–33°N | **Area 2 peak Nov**; **Areas 4 & 9 (Florida Parishes / SE) peak early–mid Dec**; **Areas 1, 5, 6 late rut in Jan**. Published as two-week peak windows, from fetal measurements | 🟢 agency fetal data, area resolution | [LDWF estimated deer breeding periods](https://www.wlf.louisiana.gov/page/deer-breeding-periods) |
+| Texas, all ecoregions | 26–34°N | Pineywoods **N 22 Nov / S 12 Nov** (total 21 Oct–5 Jan) · Post Oak **central 10 Nov / S 11 Nov** (30 Sep–16 Jan) · Cross Timbers **N 15 Nov / S 17 Nov** (13 Oct–17 Dec) · Edwards Plateau **E 7 Nov / central 24 Nov / W 5 Dec** · Trans-Pecos **8 Dec** (4 Nov–4 Jan) · Gulf Prairies **N 30 Sep / S 31 Oct** (**24 Aug**–30 Nov) · South Texas Brush **E 16 Dec / W 24 Dec** (9 Nov–1 Feb) | 🟢 agency, 16 study sites, 2,436 does | [TPWD](https://tpwd.texas.gov/huntwild/hunt/planning/rut_whitetailed_deer/) |
+| Florida, 4 disjunct herds (peer-reviewed) | 26–30.5°N | mean breeding: **Rotenberger (S) 10 Aug · Tosohatchee (central) 7 Oct · Camp Blanding (N) 2 Nov · Eglin AFB (NW) 22 Feb** — "as much as **6 months asynchronous** among herds", n = 380 tracts, 1978–1981 | 🟢 peer-reviewed fetal/tract data | [Richter & Labisky 1985, *JWM* 49:964–971](https://journals.flvc.org/edis/article/view/114365) |
+
+**Richter & Labisky is the most important single citation in this section.** It
+is peer-reviewed, it is conception-date data rather than an agency map, and it
+contains the inversion outright: the **northernmost** Florida herd sampled has
+the **latest** mean breeding date in the state. No latitude function of any
+degree can fit four points where the extremes are 196 days apart and the sign
+alternates.
+
+> **Citation hygiene, checked because this row carries more weight than any
+> other.** The four herd means (Rotenberger 10 Aug · Tosohatchee 7 Oct · Camp
+> Blanding 2 Nov · Eglin AFB 22 Feb) and the sampling design (**380 reproductive
+> tracts, July 1978 – January 1981, four sites**) were **independently
+> re-verified in a separate search this pass** and match. **But the URL attached
+> to this citation elsewhere in the section resolves to a UF/IFAS EDIS document
+> ("White-tailed Deer of Florida"), not to *JWM* 49:964–971.** The EDIS document
+> is a secondary source reporting Richter & Labisky; the primary paper has no
+> reachable URL from this environment and **has not been read**. The grade stays
+> 🟢 because the numbers are confirmed by two independent secondary sources
+> reporting the same primary study, but the link must not be presented as the
+> paper. Do not cite the EDIS URL as if it were the *JWM* article.
+
 **The finding that kills latitude, stated as sharply as the data allows.**
 Pass 2's example was Texas Gulf (30 Sep) vs Mississippi (1 Jan) at similar
 latitudes. The Carolinas make it worse, because they remove the "different
@@ -951,51 +2002,250 @@ state, different genetics" hand-wave:
 > other counties peaking in **December**, inside one state.
 
 No function of latitude can produce that. Florida settles it: a single state
-spans **six months** of zone mean-conception dates, from 22 July to 31 January.
-The `319 + (40 − lat)·1.2` form is not merely mis-parameterised; it is the wrong
-functional class, and no coefficient rescues it.
+spans **six months** of zone mean-conception dates, from 22 July to 31 January —
+and the peer-reviewed herd data show the span is **inverted** with respect to
+latitude. The `319 + (40 − lat)·1.2` form is not merely mis-parameterised; it is
+the wrong functional class, and no coefficient rescues it.
 
-**Implementable shape.**
+**Implementable shape — pass-4 revision, resolution-tiered and honest at each tier.**
 ```
-peakBreedingDay(lat, lon):
-  if lat >= 38:              return 314 ± 4        // 🟢 photoperiod, fetal-aged
-  if region lookup hits:     return regionPeak ± regionSD   // 🟢/🔵 table above
-  else:                      return UNKNOWN        // never a latitude formula
+peakBreedingDay(lat, lon, userCalibration) -> { doy, ci95Days, tier } | UNKNOWN
+
+  T0  userCalibration present (>= 3 seasons of the user's own logged
+      chasing/breeding observations)
+        -> calibrated peak,          ci95 = +-4 d    conf 0.90   // Dye 2012
+  T1  region polygon hit at county / unit / ecoregion / zone resolution
+        -> agency mean conception,   ci95 = +-10 d   conf 0.55
+  T2  region polygon hit at STATE resolution only, inside a state whose
+      published within-state spread exceeds 30 d (AL, MS, LA, FL, TX, NC, GA)
+        -> return the state's RANGE, never its midpoint,
+           and mark the reading "regionally variable"   conf 0.25
+  T3  lat >= 37 deg N and NOT inside any South/Coastal-Plain region polygon
+        -> 314 (10 Nov),             ci95 = +-8 d    conf 0.70   // photoperiod
+  T4  35 <= lat < 37 deg N, interior/upland only (TN, AR, E OK, KY plateau)
+        -> 321 (17 Nov),             ci95 = +-12 d   conf 0.40
+  T5  anything else below 37 deg N with no region match
+        -> UNKNOWN. Do not return a date.
+  T6  |lat| < 18 deg N
+        -> UNKNOWN, permanently. Breeding is effectively aseasonal (see below).
 ```
-Resolution matters and should be honest about itself: Georgia and Florida
-publish at **county / zone** resolution, Texas at **ecoregion**, Mississippi and
-South Carolina at **state** resolution. A state-level answer in Alabama is worth
-little given ≥ 60 days of variation inside a single county — which is exactly
-what `offsetDays` user calibration is for, and why it should be promoted to the
-primary mechanism in the South rather than a refinement.
+Units: `doy` is day-of-year 1–365 with no leap adjustment (the model's existing
+convention); `ci95Days` is a half-width in days; `conf` is the redefined
+`rutConfidence` below. `southernHemisphere` continues to shift by 182 d and is
+applied *after* tier selection.
 
-**Scope warning that must reach the UI.** All eight rows are agency estimates of
-a *population mean*. The dispersion is the story: 46 days mean range in
-Mississippi, 9–110 days within a Florida area, ≥ 60 days within one Alabama
-county. "Peak rut is Tuesday" is not a claim any of these sources supports.
+**Why T2 exists and matters.** A state-level answer is not a weaker answer, it is
+usually a *wrong* answer. Alabama's statewide "peak" is meaningless when
+conception varies ≥ 60 days inside a single county and the state spans 13 Nov to
+8 Feb. In those states the correct output is a **range with a label**, not a
+midpoint. Returning "1 January" for all of Mississippi is precisely the
+confidently-wrong failure `CLAUDE.md` forbids: it is right in the Delta and
+seven weeks early on the coast.
 
-*(All rows abstract/index-level. Before implementing, the GA county table and
-the FL zone table should be read from their PDFs directly — they are the two
-rows carrying real spatial resolution and the two most likely to be
-mis-transcribed from search snippets. The four county examples above are the
-only Georgia rows actually seen; the remaining 155 must be read from source.)*
+Resolution the sources actually publish, so the polygon layer can be built to
+match: **county** — GA (159), NC, AL, MS; **management unit / area** — NC (5
+units), LA (10 areas); **ecoregion** — TX (7, with N/S/E/W splits inside
+several); **zone** — FL; **state or region** — SC (3 physiographic regions), VA,
+KY, TN (3 regions), AR, WV.
 
-### 🔴 `rutConfidence` thresholds — too generous by a wide margin
-Returns **0.65 for 32–38°N**. Mississippi and Alabama are 32–33°N and the model
-is a month or more wrong there. 0.65 is not a defensible confidence for a
-one-month error. Recommend, until a region lookup exists:
+**Scope warning that must reach the UI.** Every row in both tables is an agency
+or study estimate of a *population mean*, not a date deer breed on. The
+dispersion is the story: SD **13.4 days** and mean range **46 days** among
+individuals in Mississippi; **9–110 days** within a single Florida area; **≥ 60
+days** within one Alabama county; **6 months** among four Florida herds. "Peak
+rut is Tuesday" is not a claim any of these sources supports, and the interval
+belongs next to the date, not in a tooltip.
 
-| Latitude | Now | Recommended | Why |
-|---|---|---|---|
-| ≥ 38°N | 0.90 | 0.90 | supported by fetal-aging data |
-| 36–38°N | 0.65 | 0.55 | edge of the tight photoperiod window |
-| < 36°N | 0.65 / 0.40 / 0.20 | **0.15**, or refuse to return a date | latitude is not predictive here |
+#### Unread at source — the honest ledger for the next pass
+`WebFetch` is blocked for every host and **`curl` to these hosts fails at CONNECT
+with a proxy 403** (retested this pass against `georgiawildlife.com` and
+`myfwc.com`; both returned `curl (56) CONNECT tunnel failed, response 403`). The
+following are therefore **found but unread** — leads, not grades:
 
-36°N, not 38°N, is the boundary the literature uses: north of ~36° most deer
-breed mid-October to mid-December with a November peak; between 28–36° breeding
-spans late September to late March and peaks in November, December *or* January
-depending on the area. The cutpoints themselves remain 🔴 — they are a policy
-choice about how loud to be when we do not know.
+| Source | What is still needed | Why it matters |
+|---|---|---|
+| [GA DNR rut map PDF](https://georgiawildlife.com/sites/default/files/wrd/pdf/research/Georgia-Rut-Map.pdf) | 155 of 159 county rows | Only **Appling 11/03–11/09, Atkinson 10/20–10/26, Bacon 10/27–11/02** are confirmed — they appear in the PDF's own indexed title text. Clarke 11/10–11/16 came from a pass-3 snippet. **Secondary summaries of this map actively contradict each other**: one says coastal counties peak 10–20 Oct (earliest in the state), another says southern and coastal areas peak "late November or December". Do not code either. |
+| [FWC statewide rut map PDF](https://myfwc.com/media/18766/statewide-rut-map.pdf) | the zone table and zone geometry | Florida is the widest-spread state in the register and the only one where the inversion is peer-reviewed. The FWC zones are the implementation surface; Richter & Labisky gives the four anchor points. |
+| [NCWRC peak conception dates PDF](https://www.ncwildlife.gov/media/4373/download?attachment=) | per-county dates and per-county sample sizes | The agency itself warns precision varies with n. The 5 unit dates are confirmed in text; the county table is not. |
+| KDFWR, TWRA, AGFC deer-program reports | primary fetal data behind the KY / TN / AR rows | Those three rows are 🟡 in the table above purely because they were seen only in secondary summary. |
+| [Sumners et al. 2015](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/jwmg.954) full text | which population pairs, and the mtDNA effect size | The mechanism row's 🔵 grade rests on an abstract. |
+
+**A caveat on the Georgia rows specifically that must survive into
+implementation.** The GA map's cells are the **peak week of deer–vehicle
+collisions**, not conception dates. UGA and GA DNR validated DVC peak against
+conception dates **in three counties** and found them "almost identical", and
+against GPS hourly movement rates. That validation is real but it is n = 3
+counties, so the GA rows are **🔵 inferred (DVC as a rut index)**, not 🟢
+measured conception — and this is also the one dataset in the register where
+"observable rut" and "mean conception" were found to coincide, which conflicts
+with MDWFP's guidance below.
+[SEAFWA method paper — using DVCs to map breeding activity in Georgia](https://seafwa.org/journal/2015/using-deer-vehicle-collisions-map-white-tailed-deer-breeding-activity-georgia) ·
+[UGA Today — DVCs increase during breeding season](https://news.uga.edu/deer-vehicle-collisions-breeding-season-0915/)
+
+### 🔵 Agency maps report **mean conception**, which is not the huntable peak — and the offset is disputed
+The model treats `peakBreedingDayOfYear` as both *the conception mean* and *the
+centre of the `PeakBreeding` phase*, and `calibrateOffset` hard-codes
+`CHASING_CENTER = -6` days. Three sources measure the gap between mean
+conception and peak observable rutting activity, and **they disagree by two
+weeks**:
+
+| Source | Offset of observable rut vs mean conception | Basis |
+|---|---|---|
+| MDWFP, on its own breeding-date map | **−14 d** ("subtract about two weeks from the mean conception date to obtain the simulated peak rut period") | agency guidance over 20 yr of health-check data |
+| Hunsaker et al. 2025, SW Wisconsin | **−4 to −6 d** (movement rate topped out 4–8 Nov; conception-derived peak window 23 Oct – 12 Nov, 16 d long) | 188 GPS-collared males, 2017–2020 |
+| GA DNR / UGA | **≈ 0 d** (DVC peak and conception peak "almost identical" in 3 counties) | DVC vs fetal aging |
+
+[MDWFP breeding date map](https://www.mdwfp.com/wildlife-hunting/wildlife-species-program/deer-program/deer-breeding-date-map) ·
+[Hunsaker et al. 2025, *Ecology and Evolution*](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589) ·
+[SEAFWA — DVCs to map breeding activity](https://seafwa.org/journal/2015/using-deer-vehicle-collisions-map-white-tailed-deer-breeding-activity-georgia)
+
+**Assessment.** Our `-6` sits inside the best-instrumented estimate (Wisconsin
+GPS), so it is not wrong — but it is *not* settled, and the range **−14 … 0 d**
+should be recorded rather than collapsed. Graded 🔵: the offset is measured
+three times, by three methods, with no reconciliation. **Do not** silently
+subtract 14 days from agency map values when seeding the region table — store
+the agency figure as *mean conception* and apply the offset once, explicitly,
+at the phase layer, so the two can be re-tuned independently.
+
+### 🟢 The model has a southern edge: below ~14–18°N there is no rut to predict
+The reproductive season of white-tailed deer is hypothesised to be **aseasonal
+south of about 14–18°N**, where annual variation in day length is small. A test
+in a seasonally dry tropical forest in **Costa Rica** found year-round
+reproduction, with the relative frequency of reproductive indicators driven by
+**rainfall** rather than photoperiod — most births in the dry season, a second
+peak late in the wet season.
+[Reproduction of white-tailed deer in a seasonally dry tropical forest of Costa Rica: a test of aseasonality, *J. Mammalogy* 2020, 101(1):241](https://academic.oup.com/jmammal/article-abstract/101/1/241/5655750)
+
+`Odocoileus virginianus` ranges to Bolivia and Peru, so this is a real boundary
+for a product that takes an arbitrary latitude. **Prescription:** `|lat| < 18°N`
+returns UNKNOWN unconditionally with the note *"breeding is effectively
+aseasonal at this latitude; rut phase is not defined"*. Currently the model
+happily returns `326 + (34 − lat)·3.5`, which at 10°N yields DOY 410 — i.e. it
+wraps to mid-February and reports a phase with confidence 0.2.
+
+### 🔵 The `southernHemisphere` 182-day shift is roughly right
+Introduced whitetail on **Stewart Island / Rees Valley, New Zealand** (~45–47°S,
+liberated 1905) rut **mid-April to early June**, with most fawns born
+December–January. Shifting DOY 314 by 182 days gives DOY 131 = **11 May**, which
+sits mid-window. Finland's introduced herd (~61°N) is reported to breed
+October–November, consistent with the northern constant.
+[NZ DOC — white-tailed deer hunting](https://www.doc.govt.nz/parks-and-recreation/things-to-do/hunting/what-to-hunt/deer/white-tail-deer/) ·
+[NDA — the strange story behind Finland's white-tailed deer](https://deerassociation.com/the-strange-story-behind-finlands-white-tailed-deer/)
+
+**Assessment:** 🔵 — the shift is a defensible inference from the short-day
+breeder mechanism plus two introduced-range observations, neither of which is a
+conception-date study. The southern-hemisphere branch should carry
+`conf ≤ 0.40` and the note *"introduced range, no conception-date data"*.
+
+### 🔴 The `rutConfidence` scalar has no defined meaning — *new row, pass 4*
+`rutConfidence(latitude): number` returns 0.2–0.9 and is documented in code as
+"how much to trust the phase at this latitude, 0..1". **Nothing in the codebase
+or in this register says what that number is the probability *of*.** An
+undefined confidence is worse than none: it cannot be falsified, it cannot be
+back-tested against the 40 rows above, and it renders as a chip a hunter reads
+as odds. This is a 🔴 row about a number that is not a measurement of anything.
+
+**Prescription — define it first, and the values then follow from measurement
+rather than from taste:**
+> `rutConfidence` = *the modelled probability that the true population mean
+> conception date lies within **±7 days** of the returned date.*
+
+±7 d is chosen because it is the half-width of the 21-day window inside which
+most breeding occurs (MSU Deer Lab), i.e. the tolerance at which being wrong
+still changes where a hunter sits. Once defined this way the value is testable:
+score it against the region table and it should be calibrated.
+
+### 🔴 `rutConfidence` thresholds — measurably too generous, and keyed on the wrong variable
+Returns **0.65 for 32–38°N**. From the error table, at 32–33°N the shipped model
+is off by **+24 d (South Carolina), +32 d (SC Lower Coastal Plain), −33 d
+(Mississippi Delta), −36 d (Mississippi statewide)**. A 0.65 confidence on a
+one-month error is the single most misleading number in the rut model, because
+0.65 reads to a user as "probably right".
+
+Worse, **it is keyed on latitude, which pass 4 shows is not the variable that
+predicts the error.** At 30.5°N the model is 4 days out in the Trans-Pecos and
+80 days out at Eglin AFB; one latitude, one confidence, a twentyfold difference
+in error. Confidence must key on **which tier answered**, not on latitude.
+
+| Tier | Condition | Now | Recommended | Derivation |
+|---|---|---|---|---|
+| T0 | user-calibrated, ≥ 3 seasons | n/a | **0.90** | population annual mean SD = 4 d ⇒ P(\|err\| ≤ 7 d) ≈ 0.92 (Dye 2012) |
+| T3 | ≥ 37°N, no region hit | 0.90 | **0.70** | region-to-region spread of population means ≈ ±8 d ⇒ P(\|err\| ≤ 7 d) ≈ 0.6–0.7 |
+| T1 | region hit at county / unit / ecoregion / zone | n/a | **0.55** | agency map resolution vs ≥ 60 d within-county variation (Turner 2019) |
+| T4 | 35–37°N interior/upland, no region hit | 0.65 | **0.40** | TN/AR/OK cluster 17–25 Nov; NC at the same latitude does not |
+| T2 | region hit at state resolution only, spread > 30 d | 0.65 | **0.25**, and return a range not a date | AL 13 Nov–8 Feb; MS late Nov–mid Feb |
+| T5 | < 37°N, no region hit | 0.65 / 0.40 / 0.20 | **refuse — return UNKNOWN** | errors of −80 to +131 d are observed here |
+| T6 | \|lat\| < 18°N | 0.20 | **refuse — UNKNOWN, permanently** | breeding is aseasonal (Costa Rica) |
+| — | southern hemisphere branch | inherits | **cap at 0.40** | introduced range, no conception-date data |
+
+**Pass 3 recommended a floor of 0.15 for < 36°N. Pass 4 replaces that with a
+refusal**, because 0.15 is still a number on a chip next to a date, and a date
+that can be 131 days wrong should not be shown at all. `CLAUDE.md`: *"Grey out
+layers whose inputs are unset rather than rendering a default."* An
+uncharacterised herd in south Georgia is an unset input.
+
+The tier *cutpoints* (37°N, 35°N, the 30-day state-spread threshold) remain
+🔴 — they are a policy choice about how loud to be when we do not know, informed
+by but not derived from the table. The **confidence values** attached to them
+are now 🔵, derived from measured dispersions.
+
+### 🔴 `calibrateOffset`'s ±14-day rejection clamp — **falsified by this pass's own evidence, and it fails hardest exactly where calibration is the only mechanism left**
+*New row, pass 4.* `calibrateOffset()` computes a median offset from the user's
+logged chasing observations and then discards it:
+
+```ts
+// Refuse implausible calibrations — more likely mislabelled observations
+// than a herd that breeds three weeks off the regional norm.
+return Math.abs(offset) > 14 ? undefined : offset;
+```
+
+The comment states a biological claim — *a herd does not breed three weeks off
+the regional norm* — and **every southern source in this section contradicts
+it**:
+
+| Evidence | Offset that actually occurs |
+|---|---|
+| Sumners et al. 2015 — 6 pairs of **adjacent** populations | mean **35 days** apart |
+| Turner et al. 2019 — within a **single Alabama county** | **≥ 60 days** |
+| NDA, summarising the same body of work | populations **< 30 miles apart** where the early herd *finishes* breeding before the late herd *starts* |
+| MDWFP — within Mississippi | late Nov → mid-Feb, ~**80 days** |
+| Richter & Labisky 1985 — within Florida | **~6 months** among four herds |
+| FWC — within a single Florida *area* | conception spread **9–110 days** |
+
+**Consequence, and it is the worst kind — a silent one.** A hunter in south
+Alabama or the Mississippi Delta whose herd genuinely peaks 40 days off the
+regional figure logs three seasons of honest chasing observations, and
+`calibrateOffset` returns `undefined`. The model then falls back to the regional
+default that is 40 days wrong, **with no indication that the user's own data was
+computed and thrown away.** `docs/BACKLOG.md` `I2` already promotes `offsetDays`
+to the *primary* mechanism south of ~37°N; a ±14-day clamp makes the primary
+mechanism structurally unable to express the southern range it exists to serve.
+
+**Prescription — concrete, with units and bounds:**
+
+```
+clamp bound:  ±14 d  ->  ±60 d          // covers the ≥60 d within-county
+                                        // variation measured in Alabama
+                                        // (Turner 2019); wider than the 35 d
+                                        // adjacent-population mean (Sumners 2015)
+on |offset| > 60 d:      still reject, and surface the rejection to the user
+                         ("your observations imply a peak N days from the
+                         regional figure; check the observation dates")
+                         — never return `undefined` silently
+minimum observations:    keep >= 3, but widen the plausibility test from a
+                         fixed clamp to dispersion: reject when the
+                         inter-observation spread exceeds ~45 d, which is the
+                         measured within-population conception range
+                         (Dye et al. 2012, mean range 46 d)
+north of 37°N only:      a ±14 d clamp remains defensible — the region-to-region
+                         spread of northern population means is ~±8 d, so a
+                         14-day rejection band is ~1.75 SD there
+```
+
+Graded 🔴 because `14` was chosen by us, not measured; the **replacement 60** is
+🔵, inferred directly from Turner et al.'s measured within-county variation. The
+latitude-dependence of the clamp is the honest form: the same number cannot be
+right in Pennsylvania and in Wilcox County, Alabama.
 
 ### 🟢 Moon phase does not drive the rut — *modelled by exclusion*
 48 GPS-collared bucks in Mississippi, two years, 15-minute fixes: bucks averaged
@@ -1007,6 +2257,24 @@ weather and hunting pressure.
 
 **Citation replaced.** The previous register supported this 🟢 row with a Mossy
 Oak blog post. The conclusion survives; the sourcing did not.
+
+**Pass 4 upgraded the sourcing again, to the strongest form of this test.** The
+two citations above measure *movement*; a lunar-rut claim is about *breeding*,
+and that has now been tested directly against conception dates rather than
+against activity:
+
+> **Moon phase did not accurately predict conception date for either individuals
+> or populations of deer**, in captive individuals (Texas and Mississippi) or in
+> wild Mississippi populations. Body condition did not influence conception date
+> at the population level either.
+> [Dye et al. 2012, *Wildl. Soc. Bull.* 36:107–114](https://wildlife.onlinelibrary.wiley.com/doi/10.1002/wsb.98)
+
+Two independent lines now converge: moon phase does not predict when deer breed
+(Dye 2012, conception dates), and rut timing has not shifted in 29 years while
+lunar phase relative to the calendar has (Ontario DVC, above). **Peer-reviewed,
+on the exact quantity a lunar rut predictor would claim to forecast.** The
+answer to the founder is still no, and it is now no with a conception-date study
+behind it rather than an activity study.
 
 **Decision recorded, and it is not up for reconsideration:** breeding is
 photoperiod-driven, moon phase is not a rut predictor, and a lunar rut feature
@@ -1084,17 +2352,70 @@ phenomenon is the doctrine layer on top of it — and note the cycling data abov
 implies a *third* and *fourth* recurrence too, which nobody hunts, so the
 phenomenon's practical size is unmeasured.
 
-### 🔴 The other phase window day counts (seeking −21…−10 d, chasing −10…−2 d, lockdown …)
-Our own partition of a continuous process. Ordering is doctrine; the day counts
-are invented. **Re-searched; still no source** giving durations for seeking or
-chasing. The only durations anyone measures are the two physiological ones now
-recorded above — oestrus 24–30 h and the tending bond ~24 h — and neither sets
-a multi-day phase boundary. Everything except `SecondRut` stays 🔴.
+### 🔵 The *outer* rut window is measured — 16–21 days *(new; split out of the 🔴 row below)*
+Pass 3 recorded every phase-window day count as invented. Pass 4 found the
+envelope, twice, by two methods:
 
-**Queries:** `white-tailed deer rut seeking chasing tending lockdown duration
-days GPS collar breeding chronology phases` · `National Deer Association
-lockdown phase myth GPS collar buck movement` · `white-tailed deer estrous cycle
-length days estrus duration recurrence peer reviewed`.
+- **Changepoint analysis of daily movement rates** on 188 GPS-collared males,
+  SW Wisconsin, 15 Oct – 1 Dec, 2017–2020: peak breeding season **23 Oct –
+  12 Nov**. **Peak rut length was 20–21 days from movement metrics and 16 days
+  from conception dates**, with little variation among age classes or metrics.
+  Mean movement rate peaked in the week of **5–11 Nov**; 2-year-olds moved most;
+  firearm-season opening weekend had no significant effect.
+  [Hunsaker et al. 2025, *Ecology and Evolution*](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.71589)
+- Independently: within any region, breeding duration is **30–45 days**, with
+  **most breeding inside a 21-day window centred on the peak**.
+  [MSU Deer Lab — ecology of the rut](https://www.msudeer.msstate.edu/ecology-of-the-rut.php)
+
+**Consequence for the parameter.** Our windows put `Seeking` through
+`PostRut` at −21…+24 d, a 45-day envelope. That matches the *duration* figure
+but is roughly **twice** the 16–21 day measured peak. The huntable core is
+narrower than we render it. **Recommended:** keep the outer envelope at
+−21…+24 d (matches the 30–45 d duration), but mark the **±10 d band around peak
+as the measured high-odds window** and let the UI distinguish the two. 🔵 rather
+than 🔵🟢 because the Wisconsin result is one site at 43°N and the MSU figure is
+a lab summary rather than a primary table.
+
+**Scope caution:** both are northern/tight-window populations. In Florida, an
+area's own conception spread runs **9–110 days (mean 45)**; a 21-day core does
+not exist there, and the phase model should widen or refuse alongside
+`peakBreedingDay`.
+
+### 🔴 The *internal* phase day counts (seeking −21…−10 d, chasing −10…−2 d, lockdown −2…+8 d)
+Our own partition of a continuous process. Ordering is doctrine; the internal
+boundaries are invented. **Re-searched across three passes; still no source**
+giving separate durations for seeking versus chasing. The only durations anyone
+measures are the envelope above and the two physiological ones — oestrus 24–30 h
+and the tending bond ~24 h — and neither sets a multi-day internal boundary.
+Everything except `SecondRut` and the outer envelope stays 🔴.
+
+**Queries (cumulative across passes 2–4):** `white-tailed deer rut seeking
+chasing tending lockdown duration days GPS collar breeding chronology phases` ·
+`National Deer Association lockdown phase myth GPS collar buck movement` ·
+`white-tailed deer estrous cycle length days estrus duration recurrence peer
+reviewed` · `buck movement rate peaks days before peak conception GPS collar
+chasing phase timing relative to breeding date` · `"Breeding Season and Movement
+Ecology of Male White-Tailed Deer in Southwest Wisconsin" peak movement date
+conception excursions`.
+
+### Rut-model parameters for other species — sourced, and all wrong for whitetail dates
+The transfer table further down grades species scope; these are the numbers
+behind its "Rut timing ❌❌❌" row, so the register does not have to assert it
+without a source.
+
+| Species | Rut / breeding peak | Gestation | Source class |
+|---|---|---|---|
+| Elk (*Cervus canadensis*) | rut mid-Sep – mid-Oct; **peak within 5–10 days of the autumnal equinox**; >70 % of cows bred by 15 Oct | ~245 ± 10 d; calving peak ~7 Jun | 🟡 agency / club summaries |
+| Mule deer (*O. hemionus*) | breeding peak **late Nov – mid-Dec** | ~204 d; births 16 Jun – 6 Jul, most in June | 🟡 agency / reference summaries |
+| White-tailed deer | DOY 314 ± 8 (≥ 37°N) | ~200 d | 🟢 (this section) |
+
+[Montana FWP — reproductive strategies (PDF)](https://fwp.mt.gov/binaries/content/assets/fwp/montana-outdoors/2016/reproductivestrategies.pdf) ·
+[TWRA — elk in Tennessee](https://www.tn.gov/twra/wildlife/mammals/large/elk.html) ·
+[Texas Tech NSRL — Mammals of Texas, *Odocoileus hemionus*](https://www.depts.ttu.edu/nsrl/mammals-of-texas-online-edition/Accounts_Artiodactyla/Odocoileus_hemionus.php)
+
+**DOY 314 is ~7 weeks wrong for elk.** The rut model must either refuse for
+non-whitetail species or carry a species parameter; it currently does neither
+and has no species input at all.
 
 ---
 
@@ -1257,7 +2578,7 @@ is the whole point of this register.
 |---|--------|--------------|---------|
 | 1 | Replace `toblerSpeed` with the cervid energetics curve above (`C₀ 2.6`, `k_up 26`, `k_dn 8`, floor 0.55), switching the currency from time to energy | 🔴 → 🔵/🟢 | `N8` |
 | 2 | **Close `N9` as not-supported.** The escape-terrain citation is a human Fitbit study and the concept is mountain-sheep-specific | 🟢 → 🔴 | `N9` |
-| 3 | Fix the rut model south of 38°N: DOY 319 → 314 in the north, region lookup or *unknown* in the south, `rutConfidence` < 36°N down to ~0.15 | 🔵 → 🔴 + 🟢 fix | new |
+| 3 | **Fix the rut model south of 37°N — superseded by pass 4 and now fully specified.** DOY 319 → **314 ±8** at ≥ 37°N; six-tier resolution ladder (T0–T6) in the rut section; **refuse** rather than return 0.15 below 37°N with no region match; refuse permanently below 18°N | 🔴 → 🟢 (north) + refusal (south) | `R9` |
 | 4 | Resolve the bedding contradiction: bench geometry (gentle pad, steep ring) instead of a 22° single-cell Gaussian. **Pass 3 resolved the direction — the pad side wins, so this is a re-centring, not a rewrite.** Interim if unimplemented: `idealSlopeDeg 22 → 12`, `slopeToleranceDeg 14 → 10` | 🔴 → 🟡 | new |
 | 5 | Surface `Confidence` chips on bedding, thermal, scent and rut outputs — four of the five headline layers are 🔴-driven | — | `N10` |
 | 6 | Make the scent cone stability-dependent, and fix the inversion (the night/thermal cone is currently the *widest*) | 🔴 → 🔵 | `N11` |
@@ -1268,18 +2589,40 @@ is the whole point of this register.
 | 11 | Obtain NLCD resistance values from Lilly et al. 2025 rather than inventing them | 🔴 → 🔵 | `I4` |
 | 12 | Label every layer with the region its evidence comes from; nothing is validated in the Appalachians | — | new |
 | 13 | Obtain GPS-collar data to settle bedding geometry, corridor use and shelter | 🔴 → 🟢 | `I3` |
-| 14 | **Ship the region → peak-breeding lookup** from the eight-row agency table above; read the GA county and FL zone PDFs at source before implementing | 🔴 → 🟢 | new, blocks 3 |
+| 14 | **Ship the region → peak-breeding lookup.** Seed table is now **20 rows** covering IL/Midwest, VA, WV, KY, TN, AR, E OK, NC (5 units), SC, GA, AL, MS, LA (10 areas), TX (7 ecoregions), FL (4 peer-reviewed herds + zones). Ship the confirmed rows; **do not code the 155 unread GA counties or the FL zone table from snippets** | 🔴 → 🟢 | `R9`, blocks 3 |
+| 21 | **Define `rutConfidence` before changing its values.** It is currently the probability of nothing. Define as *P(true population mean conception within ±7 d of the returned date)*, then apply the tier table — confidence keys on **which tier answered**, never on latitude | 🔴 → 🔵 | `R9` |
+| 22 | **Return a range, not a midpoint, wherever only a state-resolution match exists** in AL, MS, LA, FL, TX, NC, GA. A state midpoint in Alabama is right in the north and 11 weeks early in the southwest | — | `R9` |
+| 23 | **Refuse below 18°N** (aseasonal breeding, Costa Rica) and **cap southern-hemisphere confidence at 0.40**. The model currently returns DOY 410 at 10°N and reports a phase | 🔴 → 🟢 / 🔵 | `R9` |
+| 24 | **Store agency figures as *mean conception* and apply the observable-rut offset once, explicitly, at the phase layer.** The offset is disputed: −14 d (MDWFP) / −4…−6 d (Hunsaker 2025 GPS) / ≈0 d (GA DVC). Our `CHASING_CENTER = −6` is inside the best-instrumented estimate; keep it, record the range | 🔴 → 🔵 | `R9` |
+| 25 | Mark the **±10 d band around peak** as the measured high-odds window (16–21 d, Hunsaker 2025; 21 d, MSU) inside the existing 45-day envelope, and widen or refuse it in Florida where an area's own spread is 9–110 d | 🔴 → 🔵 | `R9` |
 | 15 | **`transitionMinutes` → `{ morning: 110, evening: 35 }`, forward-offset not centred.** Cheapest measured correction in the register | 🔴 → 🟢 | new |
 | 16 | **Fix the slope double-count in `beddingLikelihood`.** `slopeTerm × coverTerm(TRI)` counts slope twice because TRI is slope-correlated; swap TRI for Sappington VRM at a coarser window | 🔴 → 🔵 | new |
 | 17 | Set the terrain-shelter upwind search radius to **500 m** (measured optimum for distance-limited TOPEX) | 🔴 → 🔵 | new |
 | 18 | Add a season/temperature-weighted **solar-aspect** term to bedding; leeward-only points at the deepest snow on a south wind in January | none → 🟡 | new |
 | 19 | `SecondRut` window `+24…+38 d` → **`+24…+31 d`**, peak +27, from the 25–28 d oestrous cycle | 🔴 → 🔵 | new |
 | 20 | Soften the `PHASE_NOTES` lockdown claim to record the sightings-vs-movement disagreement rather than assert it | 🟡 → 🔴 | new |
+| 26 | **Correct the Lang & Gates snow figure everywhere it is quoted.** "18.1 vs 42.0 cm" is a mean against a maximum; the like-for-like figures are 18.1 SE / 21.7 NE (1.20×), with the sheltered bottomland lowest of all at 11.2 cm. Present in `docs/BACKLOG.md`'s `R31` row and in this register's own pass-3 changelog. **This is the number the case for raising the aspect weight rests on** | 🟢 (corrected) | `R31` |
+| 27 | **`R31` fix: ramp the bedding shelter floor 0.25 → 0.65 on the existing `coldBlendWeight`**, engaging at +5 °C and saturating at −10 °C. Do **not** raise `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`. Target on `R31`'s opposing planes: sun face ahead by ~1.15×, not 1.9× either way | 🔴 → 🔵 (direction) | `R31` |
+| 28 | **Land `R27` (`castShadows` wiring) before item 27.** Raising the solar side of the trade while the insolation field ignores terrain shadow amplifies an existing error onto the exact ground it decides | — | `R27` blocks `R31` |
+| 29 | **Feed `windSpeedKph` into `beddingLikelihood`.** The correct shelter weighting spans the whole plausible range with wind speed (Parker & Gillingham: at 15 m·s⁻¹ wind swamps solar "regardless of incident solar levels"), and the engine reads only `windFromDeg`. Any fixed floor is a hidden wind-speed assumption | 🔴 → 🔵 | new |
+| 30 | **Record the whitetail cold-cover disagreement in the UI, do not resolve it.** PLOS One 2013 (MN, 12 yr): colder → more open. Courbin et al. 2017 (Anticosti): cold stress → more thermal cover. Both peer-reviewed, both northern whitetail | — | `R10` |
+| 31 | **Decide day-vs-night explicitly.** Every shelter-dominant citation is a night-bed or whole-range source; the only daytime-specific one prescribes south/west slopes. The layer is used in daylight by accident, not by decision | — | new |
+| 32 | Measure the realised distribution of `coverTerm` on a real tile — VRM saturating at 0.06 against a natural range of 0–0.4 likely pins it at ceiling across most hill country | — | `R33` |
+| 33 | **Promote the two bedding floors to named exported constants.** `0.25` and `0.40` are bare literals at `wind.ts:545` and `:562`. No value change — they are 🔴 and must not be tuned on taste — but they are currently ungreppable, unoverridable by `BeddingOptions`, and invisible to any consumer that wants to report them | — | pass 6 |
+| 34 | **Compute the two floors as Manly selection ratios** once observations exist. `1/f` is the best-vs-worst ratio the engine asserts: **2.5× for cover, 4× for shelter**. `packages/shared` already computes selection ratios against a `TerrainProfile`; this is the cheapest path from 🔴 to 🔵 for either row and needs no new literature | 🔴 → 🔵 | pass 6 |
+| 35 | **The engine asserts wind shelter is a stricter bed requirement than concealment (4× vs 2.5×) and nobody chose that.** It fell out of two literals set in different commits. Decide the ordering deliberately, or set both floors equal until there is evidence to separate them | — | pass 6 |
+| 36 | **The cover term's monotonicity conflicts with two measured results and with Ridgeline's own leeward rationale.** Red deer select *intermediate* visibility (Zong 2023); horizontal visibility, not concealment, drove whitetail fawn bedsite use and *lowered* predation odds (Obermoller). Meanwhile the leeward term is justified by "watch downhill, smell uphill", which needs a sightline. **Do not invert the term** — VRM is terrain, the studies are vegetation — but stop presenting more ruggedness as monotonically better | — | pass 6 |
+| 37 | **Read Zong et al. 2023 and its Dryad datasets.** The only located lead that could yield a *fitted curve* for the cover term rather than a direction. Open-access PDF + two Dryad deposits | 🔴 → 🔵/🟢 | pass 6 |
+| 38 | **Read Armstrong, Euler & Racey 1983, *JWM* 47:880–884.** It compared **day and night beds** in central Ontario and is the single most relevant unread paper to the day-vs-night gap logged in pass 5 (item 31). A PDF surfaced this pass at `originalwisdom.com` | — | pass 6 |
+| 39 | **Fix two stale source comments in `wind.ts`.** `BEDDING_MAX_SOLAR_ASPECT_WEIGHT` still quotes the retracted "18.1 vs 42.0 cm"; `BEDDING_RING_MIN_SLOPE_DEG` still calls 15° "the bottom of the BC WHR band" (it is the centre; the bottom is 5.7°). Both were retracted in pass 5 and survive only in the code | — | pass 6 |
+| 40 | **Restate `BEDDING_RING_MIN_DATA_FRACTION`'s comment.** It claims to be pinned to `detectBenches`' `samples >= 8 of 16`; the two tests use different denominators and **do** diverge at tile borders. The behaviour is correct and intentional; the claim of equivalence is not | — | pass 6 |
 
-Item 13 would resolve more red rows than everything else combined. Items 2 and 3
-are corrections to things we currently state confidently and wrongly, and should
-go first. Items 14–17 and 19 are the pass-3 additions that come with a number
-attached and are therefore the cheapest to land.
+Item 13 would resolve more red rows than everything else combined. Items 2, 3
+and **26** are corrections to things we currently state confidently and wrongly,
+and should go first. Items 14–17 and 19 are the pass-3 additions that come with
+a number attached and are therefore the cheapest to land. **Items 27–29 are
+ordered and must stay ordered: 28 before 27, and 29 supersedes 27 whenever a
+wind speed becomes available.**
 
 ---
 
@@ -1293,9 +2636,69 @@ attached and are therefore the cheapest to land.
 | Cover term `ruggedness / 4 m` | 🔴 "invented, no literature" | concept 🔵, index choice 🔵, constant 🔴 — **plus a slope double-count defect** | Riley 1999 design intent; Sappington 2007 VRM |
 | Terrain shelter radius | not registered | 🔵 **500 m** | distance-limited TOPEX tested against 7 radii |
 | `SecondRut` +24…+38 d | unverified | 🔵 **+24…+31 d** | oestrous cycle 25–28 d, sourced |
-| Warm-aspect winter selection | not registered | 🟡, and it **conflicts with our leeward-only aspect term** | four agencies + measured 18 vs 42 cm snow by aspect |
+| Warm-aspect winter selection | not registered | 🟡, and it **conflicts with our leeward-only aspect term** | four agencies + ~~measured 18 vs 42 cm snow by aspect~~ ⚠️ **pass 5: that comparison was a mean against a maximum — see pass-5 changelog** |
 | Rut region lookup | "recommended, no data" | 🟢 **eight-row seed table** | SCDNR, GA DNR, MDWFP, TPWD, FWC, Turner 2019 |
 | Lockdown doctrine | 🟡 | 🔴 | GPS collar data contradicts it |
 | `impassableSlopeDeg: 55` | 🔴 | 🔴 **(with reason)** | the cervid slope literature has no thresholds at all, by construction |
 | Scent-detection distance | 🔴 | 🔴 **(with reason)** | only anatomy is measurable; the media metre-values have no primary source |
 | Pressure cutpoints | 🔴 | 🔴 **(with reason)** | doctrine's own threshold is ~5× ours; neither is measured |
+
+---
+
+## Pass-4 changelog — `R9`, rut regionalisation
+
+| Row | Before | After | Why |
+|---|---|---|---|
+| Latitude interpolation | 🔴 "wrong functional class", 5 example regions | 🔴 **scored against 40 published regional peaks** | +1…+7 d at ≥ 37°N; **−80 to +131 d** below it. Three independent failure modes quantified: 107 d spread at one latitude, **wrong gradient sign** in GA/NC/SC/FL, **6× too small** in AL |
+| "Southern timing is driven by herd genetics and restocking" | asserted flatly by pass 3 | 🔵 **corrected and hedged** | Sumners et al. 2015 found nuclear F<sub>ST</sub> did **not** differ (P = 0.200); only mtDNA did. Maternal lineage + female philopatry, restocking as hypothesis. This register overclaimed |
+| "±4 days" northern uncertainty | unsourced | 🟢 **two dispersions, both measured** | Dye 2012: population annual mean SD **4 d**; individual SD **13.4 d**, range 46 d. So **±8 d uncalibrated, ±4 d calibrated** |
+| Photoperiod mechanism | correlation only | 🟢 **physiological mechanism + 29-yr stability** | Verme & Ozoga 1987 (long days delay puberty); melatonin advances oestrus 37–119 d; Ontario DVC — no timing change 1988–2016, region the only surviving predictor |
+| Moon phase does not drive the rut | 🟢 on *movement* studies | 🟢 on **conception dates** | Dye 2012: moon phase did not predict conception date for individuals or populations. Tested on the exact quantity a lunar predictor claims |
+| Region seed table | 8 rows | 🟢 **20 rows**, resolution-labelled | + NC (5 units), VA, WV, KY, TN, AR, E OK, AL county, MS unit, LA (10 areas), TX (7 ecoregions), **Richter & Labisky 1985** (4 FL herds, peer-reviewed, 6 months asynchronous) |
+| `rutConfidence` | 🔴 "too generous" | 🔴 **"the probability of nothing"** — new row | Undefined semantics is the deeper defect. Defined as P(\|err\| ≤ 7 d); values re-derived per **tier**, not per latitude |
+| `rutConfidence` < 36°N | pass 3 said 0.15 | **refuse** | 0.15 is still a date on a chip. −80 to +131 d errors mean UNKNOWN |
+| Southern edge of the model | not registered | 🟢 **aseasonal below ~14–18°N** | Costa Rica test of aseasonality. Model currently returns DOY 410 at 10°N |
+| `southernHemisphere` 182-d shift | not registered | 🔵 **roughly right, cap conf 0.40** | NZ whitetail rut mid-Apr–early Jun vs shifted prediction 11 May; introduced range, no conception data |
+| Phase window day counts | all 🔴 | **split**: outer envelope 🔵, internals 🔴 | Hunsaker 2025 — peak rut **16–21 d** (188 GPS males); MSU — most breeding in a **21-d** window. Seeking-vs-chasing boundary still has no source after three passes |
+| Mean conception vs huntable peak | conflated | 🔵 **disputed, range recorded** | −14 d (MDWFP) / −4…−6 d (Hunsaker) / ≈0 d (GA DVC). Our −6 survives, inside the GPS estimate |
+| GA county + FL zone tables | "read the PDFs before implementing" | **confirmed unreachable**, ledger filed | `curl` 403 at CONNECT for both hosts. Only 3 GA counties are confirmed, from the PDF's indexed title. Secondary summaries of the GA map **contradict each other** on coastal timing |
+| Elk / mule deer rut dates | asserted in the transfer table | 🟡 **sourced** | elk peak within 5–10 d of the autumnal equinox; mule deer late Nov–mid Dec. DOY 314 is ~7 weeks wrong for elk |
+
+---
+
+## Pass-5 changelog — `R31`, shelter vs solar aspect, and the ungraded bedding set
+
+| Row | Before | After | Why |
+|---|---|---|---|
+| Lang & Gates snow depths | "18.1 cm SE vs **42.0 cm** NE", quoted as the measured mechanism | 🟢 **corrected: 11.2 bottomland / 18.1 SE / 21.7 NE (means); 42.0 was the study maximum** | A mean was being compared against a maximum, inflating the aspect effect from **1.20× to 2.32×**. The same study's **sheltered bottomland had the shallowest snow of all three sites**, a 10.5 cm advantage ≈ 3× the aspect effect |
+| Armstrong, Euler & Racey 1983 | credited with "NE 21.7 / SE 18.1 cm" | **mis-attribution retracted** | Those are Lang & Gates' figures. No numeric result from Armstrong et al. has ever been read here; the paper is real and remains found-but-unread |
+| `R31` premise ("four agencies prescribe shelter") | treated as supporting the engine's shelter term | **category error identified** | Maine IFW and UNH Extension prescribe **softwood crown closure ≥ 70 % / 65–70 %** — canopy, invisible to a DEM. The engine's shelter term is topographic |
+| Topographic wind shelter as a whitetail bed criterion | implicitly 🟢 via Lang & Gates | 🔴 **no literature found**, six distinct queries logged | Lang & Gates measured *wind velocity at night beds*, not a topographic exposure index. **The term that swings 3.2× and decides the winter answer has no species-specific calibration** |
+| "Colder → deer seek shelter" | assumed settled | **recorded as a live disagreement** | PLOS One 2013 (MN, 12 yr): colder → **more open**, authors say solar gain outweighs cover benefit "particularly when temperatures are coldest". Courbin et al. 2017 (Anticosti): cold stress → **more thermal cover**. Both peer-reviewed northern whitetail |
+| Relative magnitude of the two effects | never quantified | 🔵 **same order: solar 29–42 % vs shelter ~50 %** | J. Exp. Biol. 198:1499 (ground squirrels, 780 W·m⁻²) vs red deer sheltered-topography reporting. Parity within cross-species transfer error — **neither justifies a 1.88× win** |
+| `aspectTerm × shelterTerm` multiplicative structure | unexamined | 🔵 **vindicated** | Wind reduces solar warming as well as adding loss (*J. Theor. Biol.* 1974) — the interaction is real and the product already encodes it. Do not refactor to additive |
+| `BEDDING_SEVERE_COLD_C = −10 °C` | ungraded | 🔵 **Inferred** | Measured LCT for fed whitetail fawns = **−11.2 °C** (Can. J. Zool. 1999). Within 1.2 °C of a species-specific physiological threshold. Caveat: fawns, so conservative for adults |
+| `BEDDING_PAD_HALF_MAX_SLOPE_DEG = 12` | ungraded | 🔵 **Inferred**, shape 🟢 | Rowland 2018's monotone decline is measured; 12° places the term at 0.20 at the top of the BC WHR band and 0.34 at the top of the elk band. The *shape* fix mattered more than the value |
+| `BEDDING_RING_MIN_SLOPE_DEG = 15` | ungraded | 🔴 **Assumed**, and its stated justification is wrong | The comment calls 15° "the bottom of the BC WHR band"; that band bottoms at **5.7°** — 15° is its centre. And a *use* band cannot set a *surround* threshold without assuming what the pad/ring split exists to deny |
+| `BEDDING_VRM_FULL_COVER = 0.06` | ungraded, flagged by author | 🔴 **Assumed — upheld**, with a new consequence | Natural terrain VRM runs 0–~0.4, so saturating at 0.06 pins the cover term at ceiling across most hill country. `R33`'s ground-truthing stands |
+| `DEFAULT_VRM_RADIUS_CELLS = 4`, `DEFAULT_RING_RADIUS_CELLS = 8`, `BEDDING_RING_SOFTNESS_DEG = 4`, cover floor `0.4`, shelter floor `0.25`, `BEDDING_COLD_ONSET_C = 5`, `BEDDING_MAX_SOLAR_ASPECT_WEIGHT = 0.75`, linear ramp | unregistered | 🔴 **Assumed, all seven** | Four of them were in no backlog row at all. The two **floors** are the constants that decide which term wins a disagreement — i.e. the actual cause of `R31` — and neither had been looked at |
+| Wind speed | not considered | 🔴 **new gap** | `windSpeedKph` exists in `packages/shared/src/domain.ts:154` and never reaches the engine. Every fixed shelter floor is a hidden wind-speed assumption |
+| Day vs night beds | not distinguished | 🔴 **new gap** | The literature splits on exactly this axis and the layer's daytime reading is currently an accident rather than a decision |
+
+---
+
+## Pass-6 changelog — the two bedding floors, and the `R40` constants
+
+| Row | Before | After | Why |
+|---|---|---|---|
+| Shelter floor `0.25` | 🔴, one-line stub | 🔴 **Assumed — upheld, with a falsification test and a contrary result** | No study relates whitetail bed selection to a topographic wind-exposure index (pass 5's six queries + this pass's). New and cutting the other way: Cook et al. 1998/2004 found **no positive effect of thermal cover** on elk condition in six experiments, with dense cover the *most* energetically costly winter environment; Ewald et al. 2014 found **wind speed had no influence** on roe deer winter selection. Species and cover-type drift both apply — and *benefit ≠ selection* |
+| Cover floor `0.40` | 🔴, "has had no scrutiny at all" | 🔴 **Assumed — scrutinised, unchanged** | Concealment selection at beds is measured (Uresk, Grovenburg OR 1.035/cm, Germaine) but every numeric row is **fawn/neonate**, and the closest one shows used and available distributions **overlapping** (28.1 % vs 19.9 %; 36.0 % vs 33.8 %). Nothing supports 0.4 over 0.2 or 0.6 |
+| What a floor *is* | undefined | **defined as a measurable quantity** | `term = f + (1−f)x` ⇒ best-vs-worst ratio `1/f`. The engine therefore asserts **cover 2.5×, shelter 4×** — quantities that are exactly Manly selection ratios, which `packages/shared` already computes. The floors are unfalsifiable *today*, not unfalsifiable in principle |
+| Relative strictness of the two requirements | never examined | 🔴 **new finding: the ordering was never chosen** | `0.25 < 0.40` asserts wind shelter is a **stricter** bed requirement than concealment. It fell out of two independently-picked literals, and the located evidence leans the other way |
+| Floor *shape* — the existence of a floor | unexamined | 🔵 **sound modelling practice** | Product/geometric-mean aggregation is the standard "limiting factor" operator; the floors are the dial that adds compensation back to an otherwise non-compensatory product (USGS OF 2007-1254; GSI toolbox AM/GM/MLF) |
+| Floor *shape* — cover term monotonicity | unexamined | 🔴 **contradicted by two measured results** | Red deer select **intermediate** LiDAR-measured visibility (Zong et al. 2023, *J. Anim. Ecol.* 92:1306); **horizontal visibility, not concealment**, drove whitetail fawn bedsite use and greater field of view **lowered** coyote-predation odds (Obermoller, *JWM*); concealment and visibility are inversely-related properties of the same cover (Camp et al. 2013). ⚠️ Do not invert the term — VRM is terrain, these measure vegetation |
+| Internal contradiction | not noticed | **new** | The leeward term is justified here by "watch downhill, smell uphill" (needs a sightline); the cover term rewards monotonically increasing sightline-breaking roughness. The two encode opposite preferences and multiply together |
+| `BEDDING_RING_MIN_DATA_FRACTION = 0.5` | unregistered (new in `R40`) | 🔴 **Assumed — and not a biological parameter** | A data-quorum threshold, correctly designed. Its comment claims to be pinned to `detectBenches`' `samples >= 8 of 16`; **the two use different denominators** (all 16 vs in-grid only) and diverge at tile borders, which is the region the quorum exists to protect. Behaviour right, claim of equivalence wrong |
+| Hiding cover, 90 % of a standing deer at 61 m | not registered | 🟡 **Doctrine** | The discipline's own operational cover definition (NRCS, MSU Deer Lab) is a **step function**; ours is a ramp. Neither measured; registered so the difference is deliberate |
+| Lang & Gates correction | corrected in pass 5 | **verified unchanged this pass** | Register and `docs/BACKLOG.md` both still state 11.2 / 18.1 / 21.7 cm means and 1.20×. ⚠️ **The retracted 42.0 cm figure survives in `wind.ts`'s comment on `BEDDING_MAX_SOLAR_ASPECT_WEIGHT`** |
+| `R31` shelter-floor ramp | prescribed in pass 5 | **confirmed not shipped** | `wind.ts:545` is still the fixed literal `0.25`. Every `R31` statement remains prescription, not description |
