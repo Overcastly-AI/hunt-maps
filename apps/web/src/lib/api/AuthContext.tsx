@@ -8,10 +8,16 @@
  * state is derived **synchronously** from whatever `tokenStore` already has —
  * no network round trip gates the first render. A background `/auth/me` call
  * then either confirms that state or corrects it, and — this is the part that
- * is easy to get backwards — only a *real* auth failure (a 401 that survived
- * a refresh attempt) signs the user out. A network failure during that check
- * leaves them signed in, with `isOffline: true` so the UI can say so honestly
+ * is easy to get backwards, and *was* backwards — only a *real* auth failure
+ * (`kind: 'auth'`: a 401 that survived a refresh attempt) signs the user out.
+ * Every other outcome, a 5xx from a server that is merely unwell included,
+ * leaves them signed in with `isOffline: true` so the UI can say so honestly
  * instead of pretending the check succeeded.
+ *
+ * `isOffline` therefore means "we could not confirm this session", not
+ * strictly "there is no signal". From the hunter's side of the glass the two
+ * are indistinguishable and call for the same behaviour: keep working from
+ * what is cached.
  *
  * ## What "signed in" means here
  *
@@ -40,7 +46,11 @@ import type { AuthedUser, AuthTokens, LoginInput, RegisterInput } from './types'
 export interface AuthState {
   status: 'authenticated' | 'unauthenticated';
   user: AuthedUser | null;
-  /** True when the last background check of the session failed for lack of signal, not for lack of validity. */
+  /**
+   * True when the last background check could not confirm the session — no
+   * signal, or a server answering 5xx. Never set for a failure of *validity*:
+   * that signs the user out instead.
+   */
   isOffline: boolean;
 }
 
@@ -83,18 +93,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         if (cancelled) return;
-        if (err instanceof ApiError && err.kind === 'network') {
-          // Could not confirm the session — but a hunter with no signal must
-          // not be signed out for it. Keep the cached user, say we could not
-          // check.
-          setState((s) => ({ ...s, isOffline: true }));
+        // Sign out on a *proven* auth failure and nothing else.
+        //
+        // The inverse of this test ("stay signed in only for `kind: network`")
+        // is the shape this was originally written in, and it is wrong in the
+        // most expensive direction: a self-hosted API restarting behind nginx
+        // answers 502, a saturated connection pool answers 500, a rate limit
+        // answers 429 — none of which say anything about whether the hunter's
+        // credentials are valid, and every one of which used to clear the
+        // token and drop them at a login form they cannot get past, because
+        // the very server they would log in against is the one that is down.
+        // Field QA reproduced it against a genuinely dead backend with full
+        // signal.
+        //
+        // `apiFetch` has already attempted a single-flighted refresh before
+        // surfacing `kind: 'auth'`, so reaching here with `'auth'` means the
+        // refresh token itself was rejected — the session really is gone, and
+        // that is the only case where clearing is honest. `server`, `network`,
+        // `unknown`, `validation`, `forbidden`, `not_found` all mean "could
+        // not confirm", which is what `isOffline` is for.
+        const isProvenAuthFailure = err instanceof ApiError && err.kind === 'auth';
+        if (isProvenAuthFailure) {
+          tokenStore.clear();
+          setState({ status: 'unauthenticated', user: null, isOffline: false });
           return;
         }
-        // `apiFetch` already attempted a refresh before surfacing this, so a
-        // `kind: 'auth'` (or anything else) here means the session really is
-        // gone.
-        tokenStore.clear();
-        setState({ status: 'unauthenticated', user: null, isOffline: false });
+        // Could not confirm the session — a hunter with no signal, or with a
+        // server having a bad morning, must not be signed out for it. Keep the
+        // cached user, say we could not check.
+        setState((s) => ({ ...s, isOffline: true }));
       });
 
     return () => {

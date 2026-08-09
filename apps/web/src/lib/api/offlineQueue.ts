@@ -9,11 +9,19 @@
  * is unfinished") — **not** a finished offline-sync feature. What it does:
  *
  *  - Every write hook in `lib/api/` (`useCreateWaypoint`, `useCreateObservation`,
- *    `useSaveFilter`, `useUpdateWaypoint`, `useUpdateFilter`) tries the real
- *    request first. Only a `kind: 'network'` `ApiError` — genuinely no
- *    signal, never an auth/validation/conflict failure — falls back to
- *    queueing here instead of rejecting, so a stand logged at the bottom of a
- *    draw with no bars still feels like it saved.
+ *    `useSaveFilter`, `useUpdateWaypoint`, `useUpdateFilter`) queues straight
+ *    away when the device already knows it is offline (`isKnownOffline()`),
+ *    and otherwise tries the real request first. Only a `kind: 'network'`
+ *    `ApiError` — genuinely no signal, never an auth/validation/conflict
+ *    failure — falls back to queueing here instead of rejecting, so a stand
+ *    logged at the bottom of a draw with no bars still feels like it saved.
+ *
+ *    The up-front check is not belt-and-braces. React Query pauses a mutation
+ *    *before* `mutationFn` runs under its default `networkMode: 'online'`, so
+ *    for most of this pass's life the catch-and-queue path below was
+ *    unreachable in precisely the no-signal case it was written for: the write
+ *    sat in a paused mutation, never touched this file, and was gone on the
+ *    next reload. See `isKnownOffline()` and `queryClient.ts`.
  *  - Creates carry the `clientId` the API's own `CreateWaypointDto`/
  *    `CreateObservationDto`/`SaveFilterDto` already support for idempotent
  *    replay (`WaypointsService.create` etc. look the record up by `clientId`
@@ -53,6 +61,7 @@
  * storage engine.
  */
 
+import { useSyncExternalStore } from 'react';
 import { ApiError } from './client';
 import type { CreateFilterInput, CreateObservationInput, CreateWaypointInput, UpdateFilterInput, UpdateWaypointInput } from './types';
 
@@ -88,12 +97,59 @@ function storage(): Storage | null {
   }
 }
 
+/**
+ * Memoised on the raw stored string, not on a write counter.
+ *
+ * Two reasons, both load-bearing:
+ *
+ *  - `useSyncExternalStore` (how `useObservations`/`useWaypoints` fold queued
+ *    creates into their lists) demands a snapshot that is *referentially*
+ *    stable while nothing has changed. Returning a freshly-parsed array on
+ *    every call is an infinite render loop.
+ *  - Keying on the stored string rather than an internal dirty flag means an
+ *    external mutation — another tab, a test clearing storage, devtools —
+ *    still invalidates. A cache that can go stale relative to the durable copy
+ *    is exactly the wrong trade for the one store that must never lie about
+ *    what is still unsaved.
+ */
+let cachedRaw: string | null = null;
+let cachedItems: QueueItem[] = [];
+/**
+ * True once a queue write has failed to persist. The queue still works for
+ * this session, but a reload will lose whatever could not be written — the
+ * caller has to be able to say so rather than implying "saved".
+ */
+let hasStorageFailure = false;
+
+/** Whether anything in the queue is memory-only because storage refused a write. */
+export function queueIsMemoryOnly(): boolean {
+  return hasStorageFailure;
+}
+
 function readAll(): QueueItem[] {
+  // Once storage has refused a write, the in-memory list is the *more
+  // complete* of the two and re-reading storage would silently drop whatever
+  // could not be persisted. Memory stays authoritative until a write succeeds
+  // again (at which point `writeAll` has rewritten the whole array, so the two
+  // agree once more).
+  if (hasStorageFailure) return cachedItems;
   const s = storage();
-  if (!s) return [];
+  if (!s) return cachedItems;
+  let raw: string | null;
   try {
-    const raw = s.getItem(KEY);
-    if (!raw) return [];
+    raw = s.getItem(KEY);
+  } catch {
+    return cachedItems;
+  }
+  if (raw === cachedRaw) return cachedItems;
+  cachedRaw = raw;
+  cachedItems = parseItems(raw);
+  return cachedItems;
+}
+
+function parseItems(raw: string | null): QueueItem[] {
+  if (!raw) return [];
+  try {
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as QueueItem[]) : [];
   } catch {
@@ -102,14 +158,27 @@ function readAll(): QueueItem[] {
 }
 
 function writeAll(items: QueueItem[]): void {
+  // Update the in-memory snapshot first and unconditionally: if `setItem`
+  // throws (quota, private browsing) the item is at least still queued for
+  // this session and visible in the UI as unsynced, rather than disappearing
+  // from both storage and screen at once.
+  const raw = JSON.stringify(items);
+  cachedItems = items;
+  cachedRaw = raw;
+
   const s = storage();
-  if (!s) return;
-  try {
-    s.setItem(KEY, JSON.stringify(items));
-  } catch {
-    // Storage full or unavailable. The item that triggered this write is
-    // lost from persistence, but it already exists in memory for this
-    // session — nothing to recover from safely beyond not crashing.
+  if (s) {
+    try {
+      s.setItem(KEY, raw);
+      // The whole array was just written, so storage and memory agree again.
+      hasStorageFailure = false;
+    } catch {
+      // Storage full or unavailable. The item will not survive a reload, but
+      // the in-memory snapshot above deliberately stays authoritative for this
+      // session so it still renders as "Queued" — degrading loudly beats
+      // dropping it from storage and screen at the same time.
+      hasStorageFailure = true;
+    }
   }
   notify();
 }
@@ -157,6 +226,46 @@ export function subscribeQueue(listener: Listener): () => void {
 /** True when `apiFetch` genuinely could not reach the server — the only case a write should queue instead of surfacing to the user. */
 export function isQueueableFailure(err: unknown): boolean {
   return err instanceof ApiError && err.kind === 'network';
+}
+
+/**
+ * "The device itself says there is no network."
+ *
+ * Checked *before* a write is attempted, not just in its catch block, for two
+ * reasons that both cost a hunter a record:
+ *
+ *  1. **React Query would otherwise never run the mutation at all.** Its
+ *     default `networkMode: 'online'` pauses a mutation before `mutationFn` is
+ *     invoked once `onlineManager` has seen an `offline` event — which is
+ *     exactly the walk-into-a-hollow case. `queryClient.ts` now sets
+ *     `networkMode: 'always'` so `mutationFn` always runs; this function is
+ *     how the write then makes its own honest decision instead of firing a
+ *     request the OS has already told us cannot go anywhere.
+ *  2. **A radio with no signal hangs, it does not fail fast.** Waiting for
+ *     `fetch` to time out leaves the Save button reading "Saving…" for tens of
+ *     seconds, which is indistinguishable from progress and is what the hunter
+ *     is looking at when the app gets killed. Queueing immediately turns that
+ *     into an instant, visible "Queued".
+ *
+ * `navigator.onLine === false` is trustworthy in the direction we use it: the
+ * browser only reports false when there is genuinely no link. `true` proves
+ * nothing, which is why the catch-and-queue path below it still exists — a
+ * captive portal or a dead uplink lands there instead.
+ */
+export function isKnownOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+/**
+ * The queue as a React snapshot, referentially stable between writes.
+ *
+ * Exists so a list hook can fold still-unsynced creates into what it renders.
+ * Without it, a record created offline lives only in the in-memory query cache
+ * and vanishes on the next reload — persisted in the queue, invisible on
+ * screen, which reads to the hunter exactly like the write that was lost.
+ */
+export function useQueueSnapshot(): QueueItem[] {
+  return useSyncExternalStore(subscribeQueue, listQueue, listQueue);
 }
 
 export type QueueRunner = (op: QueuedOp) => Promise<void>;

@@ -3,9 +3,12 @@ import { ApiError } from './client';
 import {
   enqueue,
   flushQueue,
+  isKnownOffline,
   isQueueableFailure,
   listQueue,
   newClientId,
+  queueIsMemoryOnly,
+  removeFromQueue,
   wireOfflineQueueRunner,
   type QueuedOp,
 } from './offlineQueue';
@@ -14,10 +17,67 @@ function clearQueueStorage(): void {
   window.localStorage.removeItem('ridgeline.offlineQueue.v1');
 }
 
+function setOnLine(value: boolean): void {
+  Object.defineProperty(window.navigator, 'onLine', { get: () => value, configurable: true });
+}
+
 describe('offlineQueue', () => {
   afterEach(() => {
     clearQueueStorage();
+    setOnLine(true);
     vi.restoreAllMocks();
+  });
+
+  it('isKnownOffline() reports the device signal the write hooks gate on', () => {
+    setOnLine(true);
+    expect(isKnownOffline()).toBe(false);
+    setOnLine(false);
+    expect(isKnownOffline()).toBe(true);
+  });
+
+  it('listQueue() is referentially stable between writes, and changes identity on one', () => {
+    // `useObservations`/`useWaypoints` feed this straight to
+    // `useSyncExternalStore`, which loops forever if the snapshot is a new
+    // array on every call.
+    const first = listQueue();
+    expect(listQueue()).toBe(first);
+
+    enqueue({ kind: 'filter.create', clientId: 'f1', input: { name: 'F', predicate: {} } });
+    const afterWrite = listQueue();
+    expect(afterWrite).not.toBe(first);
+    expect(listQueue()).toBe(afterWrite);
+  });
+
+  it('an external clear of storage is not masked by the snapshot cache', () => {
+    enqueue({ kind: 'filter.create', clientId: 'f1', input: { name: 'F', predicate: {} } });
+    expect(listQueue()).toHaveLength(1);
+    // Another tab, devtools, or a user clearing site data. A cache that could
+    // go stale against the durable copy would have this queue reporting work
+    // as still pending that no longer exists — or worse, the inverse.
+    clearQueueStorage();
+    expect(listQueue()).toHaveLength(0);
+  });
+
+  it('a queued item survives a storage write failure in memory rather than vanishing', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      const err = new Error('QuotaExceededError');
+      err.name = 'QuotaExceededError';
+      throw err;
+    });
+
+    enqueue({ kind: 'filter.create', clientId: 'f-quota', input: { name: 'F', predicate: {} } });
+    // It cannot survive a reload — that is reported separately by
+    // `queueIsMemoryOnly()` — but it must not disappear from the session's
+    // view of what is unsaved the instant storage refuses it.
+    expect(listQueue()).toHaveLength(1);
+    expect(queueIsMemoryOnly(), 'a memory-only queue must be reportable, not implied').toBe(true);
+
+    // And once storage accepts a write again, it goes back to being the source
+    // of truth — the whole array is rewritten, so the two cannot disagree.
+    setItem.mockRestore();
+    removeFromQueue(listQueue()[0].queueId);
+    expect(listQueue()).toHaveLength(0);
+    expect(queueIsMemoryOnly()).toBe(false);
   });
 
   it('newClientId() produces distinct, non-empty ids', () => {

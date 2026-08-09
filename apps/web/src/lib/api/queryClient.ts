@@ -59,6 +59,31 @@ export const queryClient = new QueryClient({
       // on top would risk firing a non-idempotent request twice from two
       // different retry mechanisms at once.
       retry: false,
+
+      // `'always'`, not the library default `'online'`, and this line is the
+      // difference between a hunter's sighting existing and not.
+      //
+      // Under `'online'` React Query pauses a mutation *before* it invokes
+      // `mutationFn` once `onlineManager` has seen an `offline` event. Every
+      // write hook in `lib/api/` does its offline handling — generate a
+      // `clientId`, attempt the request, classify the failure, persist to
+      // `offlineQueue.ts` — *inside* `mutationFn`. So the pause meant the app's
+      // entire offline write path was unreachable in the one scenario it
+      // exists for: field QA logged a blank sit with no signal, watched the
+      // button read "Saving…" forever, reloaded, and the record was gone from
+      // the queue, the cache and the server alike.
+      //
+      // Pausing is the right default for an app whose only offline story is
+      // "wait for the network". It is the wrong one for an app that has built
+      // a durable queue, because it prevents that queue from ever being
+      // reached. We take responsibility for the offline decision instead:
+      // `isKnownOffline()` inside each `mutationFn`.
+      //
+      // Reads keep `networkMode: 'online'` (the default, see above) on
+      // purpose — a paused *query* still renders its last good data, which is
+      // the correct degradation. A paused *mutation* renders nothing and
+      // remembers nothing.
+      networkMode: 'always',
     },
   },
 });

@@ -417,6 +417,18 @@ function MapWorkspace() {
         </Callout>
       ) : currentProperty.isLoading ? (
         <p className="rl-hint">Loading your properties…</p>
+      ) : currentProperty.propertiesUnverified ? (
+        // Not "you have no properties" — we never got an answer. Saying the
+        // former to a hunter offline at a trailhead sends them to a
+        // create-and-draw-a-boundary flow that cannot work without signal,
+        // for a property they probably already own.
+        <Callout tone="warn">
+          <p>
+            Could not check your properties — no connection to your server. Nothing is lost; this
+            list will fill in as soon as you have signal. If you had a property selected, it is
+            still remembered.
+          </p>
+        </Callout>
       ) : currentProperty.properties.length === 0 ? (
         <Callout tone="info">
           <p>
@@ -571,7 +583,12 @@ function MapWorkspace() {
             {propertyId && drawerTab !== 'layers' && (
               <div className="rl-property-banner">
                 <span className="rl-property-banner__name">
-                  Property — <strong>{currentProperty.property?.name ?? 'unknown'}</strong>
+                  {/* `rememberedName` is the name cached when the hunter picked
+                      this property; offline the list cannot be fetched, so
+                      without it this reads "Property — unknown" over ground
+                      they chose by name themselves. */}
+                  Property —{' '}
+                  <strong>{currentProperty.property?.name ?? currentProperty.rememberedName ?? 'unknown'}</strong>
                 </span>
                 <Button variant="link" onClick={currentProperty.clear}>
                   Change
