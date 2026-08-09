@@ -11,13 +11,9 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Button, Callout, Sheet } from '@hunt-maps/design';
+import { Button, Callout, mapColor, Sheet } from '@hunt-maps/design';
 import type { BBox, TerrainPredicate, GroupPredicate } from '@hunt-maps/terrain';
-import {
-  useCreateFilter,
-  useDeleteFilter,
-  useUpdateFilter,
-} from '../../lib/api/filters';
+import { useCreateFilter, useDeleteFilter, useUpdateFilter } from '../../lib/api/filters';
 import type { SavedFilterDto } from '../../lib/api/types';
 import { GroupNode } from './PredicateNode';
 import { FilterMetaFields, isValidHexColor, type FilterMeta } from './FilterMetaFields';
@@ -61,11 +57,22 @@ function normalizeRoot(predicate: TerrainPredicate): GroupPredicate {
   return isGroup(predicate) ? predicate : { kind: 'all', operands: [predicate] };
 }
 
-function initialMeta(source?: { name: string; description?: string | null; color: string; opacity: number; outline?: boolean }): FilterMeta {
+function initialMeta(source?: {
+  name: string;
+  description?: string | null;
+  color: string;
+  opacity: number;
+  outline?: boolean;
+}): FilterMeta {
   return {
     name: source?.name ?? '',
     description: source?.description ?? '',
-    color: source?.color ?? '#c9a253',
+    // The bench colour, from the design system rather than copied out of it —
+    // this value *was* `'#c9a253'`, which is exactly `mapColor['feature-bench']`
+    // and is why CI's "no literal colours" guard failed. A saved filter's paint
+    // is user data and can be any hex, but its *default* is a design decision
+    // and belongs to `packages/design`.
+    color: source?.color ?? mapColor['feature-bench'],
     opacity: source?.opacity ?? 0.5,
     outline: source?.outline ?? true,
   };
@@ -100,7 +107,8 @@ export function FilterEditor({
     return emptyGroup('all');
   }, [initial, seed]);
 
-  const invalidStoredPredicate = Boolean(initial) && parseStoredPredicate(initial!.predicate) === null;
+  const invalidStoredPredicate =
+    Boolean(initial) && parseStoredPredicate(initial!.predicate) === null;
 
   const [predicate, setPredicate] = useState<GroupPredicate>(startingPredicate);
   const [meta, setMeta] = useState<FilterMeta>(() => initialMeta(initial ?? seed));
@@ -114,8 +122,12 @@ export function FilterEditor({
   });
 
   const nameError = meta.name.trim().length === 0 ? 'Name this filter before saving.' : null;
-  const conditionError = hasAnyCondition(predicate) ? null : 'Add at least one condition before saving.';
-  const colorError = isValidHexColor(meta.color) ? null : 'Fill colour needs a full 6-digit hex value.';
+  const conditionError = hasAnyCondition(predicate)
+    ? null
+    : 'Add at least one condition before saving.';
+  const colorError = isValidHexColor(meta.color)
+    ? null
+    : 'Fill colour needs a full 6-digit hex value.';
   const nestingError = limitViolation(predicate);
   const saveBlockedReason = nameError ?? conditionError ?? colorError ?? nestingError;
 
@@ -166,13 +178,10 @@ export function FilterEditor({
   const hasNegation = containsNegation(predicate);
 
   return (
-    <Sheet
-      title={isEditingExisting ? 'Edit filter' : 'New filter'}
-      onClose={onClose}
-    >
+    <Sheet title={isEditingExisting ? 'Edit filter' : 'New filter'} onClose={onClose}>
       <p className="rl-hint">
-        A saved filter is a terrain query you name and keep — "12–25°, facing north through east,
-        on a bench" — and it travels with you offline, exactly like every other layer here.
+        A saved filter is a terrain query you name and keep — "12–25°, facing north through east, on
+        a bench" — and it travels with you offline, exactly like every other layer here.
       </p>
 
       {invalidStoredPredicate && (
@@ -203,8 +212,8 @@ export function FilterEditor({
 
       {hasNegation && (
         <p className="rl-hint">
-          This filter contains a "Not" condition — see the warning inline above wherever it
-          appears. Saving is still allowed; the risk is in how it renders, not in the save itself.
+          This filter contains a "Not" condition — see the warning inline above wherever it appears.
+          Saving is still allowed; the risk is in how it renders, not in the save itself.
         </p>
       )}
 

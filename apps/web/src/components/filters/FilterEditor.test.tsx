@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FilterEditor } from './FilterEditor';
+import { mapColor } from '@hunt-maps/design';
 import type { SavedFilterDto } from '../../lib/api/types';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -14,7 +15,9 @@ function mount(ui: JSX.Element) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   act(() => {
     root!.render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
   });
@@ -33,7 +36,9 @@ afterEach(() => {
 });
 
 function saveButton(el: HTMLElement): HTMLButtonElement {
-  const btn = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Save filter'));
+  const btn = [...el.querySelectorAll('button')].find((b) =>
+    b.textContent?.includes('Save filter'),
+  );
   if (!btn) throw new Error('Save button not found');
   return btn as HTMLButtonElement;
 }
@@ -41,7 +46,12 @@ function saveButton(el: HTMLElement): HTMLButtonElement {
 describe('FilterEditor — a blank new filter', () => {
   it('Save is disabled with no name and no condition, and states the (first) reason', () => {
     const el = mount(
-      <FilterEditor windFromDeg={null} atUtc={new Date()} viewport={null} onClose={() => undefined} />,
+      <FilterEditor
+        windFromDeg={null}
+        atUtc={new Date()}
+        viewport={null}
+        onClose={() => undefined}
+      />,
     );
     expect(saveButton(el).disabled).toBe(true);
     // Name is checked first — the reason shown is the name, and the group's
@@ -52,10 +62,18 @@ describe('FilterEditor — a blank new filter', () => {
 
   it('Save stays disabled on an empty condition tree even once a name is given', () => {
     const el = mount(
-      <FilterEditor windFromDeg={null} atUtc={new Date()} viewport={null} onClose={() => undefined} />,
+      <FilterEditor
+        windFromDeg={null}
+        atUtc={new Date()}
+        viewport={null}
+        onClose={() => undefined}
+      />,
     );
     const nameInput = el.querySelector('#filter-name') as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )!.set!;
     act(() => {
       setter.call(nameInput, 'My filter');
       nameInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -70,7 +88,12 @@ describe('FilterEditor — a blank new filter', () => {
     // which `docs/design/PLAN-direction-a.md` §d explicitly reserves for
     // modelled parameters only.
     const el = mount(
-      <FilterEditor windFromDeg={null} atUtc={new Date()} viewport={null} onClose={() => undefined} />,
+      <FilterEditor
+        windFromDeg={null}
+        atUtc={new Date()}
+        viewport={null}
+        onClose={() => undefined}
+      />,
     );
     expect(el.textContent).not.toContain('Measured');
     expect(el.textContent).not.toContain('Assumption');
@@ -88,7 +111,7 @@ describe('FilterEditor — a saved filter with a predicate that fails validation
       // `kind: 'eval'` is not a real predicate kind — `validatePredicate`
       // must reject it.
       predicate: { kind: 'eval', code: 'process.exit(1)' },
-      color: '#c9a253',
+      color: mapColor['feature-bench'],
       opacity: 0.5,
       outline: true,
       sharedPublicly: true,
@@ -121,7 +144,7 @@ describe('FilterEditor — starting from a preset', () => {
           name: 'Sidehill walkable grade (copy)',
           description: 'The 8–20° band deer contour along.',
           predicate: { kind: 'range', metric: 'slope', min: 8, max: 20 },
-          color: '#9b8cf5',
+          color: mapColor['feature-saddle'],
           opacity: 0.4,
         }}
         windFromDeg={null}

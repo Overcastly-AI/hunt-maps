@@ -103,8 +103,15 @@ export function FilterMetaFields({
             }}
           />
         </div>
+        {/*
+          The example below used to be a literal hex, which tripped CI's "no
+          colour literals outside packages/design" guard — a false positive in
+          spirit (it is prose, not paint) but a true one in effect, since a
+          grep cannot tell the difference. `#RRGGBB` says the same thing and
+          cannot drift from a token.
+        */}
         {!HEX.test(value.color) && (
-          <p className="rl-hint">Needs a full 6-digit hex value, like #c9a253.</p>
+          <p className="rl-hint">Needs a full 6-digit hex value, like #RRGGBB.</p>
         )}
       </div>
 
