@@ -3,9 +3,9 @@
 **Auditor:** `field-qa`, second of two independent audits of the same surface
 (the first audits information architecture/design; this one audits it as a
 hunter uses it — gloved, one-handed, in the dark, on a mid-range phone).
-Founder's request: *"Left side bar is really hard to work with. I would like
+Founder's request: _"Left side bar is really hard to work with. I would like
 two agents to audit and work together to fix it. If a full left hand nav
-design revamp is needed then let's do it."* The two audits did not coordinate
+design revamp is needed then let's do it."_ The two audits did not coordinate
 — that independence is the point.
 
 **Scope:** `apps/web/src/App.tsx` (chrome markup, ~L250–307), `apps/web/src/index.css`
@@ -80,7 +80,7 @@ from the dead ~320px — it reads as one continuous pressable surface per row.
 
 **What makes this dangerous rather than merely untidy:** `.rl-conditions__cell`
 — the wind/time/thermals bar sitting directly above this rail, in the same
-corner — genuinely *is* tappable edge-to-edge. Its cells are plain `<button>`s
+corner — genuinely _is_ tappable edge-to-edge. Its cells are plain `<button>`s
 with no explicit width (`packages/design/src/styles.css:314–326`), so they
 size to content and pack the full bar with no dead zone; I confirmed this by
 pixel-cropping the same screenshot. That correct, adjacent control trains the
@@ -89,16 +89,16 @@ below it looks identical and behaves nothing like it.
 
 **Field cost:** the row this hits hardest is the one that starts a
 multi-minute elevation download the entire offline story depends on
-(`CLAUDE.md` §1: *"Losing a region the user waited twenty minutes for,
-discovered blank in the field, is the worst failure this product has"*). A
+(`CLAUDE.md` §1: _"Losing a region the user waited twenty minutes for,
+discovered blank in the field, is the worst failure this product has"_). A
 hunter taps center-of-row — the natural target on what looks like a wide
-button — and nothing happens. There is no confirmation toast and (see Finding
-2) no press feedback of any kind, so a miss and a hit feel identical at the
+button — and nothing happens. There is no confirmation toast and (see Finding 2) no press feedback of any kind, so a miss and a hit feel identical at the
 moment of the tap. The hunter may walk into the field believing the download
 started when it never did.
 
 **Not caught by the invariant suite — and precisely why, so nobody assumes it
 is guarded:**
+
 - `1. Hit-testability` (`ui-invariants.spec.ts:166–235`) samples
   `document.elementFromPoint` only at the **center of each interactive
   element's own `getBoundingClientRect()`**. The button's own rect is
@@ -106,8 +106,8 @@ is guarded:**
   samples the visually-implied larger surface.
 - `3. Touch targets` (`ui-invariants.spec.ts:342–386`) asserts
   `effectiveRect ≥ 44×44`, which the button also passes trivially — the
-  defect is oversized *visual* affordance around an appropriately-sized
-  *real* target, not an undersized target.
+  defect is oversized _visual_ affordance around an appropriately-sized
+  _real_ target, not an undersized target.
 - `4. No chrome collisions` is desktop-only, and in any case is the wrong
   shape of check: this is not two chrome groups landing on each other, it is
   one group whose painted surface wildly exceeds its interactive surface.
@@ -128,7 +128,7 @@ of this check would never have caught it, and did not.
 
 `apps/web/src/App.tsx:281`: `<RailButton label="Add waypoint" onClick={() => undefined}>`.
 Confirmed dead by source — this was already flagged going in; what this audit
-adds is *why it's worse than "a missing feature"*:
+adds is _why it's worse than "a missing feature"_:
 
 - **No `:active` state exists anywhere in `packages/design/src/styles.css`.**
   I grepped the whole file for `:active` and got zero matches. `.rl-rail__btn`
@@ -146,13 +146,13 @@ no visual flash, no toast, no map change, nothing. The only way to learn it's
 broken is to have already expected a pin to appear and to notice one didn't —
 which assumes knowledge the icon-only control never gave you.
 
-**Compounding with Finding 1:** on mobile this is the *middle* of three
+**Compounding with Finding 1:** on mobile this is the _middle_ of three
 full-width dead-looking rows, sandwiched between two rows that are each only
 ~12% live. A hunter reaching for "Save" and landing a little high, or reaching
 for "Layers" and landing a little low, both plausibly land on this same dead
 row and get the identical silent nothing — three different intents, one
 outcome. The first time this happens, the reasonable conclusion is "this rail
-doesn't work," which erodes trust in the two controls that *do* work, right
+doesn't work," which erodes trust in the two controls that _do_ work, right
 when they're needed.
 
 ---
@@ -165,6 +165,7 @@ agent was using. This is arithmetic from source, reported as a specific,
 falsifiable risk — not an observation.
 
 `apps/web/src/index.css:350–358`:
+
 ```css
 .inspect-card {
   position: absolute;
@@ -241,7 +242,7 @@ the thing they started 15 minutes ago is still running, finished, or silently
 died, without deliberately reopening that one specific panel again.
 
 **Not caught by the suite:** test group `11` (offline region picker) only
-asserts progress display *while the picker is open*. Nothing asserts state
+asserts progress display _while the picker is open_. Nothing asserts state
 visibility after navigating away from it.
 
 ---
@@ -280,8 +281,8 @@ Recorded so nobody re-fixes a solved problem or re-audits a covered path:
   is real and mobile-only precisely because the `align-items: stretch`
   override only fires under the 860px breakpoint — desktop was never at risk.
 - **Mobile chrome collision is genuinely untested** (tracked as `BACKLOG
-  R37`) — I want to be precise that I did not independently verify mobile
-  collision is *safe* generally. I checked two specific things by eye
+R37`) — I want to be precise that I did not independently verify mobile
+  collision is _safe_ generally. I checked two specific things by eye
   (conditions-bar fill, and the one sheet-open screenshot) and both were
   clean; beyond that, mobile collision should be treated as unknown, not
   passing.
@@ -327,3 +328,463 @@ controls the `.rl-conditions__cell` way from the start.
 4. **Finding 4** (no persistent download indicator) — real, lower urgency
    than 1–2 since the download itself isn't lost, only its visibility while
    it runs.
+
+---
+
+---
+
+# QA — Field Audit: Auth, offline write queue, properties/drawer/stand/observation/filter/terrain sheet (2026-08-09)
+
+**Auditor:** `field-qa`, independent of the build. Scope per brief: the
+material that shipped in one push — auth + API client + offline write queue
+(`clientId`-keyed), properties + boundary drawing, the tabbed drawer
+(Layers/Stands/Sightings), stand detail + wind check, observation capture
+including the one-button blank-sit log, the saved-filter editor + live match
+share, and the terrain-readout peek-detent sheet.
+
+**Environment, stated up front because it shapes every finding below:** no
+Postgres, no API process, `docker` unavailable — confirmed (`pg_isready`
+failed, `docker ps` had no daemon). `services.arcgisonline.com` (satellite
+basemap) is blocked by the egress proxy; `s3.amazonaws.com/elevation-tiles-prod`
+(DEM) is reachable. Built with `pnpm -r build` (green) before testing.
+**This session shared the sandbox with another live agent** (`code-reviewer`/
+build agent fixing `R66`, confirmed via `git status` showing in-flight,
+uncommitted changes to `terrainProtocol.ts`/`terrain.worker.ts`/
+`ui-invariants.spec.ts` that are not mine) that was continuously running its
+own copies of the Playwright suite against the same shared preview server on
+:4173 for the entire session. That matters for the invariants-suite result
+below — read that caveat before trusting the number.
+
+I did not modify any application code. I wrote and then deleted my own
+scratch Playwright specs (`apps/web/e2e/manual-qa*.spec.ts`) used to drive
+the real built app through Chromium for every finding below — nothing from
+them is left in the tree. Every finding that says "confirmed live" was
+personally observed through that harness, not inferred; findings that are
+source-only say so explicitly.
+
+## 0. The automated floor — inconclusive, not clean, say so plainly
+
+Ran `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers pnpm exec playwright test
+ui-invariants --workers=1` as instructed. Result: **20 passed, 53 failed, in
+23.8 minutes.** I am **not** reporting those 53 as genuine regressions and
+neither should anyone else without a clean rerun: the trailing ~10 failures
+are bare `net::ERR_CONNECTION_REFUSED` on `localhost:4173` — the shared
+preview server died mid-run — and the failure list is a near-total wipeout
+spread evenly across unrelated describe blocks (trigger stability, touch
+targets, chrome collisions, focus visibility, contrast, panel density,
+offline coverage, layer paint, region picker, glass containers, tabbed
+drawer), which is the signature of "the shared server/CPU died partway
+through," not "the app broke in 53 independent ways." The suite's own commit
+history documents a 32.7-second runtime for a comparable slice; 23.8 minutes
+under concurrent load from a second agent's continuous, overlapping test runs
+on the same port is not a clean signal. **I did not use this result for any
+verdict in this report.** It needs a solo rerun once the sandbox is not
+shared, and I'm flagging that as a gap rather than papering over it with a
+number that looks authoritative but isn't.
+
+## Findings, ranked by field consequence
+
+### 1. CRITICAL — A backend that answers with an error (not a backend that's unreachable) silently logs the hunter out and clears their session
+
+**What a hunter is trying to do:** reopen the app — any time, not just at the
+trailhead — while their self-hosted server is having a bad moment: mid
+restart, DB connection pool exhausted, container crash-looping. Signal is
+fine. The reverse proxy in front of the app (nginx in `deploy/compose`, or
+this sandbox's own `vite preview`, which — I checked — also proxies `/api` to
+`:3001` and gets `ECONNREFUSED`) answers with a plain HTTP error. This is not
+a rare edge case for a self-hosted product; it is the single most likely
+"something's wrong with my server" state a hunter running Ridgeline at home
+will ever see.
+
+**Mechanical cause, exact, confirmed live:** `apps/web/src/lib/api/
+AuthContext.tsx:84-98`. On every app mount, if a session is cached, a
+background `authApi.me()` call confirms it:
+
+```ts
+.catch((err) => {
+  if (cancelled) return;
+  if (err instanceof ApiError && err.kind === 'network') {
+    setState((s) => ({ ...s, isOffline: true }));
+    return;
+  }
+  tokenStore.clear();
+  setState({ status: 'unauthenticated', user: null, isOffline: false });
+});
+```
+
+The comment above this code says the intent precisely: _"only a real auth
+failure (a 401 that survived a refresh attempt) signs the user out."_ The
+code does not implement that. It implements the inverse: **only `kind ===
+'network'` is spared; everything else — a bare 500, a 502 from a dead
+upstream, a 503, a 429, an `unknown` — clears the token and signs out.**
+`classifyHttpError` (`client.ts:101-126`) maps any `status >= 500` to `kind:
+'server'`, never `'network'`. A `'server'` response reaches this catch block
+and is treated exactly like an invalid session.
+
+**Confirmed live, two ways:**
+
+- **Deterministic repro** (`page.route('**/api/**', route => route.fulfill({
+status: 502, ... }))` — no CDP-level network blocking, a real HTTP response):
+  before, `localStorage['ridgeline.auth.v1']` holds a valid cached session.
+  After boot: `localStorage.getItem('ridgeline.auth.v1')` → **`null`**.
+  Navigating to `/properties` (a `RequireAuth`-gated route) → **redirected to
+  `/login`**. The Stands tab shows _"Sign in to log stands, cameras and
+  markers."_
+- **This sandbox's real dead-backend behaviour**, unmodified: `vite preview`
+  proxies `/api` to `:3001`, gets `ECONNREFUSED`, and answers the browser with
+  a bare `500`. Booting the app with a cached session against this exact,
+  unmodified environment reproduces the identical sign-out.
+
+**Field cost:** the hunter did nothing wrong. Their phone has full bars. They
+reopen the app and are looking at a login form for a backend that is, by
+definition, unreachable right now — the one thing they cannot do anything
+about from a stand. This is the exact scenario `CLAUDE.md` names by name
+("does it come back signed in, or does it ask for a password with no signal?
+That specific failure would end the hunt before it starts") except it is
+_not_ "no signal" — the code's `isOffline: true` branch for genuine signal
+loss is correctly implemented and **I confirmed it works** (finding 3 below,
+same test harness: a truly offline reload, via `context.setOffline(true)`,
+correctly keeps the cached user signed in). It is specifically "signal fine,
+server unwell" that fails, and for a self-hosted app that is not a corner
+case — it is Tuesday.
+
+**Fix shape** (not prescribing implementation, flagging the inversion): gate
+on `err.kind === 'auth'` to sign out, not on `err.kind !== 'network'` to stay
+signed in. Every other kind (`server`, `unknown`, `validation`, `forbidden`,
+`not_found`) should behave like `network` here — none of them mean the
+session is invalid.
+
+**Not caught by the invariant suite** — there is no invariant that exercises
+auth-against-a-failing-backend at all; this is a state-machine defect, not a
+rendering one. Proposed invariant: an e2e test that seeds a cached session,
+mocks every `/api/**` route to return `502`, boots the app, and asserts the
+user is still shown as signed in (`isOffline: true` surfaced somewhere, never
+a bounce to `/login`).
+
+---
+
+### 2. CRITICAL — Genuinely offline writes are not reliably queued; a write can vanish with zero trace, worse than "queued and idempotent" implies
+
+**What a hunter is trying to do:** the flagship interaction this product is
+built around — end a sit with zero sightings, tap "Save blank sit," in a
+blind with actually no bars (`navigator.onLine === false`, not just a slow
+connection).
+
+**What I expected**, from `CLAUDE.md` ("every write is queued and
+idempotent") and `lib/api/offlineQueue.ts`'s own doc comment ("Every write
+hook... tries the real request first. Only a `kind: 'network'` `ApiError`...
+falls back to queueing"): the write attempts, `fetch` throws, `apiFetch`
+classifies it `kind: 'network'`, the hook's `catch` calls `enqueue()`, the
+item lands in `localStorage['ridgeline.offlineQueue.v1']`, and the UI can
+show it as a "queued" record (`useQueuedIds`, wired into `ObservationList`).
+
+**What actually happens, confirmed live, two independent ways:**
+
+- **Realistic**: signed in, a real property mocked, on the Blank Sit form,
+  `await context.setOffline(true)` (Playwright's real network-offline
+  emulation), tap Save. Result: the Save button reads **"Saving…" and never
+  resolves** for as long as I waited (1.5–3s per run). `localStorage
+['ridgeline.offlineQueue.v1']` stays **`null`** the entire time — not
+  populated, not even attempted. Reconnecting later, the write _does_
+  eventually succeed (POST count went from 0 to 1) — but only because the
+  app was still open and the original `mutate()` call was still alive,
+  waiting.
+- **Deterministic, to rule out any Playwright network-emulation artifact**:
+  left the real network and the mocked backend **completely healthy** (every
+  `/api` route mocked to answer instantly and successfully) and forced only
+  `navigator.onLine` to `false` via `Object.defineProperty` — exactly the
+  signal both React Query's `onlineManager` and the app's own online/offline
+  handling key off, with **no actual network interference at all**. Tapped
+  Save. Result: **`POST /api/observations` was hit zero times** — the
+  request was never even attempted, proven because the mock route (which
+  would answer in milliseconds) never fired. `ridgeline.offlineQueue.v1`
+  stayed `null`. The button stayed on "Saving…" indefinitely. Then, standing
+  in for a hunter's phone getting backgrounded and reclaimed by the OS (very
+  common for PWAs) or force-quit before signal returns, I reloaded the page
+  — still with the write never having reached the queue. **After reload,
+  `ridgeline.offlineQueue.v1` is still `null`. The write left no trace
+  anywhere. It is gone.**
+
+**Root cause:** `@tanstack/react-query` v5's default `networkMode: 'online'`
+applies to **mutations**, not just queries. `queryClient.ts` sets
+`mutations: { retry: false }` with no `networkMode` override, so the default
+applies. When `navigator.onLine` is `false`, React Query pauses the mutation
+**before invoking `mutationFn`** — the exact function whose `try/catch`
+around `apiFetch` is where `offlineQueue.ts`'s `enqueue()` gets called. The
+whole catch-and-persist-to-`localStorage` mechanism the doc comments describe
+is real code that is reachable, correctly written, and unit-tested in
+isolation (`offlineQueue.test.ts`) — but it is **downstream of a gate that
+never lets execution reach it** for the single most common real offline
+case. It only fires for the much narrower situation of "`navigator.onLine`
+is (still) `true`, but this specific request's `fetch()` throws anyway" (a
+real but comparatively rare partial-connectivity edge case) — not for "the
+phone genuinely has no signal," which is the scenario the whole feature is
+named for.
+
+**Why this is worse than "the queue is unfinished":** `offlineQueue.ts`'s own
+doc comment is candid that conflict resolution and retry-with-backoff are
+unfinished, and that's a fair, stated scope cut. This is different — it is
+not an unfinished corner of a working mechanism, it is the mechanism's
+primary trigger being unreachable in the primary scenario, while every
+surrounding signal (a `localStorage`-backed queue exists, `clientId` is
+generated, `useQueuedIds` renders queued items in the list) suggests to
+whoever reads the code — and to the hunter looking at "Saving…" — that it's
+working. `CLAUDE.md` calls a silently-vanishing write "the worst outcome this
+product can produce — worse than refusing." This is that outcome, and it is
+also the quietest possible version of it: no error, no toast, no queued
+badge, just a spinner that looks like progress right up until the app closes.
+
+**Field cost:** a hunter logs a blank sit or a sighting with genuinely no
+bars, closes the app (or it gets killed in the background, or the battery
+dies) before signal returns, and the observation never existed. Every
+downstream selection analytic this product's whole differentiator rests on
+(`CLAUDE.md` §5, Manly selection ratios against availability) is quietly
+undercounting effort exactly where signal is worst — which, for public land
+in a hollow, correlates with exactly the stands worth analysing.
+
+**Fix shape** (not prescribing implementation): either set `networkMode:
+'always'` (or `'offlineFirst'`) on the mutations that need `offlineQueue.ts`
+reachable while offline, so `mutationFn` always runs and its own `try/catch`
+gets the chance to classify and enqueue; or move the offline detection ahead
+of React Query entirely (check `navigator.onLine` inside the mutation
+function and enqueue directly, never relying on the library's pause). Either
+way, the fix needs a test that forces `navigator.onLine = false` and asserts
+`ridgeline.offlineQueue.v1` gains an entry _before_ reconnecting — the exact
+gap this finding exposes.
+
+**Not caught by the invariant suite** — this is a data-durability defect, not
+a rendering one, out of scope for `ui-invariants.spec.ts` by design.
+`offlineQueue.test.ts` and `useOfflineRegions.test.ts` exist but (I checked)
+test the queue's own persistence/replay logic in isolation with a
+synthetic `ApiError` — they do not exercise the real trigger path through a
+live `useMutation` with React Query's actual `networkMode` behaviour, which
+is exactly where this gap lives. Proposed invariant/test: an integration test
+that mounts the real `ObservationsSheet` behind the real `QueryClient`, sets
+`navigator.onLine = false`, submits a blank sit, and asserts the queue gained
+an entry synchronously — not "eventually succeeds once reconnected while the
+tab happens to stay open."
+
+---
+
+### 3. HIGH — Going offline (or hitting a backend error) wipes the hunter's remembered property and tells them, falsely, that they have none
+
+**What a hunter is trying to do:** reopen the app with no signal, at the
+trailhead or mid-hunt, and get straight to logging against their own
+property — which the app already promises via `currentProperty.ts`'s own doc
+comment ("a hunter reopening the app at the trailhead should not have to
+reselect their own property every time").
+
+**Confirmed live:** signed in with a cached session and a persisted
+`ridgeline.currentPropertyId.<user>` pointing at a real property, first
+loaded once online (so the PWA shell installs), then `context.setOffline
+(true)` and reloaded — a completely ordinary "relaunch the app with no
+signal" sequence. Result: the Sightings tab shows
+
+> _"Sightings & sits needs a property first — **create one** and draw its
+> boundary once."_
+
+— a **factually wrong** statement (the hunter has a property; the app simply
+couldn't check) that then links to a flow (`/properties/new`, drawing a
+boundary) which itself needs a live connection and cannot possibly succeed
+offline. And `localStorage['ridgeline.currentPropertyId.<user>']`, which held
+the correct id before the reload, comes back **`null`** afterward — the
+remembered choice is gone, not just temporarily unavailable.
+
+**Mechanical cause:** `lib/currentProperty.ts:95-115`. The effect that
+restores a persisted property id gates only on `propertiesQuery.isLoading`:
+
+```ts
+if (propertiesQuery.isLoading) return; // wait for the real list before trusting anything
+const stillExists = properties.some((p) => p.id === persisted);
+if (stillExists) {
+  setPropertyId(persisted);
+} else {
+  writePersisted(user.id, null);
+  setPropertyId(null);
+}
+```
+
+`isLoading` in TanStack Query v5 is `isPending && isFetching` — it is
+**`false`** both when a fetch genuinely succeeds _and_ when a fetch is
+paused offline with no cached data (`fetchStatus: 'paused'`, not
+`'fetching'`) _and_ when a fetch has exhausted its retries and settled into
+an error state. All three land here as "not loading," and the code cannot
+tell "I successfully confirmed this property doesn't exist" apart from "I
+never got an answer." It treats both as the latter — the property gets
+deleted from the user's own remembered state and they're told (see finding
+1's sibling failure mode) they have none.
+
+**Field cost:** lower than findings 1–2 because nothing server-side is lost —
+the property still exists, and reselecting it once signal returns is
+mechanically possible (assuming the picker itself becomes reachable, which
+also needs a successful fetch). But the _message_ is actively harmful in the
+moment: it tells an offline hunter to go create a new property and redraw a
+boundary, which cannot work offline and, if attempted later online without
+realising the original property already exists, risks a duplicate property
+with a fresh (wrong) `TerrainProfile` denominator for every future analytic.
+
+**Fix shape:** distinguish `propertiesQuery.isSuccess` from
+`isError`/paused-with-no-data before treating an absence from `properties` as
+authoritative; only clear the persisted id on a _confirmed_ successful fetch
+that doesn't contain it.
+
+**Not caught by the invariant suite** — again a state-derivation defect, not
+a rendering one.
+
+---
+
+### 4. MEDIUM — The waypoints list shows "No waypoints yet" and "Loading…" at the same time, so a still-pending fetch looks identical to a confirmed-empty property
+
+**Source-confirmed**, `apps/web/src/components/waypoints/WaypointsSheet.tsx:
+125-128`:
+
+```tsx
+{isLoading && <p className="rl-hint">Loading…</p>}
+{isError && <p className="rl-hint">Could not load waypoints. Showing what is cached, if anything.</p>}
+<WaypointList waypoints={waypoints ?? []} ... />
+```
+
+`WaypointList` renders its own "No waypoints yet" empty-state copy
+(`WaypointList.tsx:24`) purely from an empty array, with no `isLoading` gate
+of its own. `waypoints ?? []` means "we have no data yet" and "we confirmed
+there is nothing" render identically. I observed this directly (screenshot,
+`STANDS & MARKERS` panel showing "Loading…" immediately above "No waypoints
+yet. Mark your stands..." simultaneously) while a mocked request was
+deliberately slow. If a real fetch stalls or a offline-paused query never
+resolves, a hunter with real stands already logged would see "No waypoints
+yet" with no visual distinction from a fetch that's still in flight.
+
+**Field cost:** moderate, cosmetic-adjacent but genuinely confusing — a
+hunter checking "did my stand save" gets an answer that reads as confirmed-no
+when the honest answer is "don't know yet."
+
+**Fix shape:** gate `WaypointList`'s empty-state render on `!isLoading`
+(mirroring what `ObservationList`/other lists in this codebase likely already
+do — worth checking for the same shape elsewhere).
+
+**Proposed invariant:** none of the six `ui-invariants.spec.ts` failure
+classes cover "two mutually-exclusive states rendered simultaneously" — this
+is a new shape worth naming (e.g., "loading and empty states never coexist
+in the DOM for the same list").
+
+---
+
+### 5. MEDIUM, source-confirmed (live repro blocked by a test-harness flake, disclosed) — the Wind Check's own success-state copy claims offline capability it doesn't have
+
+`WindCheckCard.tsx`'s file header calls this **"the flagship answer"** on a
+stand's detail view. Its "no wind set" state is honest and well-written
+("Set a wind direction... without one, this would be a guess rendered as an
+answer" — genuinely good). But the mechanism behind it, confirmed by
+`lib/api/waypoints.ts:34,46-53`, is `apiFetch<WaypointWindCheckDto>(
+`/waypoints/${id}/wind-check?wind=...`)` — a live server round trip, not a
+computation against the on-device DEM cache the way slope/aspect/landform
+analysis is. Yet the card's own success-state copy says:
+
+> _"Blends the wind you set with modelled thermal drift for this slope and
+> time of day. **Resolves against the elevation on this device, so it works
+> with no signal.**"_
+
+That sentence is not true of the code path that produced the number it's
+printed under. `CLAUDE.md`'s first non-negotiable is explicit that the
+engine is shared client/server specifically so "a saved filter must produce
+identical output on the laptop at camp and the phone at the bottom of a
+draw" — the wind check, arguably the single most field-critical readout in
+the app ("can I hunt this stand today"), is the one place I found that
+breaks that pattern. Going genuinely offline does _not_ silently show a
+stale/wrong answer — `isError` correctly falls back to a different, accurate
+message ("Could not reach the wind check right now. Terrain and layers still
+work offline") — so this is not a confidently-wrong-terrain defect in the
+CLAUDE.md §2 sense. It's narrower: the copy on the _working_ path overstates
+what the mechanism does, and the flagship interaction is the one place in
+this app that goes fully dark exactly when a hunter standing at their own
+stand with no bars needs it most.
+
+**Disclosure on rigor:** I confirmed the network-call mechanism by source
+(the `apiFetch` call is unambiguous) and confirmed the property/auth
+plumbing needed to reach a live stand detail screen works via the same
+mocking harness used for findings 1–3. I ran out of time chasing an
+unexplained Playwright-route-interception flake specific to this one test
+(a route registered exactly the same way that worked in three other tests in
+this session stopped intercepting requests in this one, and I could not
+isolate why within a reasonable budget, likely sandbox resource contention
+from the concurrently-running second agent) — so I did **not** get a final
+screenshot of the "offline, wind already set" state live. I'm reporting the
+mechanism as confirmed by source and the copy claim as directly
+contradicting it, and flagging the live "what does it actually render while
+offline with a wind already set" screenshot as **not personally verified** —
+a build agent should confirm the `isError` branch is what actually shows
+(strongly likely given the source) rather than something worse.
+
+---
+
+## What's confirmed working — say this plainly too
+
+- **Genuine signal loss keeps the hunter signed in.** A fully-offline reload
+  (`context.setOffline(true)`, real CDP-level network blocking, not just the
+  `navigator.onLine` flag) correctly hits `AuthContext`'s `kind === 'network'`
+  branch: the cached user stays signed in, `isOffline` is surfaced, no bounce
+  to `/login`. This is the one piece of the auth/offline picture that works
+  exactly as designed — findings 1–2 are specifically about the cases
+  _adjacent_ to this one, not this one itself.
+- **The offline coverage badge is honest and specific.** Loading the app on a
+  never-downloaded view shows _"NOT DOWNLOADED"_ with _"None of this view's
+  elevation is on this device. Analysis layers here need a connection until
+  you save this area. Checked all 15 tiles at zoom 14."_ — exact, not vague,
+  and it correctly disables the Bedding Likelihood checkbox with _"Set a wind
+  direction first — without one this layer would render against a default,
+  which would be misleading rather than merely wrong."_ Good honesty pattern,
+  confirmed live, screenshot on file.
+- **Relief/hillshade gives real terrain context with zero basemap imagery.**
+  In this sandbox, satellite/topo tiles are unreachable but DEM tiles are —
+  and confirmed live, a stand-detail screenshot showed a fully legible
+  grey-scale hillshade (ridgelines, draws) with **no basemap raster loaded at
+  all**. That's the offline-elevation-only story working as intended: a
+  hunter with cached DEM and no imagery still gets a readable terrain
+  surface, not a black rectangle. (The one case that _is_ a black rectangle —
+  a view whose elevation was never downloaded at all — is correctly labelled
+  "NOT DOWNLOADED," not silently blank.)
+- **`MatchShare` (the saved-filter live match share) is the best-handled
+  honesty surface in this pass.** Source-reviewed in full
+  (`components/filters/MatchShare.tsx`): eight distinct, correctly-worded
+  states — empty, negation-unreliable (explicitly hides the number rather
+  than show a known-wrong one — "A hidden statistic is the honest choice"),
+  needs-wind, no-view, loading, **offline** ("Match share needs a connection
+  — try again once you have signal. Everything else about this filter,
+  including how it renders on the map, still works offline"), error, and
+  result (which itself states its own zoom-mismatch and treats no-data cells
+  as non-matches explicitly rather than silently). Nothing to fix here; if
+  anything this is the model the property-gate and wind-check copy above
+  should be brought in line with.
+- **A failed save doesn't discard what the hunter typed.** `BlankSitQuickLog`
+  and `ObservationForm` keep their own local component state; a mutation
+  error (`create.isError`) shows inline (_"Could not save — try again"_)
+  without unmounting the form or clearing sit-length/notes/conditions — so
+  the _"signal's fine, server errored"_ sibling of finding 2 at least doesn't
+  destroy the typed note, only requires the hunter to notice the message and
+  retry. This does not help the true-offline case in finding 2 (that one
+  never reaches this error state at all — it hangs on "Saving…" instead).
+- **Cold start against a genuinely dead backend never white-screens or hangs
+  forever.** Every screen I drove against this sandbox's real
+  no-database/no-API state rendered _something_ — a specific error message,
+  a gate, a spinner that resolved to a state — never a bare crash, blank
+  white page, or unhandled exception in the console. That baseline
+  robustness is real and worth stating alongside the sharper findings above.
+
+## What I did not get to
+
+- The full offline write queue's **conflict** path (a 409 from a concurrent
+  edit) — not exercised this session; `offlineQueue.ts`'s own doc comment
+  already discloses no merge UI exists yet, so I didn't spend the budget
+  re-confirming a known, stated gap.
+- Boundary drawing (`BoundaryEditor`/`PropertyBoundaryEditScreen`) end to end
+  — blocked by the same "no backend" constraint for anything past the
+  drawing interaction itself, and lower priority than the auth/queue findings
+  above given the time available.
+- A clean, uncontaminated run of `ui-invariants` (see §0) — needs a solo
+  rerun.
+- Reconnect-and-sync-exactly-once for a queue item that _did_ make it into
+  `localStorage` (the narrow case where `navigator.onLine` stayed true but a
+  request still failed) — I confirmed items enqueue and later flush via the
+  `online` listener in principle (source, `offlineQueue.ts`'s `flushQueue`/
+  `initOfflineQueue`), but did not specifically test double-flush safety
+  (queueing the same clientId twice, flushing twice concurrently) live.
