@@ -129,9 +129,7 @@ function renderTile(msg: RenderTileMessage): Uint8ClampedArray {
   const layers: AnalysisLayer[] =
     msg.layer === 'filters'
       ? ([
-          ...new Set(
-            (msg.filters ?? []).flatMap((f) => [...requiredMetrics(f.predicate)]),
-          ),
+          ...new Set((msg.filters ?? []).flatMap((f) => [...requiredMetrics(f.predicate)])),
         ] as AnalysisLayer[])
       : [msg.layer];
 
@@ -185,10 +183,21 @@ function renderTile(msg: RenderTileMessage): Uint8ClampedArray {
       // for [0, 1] paints nothing (BACKLOG R32). Rescale into the ramp's
       // domain first; see `BEDDING_RAMP_DOMAIN_MAX` for why that domain is a
       // fixed, documented figure rather than a per-tile stretch.
-      return renderRamp(
-        stretchFieldToUnit(result.bedding ?? new Float32Array(n), BEDDING_RAMP_DOMAIN_MAX),
-        HEAT_RAMP,
-      );
+      //
+      // `result.bedding` is only ever absent when `windFromDeg` was not
+      // supplied (the pipeline's own gate — see `pipeline.ts`). The UI keeps
+      // that from happening on the normal toggle path (the checkbox is
+      // disabled without a wind), but a caller that reaches this tile without
+      // one — a saved filter evaluated mid-race with the wind clearing, for
+      // instance — must not fall back to `new Float32Array(n)`: that renders
+      // a fabricated all-zero field through the ramp, which reads as "checked
+      // this ground, it is not bedding" rather than "unknown" (BACKLOG R66 —
+      // the same absent-data-as-a-measured-zero defect `R36`/`R49` fixed
+      // elsewhere). Paint nothing instead, transparent, so a hunter cannot
+      // mistake missing data for a negative reading.
+      return result.bedding
+        ? renderRamp(stretchFieldToUnit(result.bedding, BEDDING_RAMP_DOMAIN_MAX), HEAT_RAMP)
+        : new Uint8ClampedArray(n * 4);
     case 'weiss':
       return renderCategorical(result.weiss ?? new Uint8Array(n), WEISS_COLORS);
     case 'wood':

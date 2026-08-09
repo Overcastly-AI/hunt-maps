@@ -68,6 +68,47 @@ async function measureBox(locator: Locator): Promise<Box> {
   return box;
 }
 
+/**
+ * Poll real screenshots of `box` until the saturated-pixel coverage stops
+ * changing, instead of trusting a fixed settle delay after `waitForTiles`.
+ *
+ * `waitForTiles`'s own doc explains why a GL framebuffer readback is not a
+ * safe "painted" signal here: `map.areTilesLoaded()` only proves MapLibre
+ * finished *fetching* a source's tiles, and the fixed sleep after it is a
+ * guess at how long the GPU needs to actually composite that into a frame.
+ * That guess held on a fast, idle machine and produced a false "0.15%,
+ * painted nothing" reading — indistinguishable from the real `R32`/`R66`
+ * regression this suite exists to catch — on a slower or more loaded one,
+ * where the composite genuinely had not landed yet when the single
+ * `page.screenshot()` fired. Measuring the actual pixels twice in a row
+ * rather than once on a clock removes the guess entirely: if the layer never
+ * paints, coverage stays flat near the noise floor and this still returns
+ * promptly (two flat reads in a row), so a genuinely broken layer fails just
+ * as fast as before.
+ */
+async function waitForCoverageStable(
+  page: Page,
+  box: Box,
+  opts: { timeoutMs?: number; pollMs?: number; quietReads?: number } = {},
+): Promise<number> {
+  const { timeoutMs = 60_000, pollMs = 500, quietReads = 2 } = opts;
+  const start = Date.now();
+  let last: number | null = null;
+  let stableCount = 0;
+  for (;;) {
+    const pct = await canvasSaturationCoverage(page, box);
+    if (last !== null && Math.abs(pct - last) < 0.01) {
+      stableCount++;
+      if (stableCount >= quietReads) return pct;
+    } else {
+      stableCount = 0;
+    }
+    last = pct;
+    if (Date.now() - start >= timeoutMs) return pct;
+    await page.waitForTimeout(pollMs);
+  }
+}
+
 async function closeLayersSheet(page: Page): Promise<void> {
   const closeBtn = page.getByRole('button', { name: 'Close panel' });
   if (await closeBtn.isVisible()) {
@@ -1124,7 +1165,7 @@ test.describe('10. Layer paint coverage — a layer that paints nothing must fai
       await waitForRectStable(page.locator('.chrome-bottomleft'));
 
       const mapBox = await measureBox(page.getByTestId('map-canvas'));
-      const coveragePct = await canvasSaturationCoverage(page, mapBox);
+      const coveragePct = await waitForCoverageStable(page, mapBox);
       // eslint-disable-next-line no-console
       console.log(
         `[R32 invariant] bedding saturated-pixel coverage at ${viewport.width}px: ${coveragePct.toFixed(2)}%`,
