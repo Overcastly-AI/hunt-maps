@@ -1,3 +1,9 @@
+## [1.2.4](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.3...v1.2.4) (2026-08-10)
+
+### Documentation
+
+* make the scorecard tell the truth ([#16](https://github.com/Overcastly-AI/hunt-maps/issues/16)) ([c68c485](https://github.com/Overcastly-AI/hunt-maps/commit/c68c4856888e93270388a818b7d83f909d0c62f2))
+
 ## [1.2.3](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.2...v1.2.3) (2026-08-10)
 
 ### Documentation
