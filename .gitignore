@@ -19,6 +19,13 @@ tiles/
 *.laz
 *.las
 
+# ...except the committed test fixtures. These are deliberately small slices of
+# real USGS 3DEP products, kept verbatim so the GeoTIFF decoder is tested
+# against bytes GDAL actually wrote rather than against our own encoder. The
+# blanket *.tif rule above silently excluded them once, which left a committed
+# test reading a file that was not in the repo.
+!packages/terrain/src/testing/fixtures/*.tif
+
 # Test artifacts
 playwright-report/
 test-results/

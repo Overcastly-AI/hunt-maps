@@ -35,7 +35,7 @@ export default defineConfig({
         name: 'Ridgeline — Hunting Terrain Analytics',
         short_name: 'Ridgeline',
         description:
-          'LiDAR terrain analysis, saved slope filters and movement corridors — offline first.',
+          'DEM terrain analysis, saved slope filters and movement corridors — offline first.',
         theme_color: '#0f1216',
         background_color: '#0f1216',
         display: 'standalone',

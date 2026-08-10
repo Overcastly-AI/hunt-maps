@@ -6,9 +6,14 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './index.css';
 import App from './App';
 import { AuthProvider, initOfflineQueue, queryClient } from './lib/api';
+import { initServiceWorkerUpdates } from './lib/swUpdate';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element.');
+
+// Picks up a deploy in an already-open tab. Must run before the first paint so
+// the listener exists by the time a newly-activated worker claims this client.
+initServiceWorkerUpdates();
 
 // Registers the `online` listener that replays queued offline writes
 // (`lib/api/offlineQueue.ts`) as soon as the device reconnects, and makes one

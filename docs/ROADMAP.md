@@ -20,7 +20,7 @@ The analytics engine, validated against analytically-known surfaces.
 
 - [x] **"Not a bench" and "flat ground" matched ground never measured —
       `BACKLOG R69`.** Found by `analytics-auditor`, and invisible to the
-      `R56` guard because that tests the *syntax* `not` while the real property
+      `R56` guard because that tests the _syntax_ `not` while the real property
       is "can match a cell the engine never measured". `isBench: false` matched
       **100% of a plane with no benches on it**; an aspect predicate with
       "also match flat ground" returned **only voids**. `BenchFlag.Unknown = 2`
@@ -41,7 +41,7 @@ The analytics engine, validated against analytically-known surfaces.
       36 of 81 cells surviving it returned **exactly 0**, the engine's strongest
       possible claim that a ridge crest is a billiard table, feeding the bedding
       cover term its floor. Random thinning to 30% kept the error under 6% — VRM
-      survives losing cells and fails when it loses a *direction*, which is why
+      survives losing cells and fails when it loses a _direction_, which is why
       it gets a coverage quorum at 0.75 (≤11% error, against 72% at 0.5) and TPI
       gets a centroid test instead. TPI's own bias is exact and first-order:
       `TPI = −∇z · d` for centroid `d`, and the worst one-sided window sits at
@@ -50,7 +50,7 @@ The analytics engine, validated against analytically-known surfaces.
       missing neighbour made `classifyWeiss` fabricate **15.6% of a uniform
       plane** as UpperSlope and MountainTop. Now 128 cells, with the remainder
       pinned as a known residual and filed as `R64`: the guard bounds fabricated
-      *relief*, but `standardize` divides by a field's own σ, and a plane has
+      _relief_, but `standardize` divides by a field's own σ, and a plane has
       none. Cost is +18% on TPI at r=20 on tiles containing a void, invisible at
       `analyze()`.
 
@@ -147,6 +147,48 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **Real USGS 3DEP elevation is decodable — the reader, not the wiring.**
+      `R77`, first half. Verified against a real staged product rather than a
+      fixture: a 10012² float32 COG, LZW with the floating-point predictor,
+      EPSG:26916 — two range requests (8 KB header, ~570 KB tile) returned
+      84.45–87.00 m in 870 ms out of a 485 MB raster. Zero dependencies, so the
+      Transverse Mercator is closed-form (Snyder PP 1395, round-trip pinned to
+      ~1 cm). **The datum risk was measured and disproved:** 196 points in each
+      of three relief classes gave sub-metre, sign-inconsistent offsets with
+      scatter growing with relief — resampling error, not a ~30 m datum step, so
+      both sources are orthometric and no geoid conversion is needed.
+      **Explicitly not finished:** the modules are now exported, but nothing
+      _renders_ from them yet — the map still draws Terrarium, and no `readRange`
+      is wired to `fetch` in the worker or to the API. 1 m coverage is
+      addressable only given an acquisition project, because USGS's own index for
+      it is a 1.9 GB GeoPackage. Where no project is known the answer is "no 1 m
+      data here", never a silent fall back to 10 m dressed up as LiDAR. Terrain
+      tests 283 → 337, including a `CogReader` suite that samples a closed-form
+      plane exactly, reads outside the raster and inside voids as NODATA rather
+      than interpolating, and pins that the raw `-999999` sentinel never escapes
+      as a finite elevation — the finite-NODATA class this repo has been bitten
+      by six times.
+
+- [x] **A deploy is actually visible — cache headers, not code.** Reported from
+      the field: the release was published and the UI did not change. Nothing
+      was red — CI passed, `release.yml` published `hunt-maps-web:latest`, the
+      container ran the new image. The defect was entirely in cache policy.
+      `index.html` is the only unhashed file naming the hashed bundles, and it
+      carried **no `Cache-Control` at all**, so browsers applied heuristic
+      freshness and served it without asking; it then pointed at the previous
+      `/assets/` hashes, which are correctly `immutable` for a year. A correct
+      release was therefore invisible to anyone who had already loaded the site,
+      **and stayed invisible**. Fixed at both layers, because either alone still
+      fails: `nginx.conf` now revalidates `index.html` and refuses to store
+      `registerSW.js` and the manifest alongside `sw.js`; and `swUpdate.ts`
+      reloads once when a service worker _replaces_ an existing one, which is
+      what makes `registerType: 'autoUpdate'` reach a tab that is already open.
+      Deliberately narrow — it cannot fire on first install, cannot fire
+      offline, and queued writes survive it because the queue lives in
+      IndexedDB. 6 new assertions read the shipped `nginx.conf` (the same file
+      baked into the image); proven non-vacuous by reverting the config, 3 red.
+      321 web tests.
+
 - [x] **The doors actually open — the tabbed drawer.** The three panels were
       built, tested, and mountable by nothing. `App.tsx` now tracks a
       `drawerTab` rather than a `sheetOpen` boolean, with a `TabBar` primitive
@@ -180,10 +222,10 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       all rather than show a number it cannot stand behind.
 
       Property routes are wired; the stands, observations and filter panels are
-      built and tested but **not yet reachable** — the `CommandBar` documents
-      that a fourth and fifth cell is the wrong answer and they belong as tabs
-      in the single drawer slot, which is a design decision rather than
-      plumbing. Tracked, not forgotten.
+                  built and tested but **not yet reachable** — the `CommandBar` documents
+                  that a fourth and fifth cell is the wrong answer and they belong as tabs
+                  in the single drawer slot, which is a design decision rather than
+                  plumbing. Tracked, not forgotten.
 
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
@@ -204,12 +246,12 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
 
       Three defects found by rendered-state harnesses that every DOM query
-      passed: a voided cell rendering **`-107507 ft`** because
-      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
-      misconception as `R49`, now confirmed in all three packages; a
-      drag/click race where the browser's synthetic `click` after `pointerup`
-      made a dismiss-drag also fire a tap-toggle; and a register-screen link
-      measuring 35×44 px against the 44 px gloved-use floor.
+                  passed: a voided cell rendering **`-107507 ft`** because
+                  `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                  misconception as `R49`, now confirmed in all three packages; a
+                  drag/click race where the browser's synthetic `click` after `pointerup`
+                  made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                  measuring 35×44 px against the 44 px gloved-use floor.
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
@@ -318,19 +360,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-                  hit-testability against the viewport alone, so a row scrolled just past
-                  the *sheet's* clipped edge was hit-tested at its unpainted position and
-                  reported as visible-but-unclickable — a false failure indistinguishable
-                  from the real clipping bug the suite is named after; it now intersects
-                  against every clipping ancestor and hit-tests the centre of the visible
-                  region. Ground truth was measured before accepting the greener result:
-                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-                  and no painted control fails a hit test. Then (`7ff42cee`) two more
-                  guards on the helper itself: a synthetic fixture pinning both branches
-                  of the clipped-ancestor fix so neither can regress silently, and a check
-                  that the collision matrix's "no collision" result means a selector
-                  matched and did not overlap, not that a renamed selector stopped
-                  matching anything.
+                              hit-testability against the viewport alone, so a row scrolled just past
+                              the *sheet's* clipped edge was hit-tested at its unpainted position and
+                              reported as visible-but-unclickable — a false failure indistinguishable
+                              from the real clipping bug the suite is named after; it now intersects
+                              against every clipping ancestor and hit-tests the centre of the visible
+                              region. Ground truth was measured before accepting the greener result:
+                              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                              and no painted control fails a hit test. Then (`7ff42cee`) two more
+                              guards on the helper itself: a synthetic fixture pinning both branches
+                              of the clipped-ancestor fix so neither can regress silently, and a check
+                              that the collision matrix's "no collision" result means a selector
+                              matched and did not overlap, not that a renamed selector stopped
+                              matching anything.
 
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in

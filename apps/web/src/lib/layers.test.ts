@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LAYERS, layerById, missingInputs, toggleLayer } from './layers';
+import { DEM_SOURCE } from './map/demSource';
 
 describe('toggleLayer', () => {
   it('adds and removes a layer', () => {
@@ -129,6 +130,56 @@ describe('layer catalogue', () => {
         } else {
           expect(l.grade, l.id).toBeUndefined();
         }
+      }
+    });
+  });
+
+  // Regression guard for the "LiDAR relief" mislabel this fix corrects
+  // (CLAUDE.md non-negotiable #2 — "never be confidently wrong about
+  // terrain"). The map's actual DEM (`DEM_SOURCE`, `lib/map/demSource.ts`) is
+  // a ~10 m global blend capped at zoom 15 — nothing here has ever served
+  // real LiDAR — and nothing caught a layer label promising otherwise. These
+  // three checks are deliberately structural rather than a one-off assertion
+  // on `multiHillshade`, so the same defect shipping under a different label
+  // or a different resolution number fails here too.
+  describe('elevation-source honesty (regression guard for R77 / the LiDAR mislabel)', () => {
+    it('never names a specific elevation-data technology in a layer label', () => {
+      // Labels are short and get read in isolation — exactly the field that
+      // said "LiDAR" while a 10 m blend sat behind it. A label should say
+      // what a layer does; which dataset happens to power it today belongs
+      // in the blurb, sourced from `DEM_SOURCE`, not baked into the label.
+      const technologyTerms = /\b(lidar|3dep|ifsar|photogrammetry)\b/i;
+      for (const l of LAYERS) {
+        expect(l.label, l.id).not.toMatch(technologyTerms);
+      }
+    });
+
+    it('routes any metre-resolution claim in a blurb through DEM_SOURCE, never a hardcoded number', () => {
+      // A blurb may say how fine the elevation data is, but only by quoting
+      // `DEM_SOURCE.resolutionNote` — the one place that number is allowed to
+      // live. A literal "1 m" typed into a blurb is exactly how this bug
+      // shipped: true of 3DEP, false of the terrarium blend this app actually
+      // serves, and nothing tied the two together.
+      const metreResolutionClaim = /\b\d+(\.\d+)?\s?m\b/i;
+      for (const l of LAYERS) {
+        if (metreResolutionClaim.test(l.blurb)) {
+          expect(l.blurb, l.id).toContain(DEM_SOURCE.resolutionNote);
+        }
+      }
+    });
+
+    it('only mentions logging grades, skid roads or micro-terrain in the relief blurb to say the DEM cannot resolve them', () => {
+      // Old logging grades, skid roads and micro-benches are narrower than a
+      // single pixel of a ~10 m blend — the precise overclaim the mislabelled
+      // layer made ("Reveals benches, old logging grades and micro-terrain
+      // ..."). It is fine, and expected, to name these features to explain
+      // what the layer *cannot* show; a blurb that names them with no
+      // negation anywhere is claiming the opposite, which is the regression.
+      const relief = layerById('multiHillshade');
+      expect(relief, 'multiHillshade must stay registered for this guard to mean anything').toBeDefined();
+      const featureTerms = /(logging grade|skid road|micro-?terrain|micro-?bench)/i;
+      if (featureTerms.test(relief?.blurb ?? '')) {
+        expect(relief?.blurb).toMatch(/\b(not|cannot|does not|doesn't|need (a )?(finer|real))\b/i);
       }
     });
   });

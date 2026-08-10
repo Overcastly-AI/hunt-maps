@@ -6,6 +6,7 @@ import { LAYERS, layerById } from '../lib/layers';
 import { BASE_SOURCES, isSyncedLayer } from '../lib/map/baseSources';
 import { terrainTileUrl, TerrainProtocol } from '../lib/map/terrainProtocol';
 import { boundsToBBox, DEM_MAX_ZOOM, DEM_TILE_SIZE } from '../lib/map/demTiles';
+import { DEM_SOURCE } from '../lib/map/demSource';
 import { exposeDevHook } from '../lib/devHook';
 import { CoverageOverlay, coverageExtentToDraw } from '../lib/map/coverageOverlay';
 import { RegionOutline } from '../lib/map/regionOutline';
@@ -327,7 +328,7 @@ function syncLayers(
         // silently start disagreeing about which tiles a view needs.
         tileSize: DEM_TILE_SIZE,
         maxzoom: BASE_SOURCES[id]?.maxzoom ?? DEM_MAX_ZOOM,
-        attribution: BASE_SOURCES[id]?.attribution ?? 'Elevation: USGS / AWS Terrain Tiles',
+        attribution: BASE_SOURCES[id]?.attribution ?? `Elevation: ${DEM_SOURCE.attribution}`,
       });
       map.addLayer(
         {

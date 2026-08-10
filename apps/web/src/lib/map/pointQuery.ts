@@ -69,7 +69,13 @@ export interface AspectReading {
 }
 
 export interface TerrainReadoutFacts {
-  /** Ground elevation, feet. Published USGS/LiDAR geometry — no evidence grade. */
+  /**
+   * Ground elevation, feet, read from whichever DEM source this deployment is
+   * configured with — today that is AWS Terrain Tiles/Terrarium (~10 m
+   * blended, not LiDAR; see `../map/demSource.ts`'s `DEM_SOURCE`). Published
+   * geometry — no evidence grade; the caveat here is about the source's
+   * resolution, not the maths reading it.
+   */
   elevationFt: Reading<number>;
   /** Horn slope, degrees. Published geometry — no evidence grade. */
   slopeDeg: Reading<number>;
