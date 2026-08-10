@@ -43,7 +43,6 @@ import {
   parseTiff,
   pixelToModel,
   tileIndex,
-  tilesAcross,
   TiffTruncatedError,
   TiffUnsupportedError,
   type TiffDirectory,

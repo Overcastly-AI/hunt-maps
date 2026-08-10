@@ -14,6 +14,15 @@ export * from './dem/tilemath.js';
 export * from './dem/grid.js';
 export * from './dem/halo.js';
 
+// Real USGS 3DEP elevation: a zero-dependency Cloud-Optimized GeoTIFF reader,
+// the UTM projection its 1 m products need, and the vertical-datum guard that
+// stops orthometric and ellipsoidal heights being mixed in one surface.
+export * from './dem/geotiff.js';
+export * from './dem/projection.js';
+export * from './dem/verticalDatum.js';
+export * from './dem/cog.js';
+export * from './dem/usgs3dep.js';
+
 export * from './analysis/horizon.js';
 export * from './analysis/surface.js';
 export * from './analysis/landform.js';
