@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.0...v1.2.1) (2026-08-10)
+
+### Fixes
+
+* **web:** make a published release visible, and read real USGS 3DEP elevation ([#13](https://github.com/Overcastly-AI/hunt-maps/issues/13)) ([8f559f1](https://github.com/Overcastly-AI/hunt-maps/commit/8f559f13e837573a5e7b483ea6b19aad7dd7b8c3))
+
 ## [1.2.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.3...v1.2.0) (2026-08-09)
 
 ### Features
