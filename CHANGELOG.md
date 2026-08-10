@@ -1,3 +1,9 @@
+## [1.2.3](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.2...v1.2.3) (2026-08-10)
+
+### Documentation
+
+* sixth non-negotiable — test the artifact you ship ([#15](https://github.com/Overcastly-AI/hunt-maps/issues/15)) ([4c093e7](https://github.com/Overcastly-AI/hunt-maps/commit/4c093e792e1446c247e3e2df8b3ba53c80567736)), closes [#2](https://github.com/Overcastly-AI/hunt-maps/issues/2) [#4](https://github.com/Overcastly-AI/hunt-maps/issues/4)
+
 ## [1.2.2](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.1...v1.2.2) (2026-08-10)
 
 ### Fixes
