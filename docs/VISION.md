@@ -50,7 +50,7 @@ Trust is slow to build and impossible to buy. It is the deepest moat here.
 
 | Capability | Incumbents | Ridgeline | Status |
 |-----------|-----------|-----------|--------|
-| LiDAR shaded relief | ✅ | ✅ multi-directional | ✅ parity |
+| LiDAR shaded relief | ✅ | ⚠️ multi-directional hillshade from a **~10 m** DEM | 🔴 behind |
 | Slope-angle shading | ✅ fixed bands | ✅ user-definable bands | ✅ ahead |
 | Aspect / sun exposure | ✅ static | ✅ date-aware insolation | ✅ ahead |
 | Saddle detection | ❌ manual | ✅ computed | ✅ ahead |
@@ -67,6 +67,26 @@ Trust is slow to build and impossible to buy. It is the deepest moat here.
 | Trail-camera integration | ✅ | ⬜ | 🔴 behind |
 | Mobile native apps | ✅ | ⚠️ PWA | 🟡 partial |
 | Sharing / hunting party | ✅ | ⚠️ roles exist, UI pending | 🟡 partial |
+
+> **On the LiDAR row, and why it is red.** It read "✅ parity" for months while
+> the app rendered multi-directional hillshade from ~10 m Terrarium tiles and
+> labelled it "LiDAR relief" — in the layer list, the PWA manifest and the meta
+> description (`a02793d` removed the claim). A hillshade at 10 m is real,
+> useful shape; it is not the resolution at which old logging grades and
+> micro-benches appear, which is the thing that changed hunting cartography and
+> the thing incumbents actually sell. Real 1 m 3DEP now **decodes** with zero
+> dependencies and is verified against a real staged product, but nothing
+> renders from it yet (`R79`). The row goes green when a hunter sees 1 m ground
+> on the map, not before.
+>
+> **On the rest of this table.** Until `454c8f2`, every containerised build
+> shipped with an empty DEM template, so *every* terrain row above — slope,
+> aspect, saddles, benches, bedding, corridors — rendered blank in every
+> deployed image while this scorecard said "✅ ahead". A row is evidence that
+> code exists, not that a hunter has the capability. Treat ✅ as a claim to be
+> re-verified against the running artifact, per non-negotiable #6 in
+> `CLAUDE.md`.
+
 
 Red rows outrank new pillars. Being brilliant at analysis and unable to show a
 property line is not a switchable product.
