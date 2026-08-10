@@ -22,9 +22,29 @@ COPY apps/web/ apps/web/
 # docker-compose, or by a Helm value: pointing a deployment at a different DEM
 # host requires a rebuilt image. Left unset, apps/web/src/App.tsx falls back to
 # the public AWS Terrarium tiles.
-ARG VITE_DEM_TEMPLATE=""
-ENV VITE_DEM_TEMPLATE=$VITE_DEM_TEMPLATE
-RUN pnpm --filter @hunt-maps/web build
+# NOTE: `ARG VITE_DEM_TEMPLATE=""` + `ENV` shipped every image with the variable
+# defined and EMPTY. demSource.ts used `?? <default>`, which falls back only on
+# null/undefined, so Vite inlined `""`, every tile URL resolved to `""`, and
+# EVERY terrain layer rendered blank in every container ever deployed. It was
+# invisible in dev and in CI because there the variable is simply unset.
+#
+# So: no default, and the ENV is only set when a value was actually passed. An
+# unset variable is what the fallback is written for. demSource.ts now also
+# treats empty/whitespace as unset, because one guard here is not enough — a
+# `--build-arg VITE_DEM_TEMPLATE=` on the command line recreates it.
+ARG VITE_DEM_TEMPLATE
+RUN if [ -n "${VITE_DEM_TEMPLATE}" ]; then \
+      export VITE_DEM_TEMPLATE="${VITE_DEM_TEMPLATE}"; \
+      echo "Building with VITE_DEM_TEMPLATE=${VITE_DEM_TEMPLATE}"; \
+    else \
+      echo "VITE_DEM_TEMPLATE unset — using the public Terrarium default"; \
+    fi; \
+    pnpm --filter @hunt-maps/web build
+
+# The elevation source is inlined into the bundle above, at build time. The
+# running container never reads it, so it cannot be changed by an env var in
+# docker-compose or by a Helm value: pointing a deployment at a different DEM
+# host requires a rebuilt image.
 
 # nginx-unprivileged rather than nginx: the stock image starts its master
 # process as root to bind port 80, which means a container that cannot run
