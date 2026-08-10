@@ -1,3 +1,9 @@
+## [1.2.2](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.1...v1.2.2) (2026-08-10)
+
+### Fixes
+
+* **web:** every deployed image had no DEM at all, so no layer could render ([#14](https://github.com/Overcastly-AI/hunt-maps/issues/14)) ([9471b59](https://github.com/Overcastly-AI/hunt-maps/commit/9471b5907c18a7353cd11da65831cd999c2d3ca4))
+
 ## [1.2.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.0...v1.2.1) (2026-08-10)
 
 ### Fixes
