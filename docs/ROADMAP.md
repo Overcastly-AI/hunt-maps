@@ -147,6 +147,20 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **The layers actually render — every deployed image had no DEM at all.**
+      The founder's report was "none of the layers are working", and it was
+      exactly true. `ARG VITE_DEM_TEMPLATE=""` left the variable defined and
+      **empty** in every image; `demSource.ts` used `??`, which falls back only
+      on null/undefined, so Vite inlined `""` and every tile URL resolved to the
+      empty string. No elevation, therefore no hillshade, slope, aspect,
+      landform, bedding or corridors — and **nothing threw**. Proven by grepping
+      the built bundle: unset → the Terrarium URL is present; `=""` → zero
+      occurrences. It survived because that configuration exists only inside the
+      container: dev and CI leave the variable unset, so all 330 web tests pass
+      against a code path production never takes. Fixed at the resolver, at the
+      Dockerfile, and with a loud failure for a template that cannot address a
+      tile.
+
 - [x] **Real USGS 3DEP elevation is decodable — the reader, not the wiring.**
       `R77`, first half. Verified against a real staged product rather than a
       fixture: a 10012² float32 COG, LZW with the floating-point predictor,
@@ -222,10 +236,10 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       all rather than show a number it cannot stand behind.
 
       Property routes are wired; the stands, observations and filter panels are
-                  built and tested but **not yet reachable** — the `CommandBar` documents
-                  that a fourth and fifth cell is the wrong answer and they belong as tabs
-                  in the single drawer slot, which is a design decision rather than
-                  plumbing. Tracked, not forgotten.
+                      built and tested but **not yet reachable** — the `CommandBar` documents
+                      that a fourth and fifth cell is the wrong answer and they belong as tabs
+                      in the single drawer slot, which is a design decision rather than
+                      plumbing. Tracked, not forgotten.
 
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
@@ -246,12 +260,12 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
 
       Three defects found by rendered-state harnesses that every DOM query
-                  passed: a voided cell rendering **`-107507 ft`** because
-                  `Number.isFinite(-32768)` is `true` — the same finite-sentinel
-                  misconception as `R49`, now confirmed in all three packages; a
-                  drag/click race where the browser's synthetic `click` after `pointerup`
-                  made a dismiss-drag also fire a tap-toggle; and a register-screen link
-                  measuring 35×44 px against the 44 px gloved-use floor.
+                      passed: a voided cell rendering **`-107507 ft`** because
+                      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                      misconception as `R49`, now confirmed in all three packages; a
+                      drag/click race where the browser's synthetic `click` after `pointerup`
+                      made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                      measuring 35×44 px against the 44 px gloved-use floor.
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
@@ -360,19 +374,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-                              hit-testability against the viewport alone, so a row scrolled just past
-                              the *sheet's* clipped edge was hit-tested at its unpainted position and
-                              reported as visible-but-unclickable — a false failure indistinguishable
-                              from the real clipping bug the suite is named after; it now intersects
-                              against every clipping ancestor and hit-tests the centre of the visible
-                              region. Ground truth was measured before accepting the greener result:
-                              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-                              and no painted control fails a hit test. Then (`7ff42cee`) two more
-                              guards on the helper itself: a synthetic fixture pinning both branches
-                              of the clipped-ancestor fix so neither can regress silently, and a check
-                              that the collision matrix's "no collision" result means a selector
-                              matched and did not overlap, not that a renamed selector stopped
-                              matching anything.
+                                  hit-testability against the viewport alone, so a row scrolled just past
+                                  the *sheet's* clipped edge was hit-tested at its unpainted position and
+                                  reported as visible-but-unclickable — a false failure indistinguishable
+                                  from the real clipping bug the suite is named after; it now intersects
+                                  against every clipping ancestor and hit-tests the centre of the visible
+                                  region. Ground truth was measured before accepting the greener result:
+                                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                                  and no painted control fails a hit test. Then (`7ff42cee`) two more
+                                  guards on the helper itself: a synthetic fixture pinning both branches
+                                  of the clipped-ancestor fix so neither can regress silently, and a check
+                                  that the collision matrix's "no collision" result means a selector
+                                  matched and did not overlap, not that a renamed selector stopped
+                                  matching anything.
 
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
