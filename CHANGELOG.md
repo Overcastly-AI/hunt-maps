@@ -1,3 +1,83 @@
+## [1.2.4](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.3...v1.2.4) (2026-08-10)
+
+### Documentation
+
+* make the scorecard tell the truth ([#16](https://github.com/Overcastly-AI/hunt-maps/issues/16)) ([c68c485](https://github.com/Overcastly-AI/hunt-maps/commit/c68c4856888e93270388a818b7d83f909d0c62f2))
+
+## [1.2.3](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.2...v1.2.3) (2026-08-10)
+
+### Documentation
+
+* sixth non-negotiable — test the artifact you ship ([#15](https://github.com/Overcastly-AI/hunt-maps/issues/15)) ([4c093e7](https://github.com/Overcastly-AI/hunt-maps/commit/4c093e792e1446c247e3e2df8b3ba53c80567736)), closes [#2](https://github.com/Overcastly-AI/hunt-maps/issues/2) [#4](https://github.com/Overcastly-AI/hunt-maps/issues/4)
+
+## [1.2.2](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.1...v1.2.2) (2026-08-10)
+
+### Fixes
+
+* **web:** every deployed image had no DEM at all, so no layer could render ([#14](https://github.com/Overcastly-AI/hunt-maps/issues/14)) ([9471b59](https://github.com/Overcastly-AI/hunt-maps/commit/9471b5907c18a7353cd11da65831cd999c2d3ca4))
+
+## [1.2.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.0...v1.2.1) (2026-08-10)
+
+### Fixes
+
+* **web:** make a published release visible, and read real USGS 3DEP elevation ([#13](https://github.com/Overcastly-AI/hunt-maps/issues/13)) ([8f559f1](https://github.com/Overcastly-AI/hunt-maps/commit/8f559f13e837573a5e7b483ea6b19aad7dd7b8c3))
+
+## [1.2.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.3...v1.2.0) (2026-08-09)
+
+### Features
+
+* **design:** CommandBar replaces the rail — the container was the problem ([ea6095c](https://github.com/Overcastly-AI/hunt-maps/commit/ea6095c131bf9d80683667a0a91f9bb071384189))
+* **design:** the plate material, and Confidence ships for the first time ([f56241a](https://github.com/Overcastly-AI/hunt-maps/commit/f56241a5d43871aea4d2fe9f8e940e9e20fabf1c))
+* **web:** properties, stands, observations and the saved-filter editor ([db779d4](https://github.com/Overcastly-AI/hunt-maps/commit/db779d4944331ffba1b1b947b4b0a0c9b03d3468))
+* **web:** the app can call its own backend, and a readout that admits ignorance ([aeecf57](https://github.com/Overcastly-AI/hunt-maps/commit/aeecf576bb88066a5f2f63ed3583581d541e1e14))
+* **web:** the offline region picker — the front door R8 was missing ([add172f](https://github.com/Overcastly-AI/hunt-maps/commit/add172f5154f9a9e12d8acaa008c01d93d9ce125))
+* **web:** the tabbed drawer — stands, sightings and filters are reachable ([d7d861c](https://github.com/Overcastly-AI/hunt-maps/commit/d7d861c53c11aa29c6241b2e11df1b838294dc8e))
+* **web:** wire the property routes ([5e5e2a0](https://github.com/Overcastly-AI/hunt-maps/commit/5e5e2a0709f458c31cddd7e5ab3dbfc98a2c0164))
+
+### Fixes
+
+* **api:** an absent bedding field rendered as a measured zero ([bd94718](https://github.com/Overcastly-AI/hunt-maps/commit/bd94718f21c25a7f4f2cba79b6b6374df66fb0f1))
+* **api:** availability was the bounding box, not the boundary ([0e429a1](https://github.com/Overcastly-AI/hunt-maps/commit/0e429a108a06f505155d447877c2e17715fca2c8))
+* **api:** fill the halo gridForBBox was allocating and never writing ([f140ed0](https://github.com/Overcastly-AI/hunt-maps/commit/f140ed0061e1718fcb62396c052e8c0e6a9d0a09))
+* **api:** retry the boot migration — one refused connection killed the container ([6554fb5](https://github.com/Overcastly-AI/hunt-maps/commit/6554fb5410554698bc02ffb5c514a1b5f3e62fa8))
+* **terrain:** "not a bench" and "flat ground" matched ground never measured ([2b75795](https://github.com/Overcastly-AI/hunt-maps/commit/2b757952b96456f80ed1eebbb5f7533ee99fdda2))
+* **terrain:** bedding swallowed unknown data in three of five terms, not one ([c5b3ac7](https://github.com/Overcastly-AI/hunt-maps/commit/c5b3ac716c1d436d92c49e74a5ac546e83325988))
+* **terrain:** NODATA passed the halo guard, so three layers reported "open ground" ([4e6b3f9](https://github.com/Overcastly-AI/hunt-maps/commit/4e6b3f962f5a12ede2b60677daec92f7c575929c))
+* **terrain:** six operators read the NODATA sentinel as an elevation ([5a52812](https://github.com/Overcastly-AI/hunt-maps/commit/5a52812ba3046acf9db1b971f9730bce7bc491f2))
+* **terrain:** VRM and TPI reported confident answers from one-sided samples ([8f6959e](https://github.com/Overcastly-AI/hunt-maps/commit/8f6959e354ecc30aedd0f79fb2ddd1cda9096d0e))
+* **web:** offline writes survive, and a sick server is not an invalid session ([61a0ca6](https://github.com/Overcastly-AI/hunt-maps/commit/61a0ca6eb068b2723c22bf000d0c6732178e423b))
+* **web:** R66 — bedding was never broken, the test harness was ([16b9535](https://github.com/Overcastly-AI/hunt-maps/commit/16b95356c5bf30ba745092dbc92fdd00706249a8))
+* **web:** the bedding layer painted nothing — two independent bugs ([80982c9](https://github.com/Overcastly-AI/hunt-maps/commit/80982c98aa22f79fd6d628b132c9a09f5e78521e))
+* **web:** the filter editor copied design-system colours instead of importing them ([2909ba7](https://github.com/Overcastly-AI/hunt-maps/commit/2909ba7e625a2372425a0bf3efcd0f452df6db60)), closes [#c9a253](https://github.com/Overcastly-AI/hunt-maps/issues/c9a253) [#c9a253](https://github.com/Overcastly-AI/hunt-maps/issues/c9a253)
+* **web:** the left rail, fixed at the root — two audits, two different causes ([390f667](https://github.com/Overcastly-AI/hunt-maps/commit/390f66718cb987690222c7891a0afcfc90859f85))
+
+### Documentation
+
+* **design:** direction A — final pass after its own render check ([a6e75ac](https://github.com/Overcastly-AI/hunt-maps/commit/a6e75ac89c290d1cd891c6dd5ae744c2e6f240e8))
+* **design:** direction A of three — "The Field Instrument" ([01b55fa](https://github.com/Overcastly-AI/hunt-maps/commit/01b55facdef9a56b0917809b8635855a1eb02312))
+* **design:** direction B — fix rows that painted their own name over their description ([1c8735a](https://github.com/Overcastly-AI/hunt-maps/commit/1c8735af2a9034720feb187882279f783c77c46f))
+* **design:** direction C — verification pass ([46992f9](https://github.com/Overcastly-AI/hunt-maps/commit/46992f9c5cea6cd82172fe7eb6184d3e4f97f127))
+* **design:** direction D — explored, not chosen ([b67de1b](https://github.com/Overcastly-AI/hunt-maps/commit/b67de1bc4bd78c9403191af0782c88d5813a78b2))
+* **design:** directions B and C — "The map is the entire product" / "The field record" ([8aff7d4](https://github.com/Overcastly-AI/hunt-maps/commit/8aff7d4fb6461a5f5be431010ca105a95f1a6ab2))
+* **design:** implementation plan for Direction A, and a correction ([d1cba14](https://github.com/Overcastly-AI/hunt-maps/commit/d1cba1414b26a5b3c610fd25a50b34397951a85e))
+* field audit of the map chrome, and the seven rows both audits produced ([ce49ef1](https://github.com/Overcastly-AI/hunt-maps/commit/ce49ef170afde8533246cce03a2a21a35a66e384))
+* field QA on the real artifact — two criticals that would end a morning ([5912374](https://github.com/Overcastly-AI/hunt-maps/commit/591237465c7ce4defc22cfa8afcf0f2d4604effc))
+* file R61 — the Confidence primitive has never been used ([9ec7a9c](https://github.com/Overcastly-AI/hunt-maps/commit/9ec7a9cd45df4856edd2784bd344d8fba244bed1))
+* file R77 — real LiDAR ground truth, and what the sibling repo actually does ([23230a8](https://github.com/Overcastly-AI/hunt-maps/commit/23230a851290c9a74d618e9bd651a28a91134338))
+* file the stale-bundle trap that cost time twice tonight ([db4e83d](https://github.com/Overcastly-AI/hunt-maps/commit/db4e83d8143b39b3295d1bdcd4c0c27a02c866a9))
+* move R32 to Done — it shipped and the row never got retired ([f03504e](https://github.com/Overcastly-AI/hunt-maps/commit/f03504eff1e51ad82efc852d1c62ed2774a8c2d5))
+* narrow R66 — the bedding engine is healthy, the browser path is not ([7e4b43d](https://github.com/Overcastly-AI/hunt-maps/commit/7e4b43d4878489e2619c4ee9f445b46789627244))
+* product audit of the left-hand chrome — the rail is not the worst of it ([d0e3369](https://github.com/Overcastly-AI/hunt-maps/commit/d0e33696a3c670a43febae48797355e9a81e460b)), closes [#5](https://github.com/Overcastly-AI/hunt-maps/issues/5)
+* R32 is a P0 — the bedding layer renders nothing ([4c49c5f](https://github.com/Overcastly-AI/hunt-maps/commit/4c49c5f0e941c77a7e2fea0b735b8c06fd97e42a))
+* R8 shipped — record the P0 offline-coverage fix ([6f39efe](https://github.com/Overcastly-AI/hunt-maps/commit/6f39efe46dee9391ee881e09b01e88d435a9a412))
+* record the bedding-model pass in ROADMAP and BACKLOG ([9d85d9d](https://github.com/Overcastly-AI/hunt-maps/commit/9d85d9d98e064b33742ddd81ba563cd6c9d33144))
+* ROADMAP catches up with R69, R70 and the tabbed drawer ([b455d0b](https://github.com/Overcastly-AI/hunt-maps/commit/b455d0b2c20da841080d2b8529bed6ff4c52d80f))
+* **terrain:** the retraction reached the register but never reached the source ([0e29c3d](https://github.com/Overcastly-AI/hunt-maps/commit/0e29c3de0c3d19d62094553b5fb47f4711ff7099))
+* the analytics audit found two ship blockers the builder could not see ([b49e6df](https://github.com/Overcastly-AI/hunt-maps/commit/b49e6dfef95c487205ef959231c411c21d5fc784))
+* the board was overstating the work by seven shipped rows ([817a52f](https://github.com/Overcastly-AI/hunt-maps/commit/817a52f260544af93a666d41346f2ddb284e130f))
+* the cold-season mechanism figure was wrong, and it was ours ([bd46f83](https://github.com/Overcastly-AI/hunt-maps/commit/bd46f83ed533f0ac5fc7692467deba112c12822b))
+* the engine claims shelter matters more than cover, and nobody chose that ([23529db](https://github.com/Overcastly-AI/hunt-maps/commit/23529db5a6de921b9c5db27e700f4a6e3b61ae45))
+
 ## [1.1.3](https://github.com/Overcastly-AI/hunt-maps/compare/v1.1.2...v1.1.3) (2026-08-07)
 
 ### Fixes
