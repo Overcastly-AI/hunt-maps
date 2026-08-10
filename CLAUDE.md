@@ -23,7 +23,7 @@ decision should be checked against them:
 is **"Would a serious whitetail hunter switch to this and never go back?"** — a
 daily-driver bar, not a feature-count argument.
 
-## The five non-negotiables
+## The six non-negotiables
 
 ### 1. Offline is not a feature, it is the operating assumption
 
@@ -106,6 +106,27 @@ the deer.
 Every selection analytic divides by the property's **availability
 distribution** (`TerrainProfile`) and reports Manly selection ratios with a
 chi-square test. Never ship a raw-count chart of habitat use.
+
+### 6. Test the artifact you ship, in the configuration you ship it in
+
+Every deployed image had `ARG VITE_DEM_TEMPLATE=""` in `apps/web/Dockerfile`,
+so the variable was **defined and empty**, not unset. `demSource.ts` resolved
+it with `?? DEFAULT`, and `??` only falls back on null/undefined — an empty
+string is neither. Every DEM tile URL was `""`; hillshade, slope, aspect,
+landform, bedding and corridors rendered blank in every container ever
+shipped, and nothing threw. Reported as *"I still can't even use it. None of
+the layers are working"* — which was literally true (`454c8f2`). A sibling bug
+hid a correct release behind stale browser cache because `index.html` had no
+`Cache-Control` (`bc95b24`). Both lived in the one configuration nothing
+exercises: CI runs the source tree with the var unset, never builds or runs
+the Docker image, and nothing confirms a published image reaches a server.
+
+**The source tree passing tells you nothing about the image.** If a default
+only takes its production value inside a container — a build arg, an env
+resolution, a cache header — prove it in the container: build it, run it, grep
+or curl the artifact. A blank layer is #2's "confidently wrong about terrain"
+arrived at through the deploy pipeline instead of the maths, and it is just as
+untrustworthy for being silent instead of backwards.
 
 ## Stack (do not change without updating docs/ARCHITECTURE.md)
 
