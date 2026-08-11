@@ -331,7 +331,17 @@
   padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  /*
+   * 6px, not `var(--space-2)`'s 8px — one of three small, deliberate trims
+   * (with `.rail__section`'s `padding-top` below and `.rail-chip-grid`'s own
+   * row gap) that together buy back the room `.rl-chip-row__text` wrapping
+   * onto two lines needs at the tighter 1280×800 budget viewport. Measured,
+   * not guessed: without these three the wrapped layout is 8px short of
+   * fitting at 1280×800; with them it clears with ~16px to spare (group 14
+   * still asserts the real number, so a future label that needs a third line
+   * fails loudly here rather than silently scrolling).
+   */
+  gap: 6px;
 }
 
 .rail__head {
@@ -356,7 +366,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding-top: var(--space-1);
+  /* 2px, not `var(--space-1)`'s 4px — see `.rail__scroll`'s `gap` comment. */
+  padding-top: 2px;
   border-top: 1px solid var(--color-line);
 }
 
@@ -383,11 +394,15 @@
 
 /* Two-up grid of `LayerChip`s — the density move: the same 44px gloved-tap
    row `ToggleRow` already uses, at half the vertical cost per layer, rather
-   than a shorter row that would fail the touch-target floor. */
+   than a shorter row that would fail the touch-target floor. A literal
+   single column was measured and rejected here — see `.rail__scroll`'s `gap`
+   comment — in favour of `.rl-chip-row__text` wrapping onto a second line
+   inside the same row instead of truncating. 1px row gap, not 2px: one of
+   the three small trims that comment documents. */
 .rail-chip-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px 4px;
+  gap: 1px 4px;
 }
 
 /* --------------------------------------------------------------------------

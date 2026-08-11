@@ -1053,11 +1053,33 @@ body {
   cursor: not-allowed;
 }
 
+/*
+ * Wraps rather than truncates (BACKLOG follow-up to Direction C, 2026-08-11
+ * founder review of `01-desktop-relief.png`: "Bedding likeli...", and seven of
+ * seven saved-filter names, unreadable in the two-up grid). A hunter cannot
+ * tell "Bedding ..." from "Bedding likeli..." apart, and a saved filter you
+ * cannot identify without opening it defeats the point of naming one
+ * (CLAUDE.md's "saved terrain filters are first-class").
+ *
+ * The founder's own proposed fix — collapse `.rail-chip-grid` to one column —
+ * was measured and does not fit: at both budget viewports the two grids
+ * together need ~910px of content height against a ~589-689px box (see
+ * `ui-invariants.spec.ts` group 14's own numbers), a shortfall no amount of
+ * trimming elsewhere in the rail closes. Wrapping onto (at most) two lines
+ * inside the *same* 44px-floor row instead — `Midslope drainages` etc. above
+ * the 44px floor — accomplishes the same "no label is truncated" outcome for
+ * ~14px total across every chip in the rail, not ~320px, because the 44px
+ * touch-target floor already has more headroom than one line of `--text-xs`
+ * needs. `min-width: 0` (below, and on `.rl-chip-row` itself) is still what
+ * makes this wrap into its own grid column instead of overflowing it, same
+ * reason it was there for `text-overflow: ellipsis` before.
+ */
 .rl-chip-row__text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: var(--leading-tight);
   font-size: var(--text-xs);
   color: var(--color-text);
   opacity: 0.85;

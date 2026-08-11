@@ -2396,6 +2396,97 @@ test.describe('14. Desktop rail — everything fits, no scroll, every control re
 });
 
 // ---------------------------------------------------------------------------
+// 14b. Desktop rail — no chip label is visually truncated
+// ---------------------------------------------------------------------------
+//
+// The founder's actual complaint, screenshotted (`01-desktop-relief.png`,
+// 2026-08-11): "Saddles & dr...", "Bedding likeli...", and seven of seven
+// saved-filter names ("Bedding ...", "Sidehill ...", ...) unreadable in the
+// two-up `.rail-chip-grid`. CLAUDE.md non-negotiable #4 exists exactly for
+// this shape of defect — every one of those labels was present in the DOM,
+// `getByRole('checkbox', { name: /Bedding/ })` would still have found it, and
+// every existing unit test was green throughout. Only rendered geometry
+// exposes it: an element whose content needs more horizontal room than its
+// own box is `scrollWidth > clientWidth`, the same signal `dom-audit.ts`
+// already uses for hit-testing rather than trusting DOM presence.
+//
+// `.rl-chip-row__text` no longer truncates (`packages/design/src/styles.css`
+// — it wraps onto up to two lines inside the same 44px-floor row instead), so
+// this should read zero violations against the *current* tree. It is here,
+// not folded into group 14, because it is proving a different property: group
+// 14 is "the rail fits its box", this is "nothing inside the rail is cut off"
+// — a layout can satisfy either one without the other (the two-up grid this
+// replaced satisfied group 14 while failing this one outright).
+test.describe('14b. Desktop rail — no chip label is visually truncated', () => {
+  for (const viewport of [DESKTOP, { width: 1280, height: 800 }] as const) {
+    test(`${viewport.width}x${viewport.height} — every layer chip and saved-filter label is fully visible`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport);
+
+      const measured = await page.evaluate(() => {
+        const out: Array<{ label: string; scrollWidth: number; clientWidth: number }> = [];
+        for (const el of document.querySelectorAll<HTMLElement>('.rail .rl-chip-row__text')) {
+          if (el.offsetParent === null) continue; // not currently rendered/visible
+          out.push({
+            label: (el.textContent ?? '').trim(),
+            scrollWidth: el.scrollWidth,
+            clientWidth: el.clientWidth,
+          });
+        }
+        return out;
+      });
+
+      expect(
+        measured.length,
+        'expected a real population of layer-chip and saved-filter labels to check',
+      ).toBeGreaterThan(10);
+
+      // +1px tolerance: sub-pixel layout rounding, not a real overflow.
+      const truncated = measured.filter((v) => v.scrollWidth > v.clientWidth + 1);
+      expect(
+        truncated,
+        truncated
+          .map(
+            (v) =>
+              `"${v.label}" needs ${v.scrollWidth}px but its row only gives it ${v.clientWidth}px — ` +
+              `truncated. A hunter cannot tell two saved filters apart if neither name is fully ` +
+              `readable.`,
+          )
+          .join('\n'),
+      ).toEqual([]);
+    });
+  }
+
+  /**
+   * Non-vacuity, matching this file's own pattern for every geometry-based
+   * check (groups 0, 14, 15): pin the assertion itself against a synthetic
+   * fixture that must fail it, so a future refactor cannot silently turn this
+   * into a tautology (e.g. by measuring the wrong element, or one that never
+   * actually clips). A real `.rl-chip-row__text` forced back to single-line
+   * `nowrap` inside a narrow fixed box is exactly the shape of the original
+   * defect, reproduced outside the app.
+   */
+  test('non-vacuity — this check actually fails for a label wider than its box', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setContent(
+      '<div class="rail"><span class="rl-chip-row__text" style="display:inline-block;width:60px;' +
+        'white-space:nowrap;overflow:hidden;font-size:11px;">Bedding likelihood</span></div>',
+    );
+    const violation = await page.evaluate(() => {
+      const el = document.querySelector('.rl-chip-row__text') as HTMLElement;
+      return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+    });
+    expect(
+      violation.scrollWidth,
+      'fixture setup failed — expected this synthetic label to genuinely overflow its box',
+    ).toBeGreaterThan(violation.clientWidth);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 15. No chrome surface may cover more than its stated share of the map
 // ---------------------------------------------------------------------------
 //

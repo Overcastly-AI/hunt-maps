@@ -71,7 +71,17 @@ export interface DesktopRailProps {
  *     first desktop rail licenses loosening — the floor is a design-system
  *     invariant, not a mobile-only one, and the existing suite already runs
  *     it at DESKTOP width. Two columns halves the vertical cost of the same
- *     44px-tall, fully tappable row instead.
+ *     44px-tall, fully tappable row instead. A follow-up to *this* pass
+ *     (founder review of `01-desktop-relief.png`, same day) found the two-up
+ *     column too narrow for most layer/filter names and truncating —
+ *     "Bedding likeli...", and seven of seven saved filters. Collapsing to a
+ *     single column was measured and does not fit either budget viewport
+ *     (`ui-invariants.spec.ts` group 14's own numbers, ~910px of content
+ *     against a ~589-689px box) — so `.rl-chip-row__text`
+ *     (`packages/design/src/styles.css`) wraps onto a second line inside the
+ *     same 44px-floor row instead of truncating, which fits because a single
+ *     line of `--text-xs` never used that floor's full headroom. Group 14b is
+ *     the direct assertion that nothing in the rail is cut off.
  *  3. **Elevation source is a registry-driven segmented control, not a
  *     three-row list with its own long caveat paragraph per row.** The
  *     resolution claim (`DEM_SOURCE.resolutionNote`, "not LiDAR" etc.) is

@@ -185,6 +185,22 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       desktop chip (hover-reveal reason, disabled checkbox, forced click
       provably does nothing) alongside the unchanged mobile `ToggleRow` case.
 
+- [x] **`R92` — the rail's two-up chip grid was truncating most labels it
+      showed** (founder review of `01-desktop-relief.png`, same day: "Saddles
+      & dr...", "Bedding likeli...", all seven saved-filter names). Collapsing
+      to one column, the founder's own proposed fix, was measured and does not
+      fit either budget viewport — the two grids need ~910px of content
+      height against a ~589–689px box, a shortfall nothing else in the rail
+      can close. Fixed by letting `.rl-chip-row__text` wrap onto a second line
+      inside the same 44px-floor row instead of truncating (a single line of
+      `--text-xs` never used that floor's full headroom), plus three small
+      measured trims elsewhere in the rail's own spacing to buy back the room
+      the wrap needs at 1280×800. New invariant (`ui-invariants.spec.ts` group
+      14b) asserts no rail label's `scrollWidth` exceeds its `clientWidth`,
+      proven non-vacuous against both the pre-fix layout and a synthetic
+      fixture; groups 14 and 15 (fit, no-scroll, coverage ceiling) still pass
+      unchanged and un-tuned.
+
 - [x] **`R83`'s web half, plus `R84` — the rut refusal actually renders, a
       hunter can state a target species, and the elk-invalid bedding layer
       greys out.** Closes the gap the previous entry left open. `PropertyRutReading`
@@ -201,7 +217,7 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       both offering **"Not stated" as a first-class, un-nagged choice**, and
       neither offering a path back to it once a species is set (matching
       `PropertiesService.update`'s own contract — there is no `targetSpecies:
-  null` on the wire). **`R84`** (`docs/EVIDENCE.md` Pass 7 §2 — Millspaugh
+null` on the wire). **`R84`** (`docs/EVIDENCE.md` Pass 7 §2 — Millspaugh
       et al. 1998 found slope did not discriminate elk bed sites from random
       ground at all): the bedding likelihood layer now greys out via the exact
       `ToggleRow.blockedReason` mechanism a missing wind direction already
@@ -355,10 +371,10 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       all rather than show a number it cannot stand behind.
 
       Property routes are wired; the stands, observations and filter panels are
-                                  built and tested but **not yet reachable** — the `CommandBar` documents
-                                  that a fourth and fifth cell is the wrong answer and they belong as tabs
-                                  in the single drawer slot, which is a design decision rather than
-                                  plumbing. Tracked, not forgotten.
+                                      built and tested but **not yet reachable** — the `CommandBar` documents
+                                      that a fourth and fifth cell is the wrong answer and they belong as tabs
+                                      in the single drawer slot, which is a design decision rather than
+                                      plumbing. Tracked, not forgotten.
 
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
@@ -379,12 +395,12 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
 
       Three defects found by rendered-state harnesses that every DOM query
-                                  passed: a voided cell rendering **`-107507 ft`** because
-                                  `Number.isFinite(-32768)` is `true` — the same finite-sentinel
-                                  misconception as `R49`, now confirmed in all three packages; a
-                                  drag/click race where the browser's synthetic `click` after `pointerup`
-                                  made a dismiss-drag also fire a tap-toggle; and a register-screen link
-                                  measuring 35×44 px against the 44 px gloved-use floor.
+                                      passed: a voided cell rendering **`-107507 ft`** because
+                                      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                                      misconception as `R49`, now confirmed in all three packages; a
+                                      drag/click race where the browser's synthetic `click` after `pointerup`
+                                      made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                                      measuring 35×44 px against the 44 px gloved-use floor.
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
@@ -498,19 +514,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-                                              hit-testability against the viewport alone, so a row scrolled just past
-                                              the *sheet's* clipped edge was hit-tested at its unpainted position and
-                                              reported as visible-but-unclickable — a false failure indistinguishable
-                                              from the real clipping bug the suite is named after; it now intersects
-                                              against every clipping ancestor and hit-tests the centre of the visible
-                                              region. Ground truth was measured before accepting the greener result:
-                                              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-                                              and no painted control fails a hit test. Then (`7ff42cee`) two more
-                                              guards on the helper itself: a synthetic fixture pinning both branches
-                                              of the clipped-ancestor fix so neither can regress silently, and a check
-                                              that the collision matrix's "no collision" result means a selector
-                                              matched and did not overlap, not that a renamed selector stopped
-                                              matching anything.
+                                                  hit-testability against the viewport alone, so a row scrolled just past
+                                                  the *sheet's* clipped edge was hit-tested at its unpainted position and
+                                                  reported as visible-but-unclickable — a false failure indistinguishable
+                                                  from the real clipping bug the suite is named after; it now intersects
+                                                  against every clipping ancestor and hit-tests the centre of the visible
+                                                  region. Ground truth was measured before accepting the greener result:
+                                                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                                                  and no painted control fails a hit test. Then (`7ff42cee`) two more
+                                                  guards on the helper itself: a synthetic fixture pinning both branches
+                                                  of the clipped-ancestor fix so neither can regress silently, and a check
+                                                  that the collision matrix's "no collision" result means a selector
+                                                  matched and did not overlap, not that a renamed selector stopped
+                                                  matching anything.
 
 - [x] Deploy the `Confidence` primitive into the app (`BACKLOG R10`) — now used
       in **15** places across `apps/web`, including `TerrainReadout.tsx` and
