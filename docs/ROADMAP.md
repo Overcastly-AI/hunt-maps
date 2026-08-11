@@ -222,10 +222,10 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       all rather than show a number it cannot stand behind.
 
       Property routes are wired; the stands, observations and filter panels are
-                  built and tested but **not yet reachable** — the `CommandBar` documents
-                  that a fourth and fifth cell is the wrong answer and they belong as tabs
-                  in the single drawer slot, which is a design decision rather than
-                  plumbing. Tracked, not forgotten.
+                      built and tested but **not yet reachable** — the `CommandBar` documents
+                      that a fourth and fifth cell is the wrong answer and they belong as tabs
+                      in the single drawer slot, which is a design decision rather than
+                      plumbing. Tracked, not forgotten.
 
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
@@ -246,12 +246,12 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
 
       Three defects found by rendered-state harnesses that every DOM query
-                  passed: a voided cell rendering **`-107507 ft`** because
-                  `Number.isFinite(-32768)` is `true` — the same finite-sentinel
-                  misconception as `R49`, now confirmed in all three packages; a
-                  drag/click race where the browser's synthetic `click` after `pointerup`
-                  made a dismiss-drag also fire a tap-toggle; and a register-screen link
-                  measuring 35×44 px against the 44 px gloved-use floor.
+                      passed: a voided cell rendering **`-107507 ft`** because
+                      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                      misconception as `R49`, now confirmed in all three packages; a
+                      drag/click race where the browser's synthetic `click` after `pointerup`
+                      made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                      measuring 35×44 px against the 44 px gloved-use floor.
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
@@ -270,6 +270,37 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       established that a light theme over a frozen map has **two grounds, not
       one** — the panel's and the raster's — so one ink token cannot serve both;
       anyone attempting a day mode later inherits that.
+
+      **Slices 1–2 shipped** (`f56241a`): the `plate` token group — a new group
+                      rather than a `glass` variant, or `Popover` inherits a blur change
+                      nobody asked for — and the first `Confidence` chip, on the bedding
+                      row, closing `R61`'s "used in exactly zero places" for one surface
+                      with a regression test so it cannot drift back.
+
+          **Slice 3, the `Dock`, is committed at `0947a43` and not accepted.**
+                      `code-reviewer` returned "do not merge as-is" on four blocking
+                      items, and the plan's §c content model — the always-visible Base /
+                      Relief / Terrain-analysis sections that are the *reason* a dock
+                      earns 300px — was not built. What shipped is the existing tabbed
+                      drawer nested inside a new chassis, which shrank the desktop Layers
+                      panel from ~780px to a 320px nested scroller: the first real
+                      desktop screenshot shows **one** layer row before the fold, out of
+                      ten. The chassis itself is sound work (`overflow-y: auto` from day
+                      one, `inert` on collapse, a labelled collapse control per F4) and
+                      the reconciliation reasoning — that the tabbed drawer post-dates
+                      §c — is correct and worth keeping. The open decision is whether to
+                      build §c's content model or restore the drawer to full height;
+                      it is the founder's, and it is open. Blockers tracked as `R80`.
+
+          Recorded because it cost this pass real time: the commit claimed
+                      screenshots it could not have taken. `chrome-shots.spec.ts` drove
+                      the chrome by `role=button` "Layers", which the dock makes
+                      `visibility: hidden` — correctly out of the accessibility tree, so
+                      the locator matched zero elements and all four desktop captures hung
+                      the full 180s timeout. **A UI commit that cannot photograph itself
+                      has no visual gate at all**, and the stale shots left on disk showed
+                      the chrome the commit had just deleted. Fixed here; the four real
+                      shots are in `apps/web/screenshots/chrome/`.
 
 - [x] **P0 SHIPPED — `offlineReady` replaced with per-viewport coverage truth**
       (`BACKLOG R8`). The boolean was sampled once at mount and rendered behind
@@ -360,19 +391,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-                              hit-testability against the viewport alone, so a row scrolled just past
-                              the *sheet's* clipped edge was hit-tested at its unpainted position and
-                              reported as visible-but-unclickable — a false failure indistinguishable
-                              from the real clipping bug the suite is named after; it now intersects
-                              against every clipping ancestor and hit-tests the centre of the visible
-                              region. Ground truth was measured before accepting the greener result:
-                              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-                              and no painted control fails a hit test. Then (`7ff42cee`) two more
-                              guards on the helper itself: a synthetic fixture pinning both branches
-                              of the clipped-ancestor fix so neither can regress silently, and a check
-                              that the collision matrix's "no collision" result means a selector
-                              matched and did not overlap, not that a renamed selector stopped
-                              matching anything.
+                                  hit-testability against the viewport alone, so a row scrolled just past
+                                  the *sheet's* clipped edge was hit-tested at its unpainted position and
+                                  reported as visible-but-unclickable — a false failure indistinguishable
+                                  from the real clipping bug the suite is named after; it now intersects
+                                  against every clipping ancestor and hit-tests the centre of the visible
+                                  region. Ground truth was measured before accepting the greener result:
+                                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                                  and no painted control fails a hit test. Then (`7ff42cee`) two more
+                                  guards on the helper itself: a synthetic fixture pinning both branches
+                                  of the clipped-ancestor fix so neither can regress silently, and a check
+                                  that the collision matrix's "no collision" result means a selector
+                                  matched and did not overlap, not that a renamed selector stopped
+                                  matching anything.
 
 - [ ] Deploy the `Confidence` primitive into the app — it exists in
       `packages/design`, is documented, and is used in **zero** places in
