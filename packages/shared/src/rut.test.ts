@@ -7,9 +7,11 @@ import {
   rutConfidence,
   rutPhaseFor,
 } from './rut.js';
-import { RutPhase } from './domain.js';
+import { GameSpecies, RutPhase } from './domain.js';
 
 const OHIO = { latitude: 39.7 };
+// The founder's own ground — Montana HD 320, Tobacco Root Mountains.
+const MONTANA_ELK = { latitude: 45.5 };
 
 describe('peakBreedingDayOfYear', () => {
   it('lands in mid-November across the northern range', () => {
@@ -66,9 +68,7 @@ describe('rutPhaseFor', () => {
   it('shifts six months for southern-hemisphere properties', () => {
     // 35°S peaks at DOY 325 mirrored six months → DOY 142 ≈ 22 May.
     const southern = { latitude: -35, southernHemisphere: true };
-    expect(rutPhaseFor(new Date('2026-05-22T12:00:00Z'), southern)).toBe(
-      RutPhase.PeakBreeding,
-    );
+    expect(rutPhaseFor(new Date('2026-05-22T12:00:00Z'), southern)).toBe(RutPhase.PeakBreeding);
     // ...and the equivalent northern date is firmly off-season there.
     expect(rutPhaseFor(new Date('2026-11-15T12:00:00Z'), southern)).toBe(RutPhase.OffSeason);
   });
@@ -108,6 +108,93 @@ describe('readRut', () => {
     expect(readRut(new Date('2026-11-15T12:00:00Z'), { latitude: 27 }).confidence).toBeLessThan(
       0.5,
     );
+  });
+});
+
+describe('R83 — species-aware refusal', () => {
+  it('whitetail (default, no species passed) is unaffected — bit-identical to pre-R83 behaviour', () => {
+    const r = readRut(new Date('2026-11-15T12:00:00Z'), OHIO);
+    expect(r.supported).toBe(true);
+    expect(r.phase).toBe(RutPhase.PeakBreeding);
+  });
+
+  it('whitetail (species passed explicitly) matches the no-species-passed reading', () => {
+    const implicit = readRut(new Date('2026-11-07T12:00:00Z'), OHIO);
+    const explicit = readRut(new Date('2026-11-07T12:00:00Z'), {
+      ...OHIO,
+      species: GameSpecies.Whitetail,
+    });
+    expect(explicit).toEqual(implicit);
+  });
+
+  it(
+    'elk at 45.5°N (Montana HD 320) never reports OffSeason during the real elk rut — ' +
+      'the whitetail-fitted model previously did, R83',
+    () => {
+      // Archery opener, ~5 Sep.
+      const opener = readRut(new Date('2026-09-05T12:00:00Z'), {
+        ...MONTANA_ELK,
+        species: GameSpecies.Elk,
+      });
+      // Peak bugling, 15 Sep.
+      const peakBugle = readRut(new Date('2026-09-15T12:00:00Z'), {
+        ...MONTANA_ELK,
+        species: GameSpecies.Elk,
+      });
+      for (const r of [opener, peakBugle]) {
+        expect(r.supported).toBe(false);
+        if (!r.supported) {
+          expect(r.species).toBe(GameSpecies.Elk);
+          expect(r.reason.toLowerCase()).toContain('no rut model');
+        }
+      }
+    },
+  );
+
+  it(
+    'elk at 45.5°N never reports Chasing/PeakBreeding five to nine weeks after the real rut — ' +
+      'the whitetail-fitted model previously did (inverted), R83',
+    () => {
+      // 6 Nov — previously "Chasing" with "highest-odds daylight window" copy.
+      const nov6 = readRut(new Date('2026-11-06T12:00:00Z'), {
+        ...MONTANA_ELK,
+        species: GameSpecies.Elk,
+      });
+      // 13 Nov — previously "PeakBreeding" with "Lockdown" copy.
+      const nov13 = readRut(new Date('2026-11-13T12:00:00Z'), {
+        ...MONTANA_ELK,
+        species: GameSpecies.Elk,
+      });
+      for (const r of [nov6, nov13]) {
+        expect(r.supported).toBe(false);
+      }
+    },
+  );
+
+  it('refuses for every non-whitetail species, not just elk', () => {
+    const nonWhitetail = [
+      GameSpecies.Mule,
+      GameSpecies.Moose,
+      GameSpecies.Blacktail,
+      GameSpecies.Pronghorn,
+      GameSpecies.Bear,
+      GameSpecies.Turkey,
+      GameSpecies.Hog,
+      GameSpecies.Other,
+    ];
+    for (const species of nonWhitetail) {
+      const r = readRut(new Date('2026-11-15T12:00:00Z'), { ...OHIO, species });
+      expect(r.supported).toBe(false);
+    }
+  });
+
+  it('does not fabricate an elk model by shifting the whitetail curve — refusal carries no phase at all', () => {
+    const r = readRut(new Date('2026-09-15T12:00:00Z'), {
+      ...MONTANA_ELK,
+      species: GameSpecies.Elk,
+    });
+    expect(r).not.toHaveProperty('phase');
+    expect(r).not.toHaveProperty('daysFromPeak');
   });
 });
 

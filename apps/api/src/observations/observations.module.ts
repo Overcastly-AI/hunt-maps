@@ -32,7 +32,7 @@ import {
   SignType,
   Species,
 } from '@prisma/client';
-import { readRut, RutPhase } from '@hunt-maps/shared';
+import { GameSpecies, readRut, RutPhase } from '@hunt-maps/shared';
 import type { GeoPoint } from '@hunt-maps/shared';
 import { AuthModule } from '../auth/auth.module';
 import { TerrainModule } from '../terrain/terrain.module';
@@ -82,6 +82,27 @@ const RUT_PHASE_TO_PRISMA: Record<RutPhase, PrismaRutPhase> = {
   [RutPhase.PostRut]: PrismaRutPhase.POST_RUT,
   [RutPhase.SecondRut]: PrismaRutPhase.SECOND_RUT,
   [RutPhase.LateSeason]: PrismaRutPhase.LATE_SEASON,
+};
+
+/**
+ * Prisma's `Species` enum (SCREAMING_SNAKE_CASE, no runtime relation to
+ * `@hunt-maps/shared`) mapped to `@hunt-maps/shared`'s `GameSpecies`, so an
+ * observation's logged species can be threaded into `readRut` (R83). Every
+ * member maps 1:1 — there is deliberately no fallback branch, so a species
+ * added to one enum and not the other fails to compile instead of silently
+ * defaulting.
+ */
+const SPECIES_TO_GAME_SPECIES: Record<Species, GameSpecies> = {
+  [Species.WHITETAIL]: GameSpecies.Whitetail,
+  [Species.MULE_DEER]: GameSpecies.Mule,
+  [Species.BLACKTAIL]: GameSpecies.Blacktail,
+  [Species.ELK]: GameSpecies.Elk,
+  [Species.MOOSE]: GameSpecies.Moose,
+  [Species.PRONGHORN]: GameSpecies.Pronghorn,
+  [Species.BEAR]: GameSpecies.Bear,
+  [Species.TURKEY]: GameSpecies.Turkey,
+  [Species.HOG]: GameSpecies.Hog,
+  [Species.OTHER]: GameSpecies.Other,
 };
 
 @Injectable()
@@ -182,11 +203,16 @@ export class ObservationsService {
       throw new BadRequestException('observedAt is in the future.');
     }
 
+    // dto.species is optional — an unspecified species (e.g. a generic sign
+    // log) keeps today's behaviour (the Whitetail default in readRut()); a
+    // species that is *positively known* and is not whitetail (elk, above
+    // all — R83) gets a refusal instead of an inverted phase.
     const rut =
       property.centerLat !== null
         ? readRut(observedAt, {
             latitude: property.centerLat,
             offsetDays: property.rutOffsetDays ?? undefined,
+            species: dto.species ? SPECIES_TO_GAME_SPECIES[dto.species] : undefined,
           })
         : null;
 
@@ -203,7 +229,11 @@ export class ObservationsService {
         signType: dto.signType,
         travelHeadingDeg: dto.travelHeadingDeg,
         observedAt,
-        rutPhase: rut ? RUT_PHASE_TO_PRISMA[rut.phase] : undefined,
+        // `rut` is `null` (no property latitude), a refusal (`supported: false`
+        // — species this model has no basis for, R83), or a real reading.
+        // Only the last one is worth a column value; the others leave
+        // `rutPhase` unset rather than storing a guess.
+        rutPhase: rut && rut.supported ? RUT_PHASE_TO_PRISMA[rut.phase] : undefined,
         temperatureC: dto.temperatureC,
         pressureHpa: dto.pressureHpa,
         pressureTrend3h: dto.pressureTrend3h,

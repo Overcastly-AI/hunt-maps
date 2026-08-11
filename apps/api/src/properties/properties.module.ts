@@ -72,12 +72,18 @@ export class PropertiesService {
     // The rut reading is per-property because it depends on latitude and the
     // property's own calibration — a hunter with ground in Michigan and Alabama
     // is genuinely in two different phases on the same day.
+    //
+    // No `species` is passed here because `Property` has no target-species
+    // field (R83 territory is `packages/shared/src/**` and `apps/api/src/**`;
+    // adding one is a schema change, out of scope for this pass — see the
+    // R83 handoff notes). Omitting `species` resolves to the `Whitetail`
+    // overload of `readRut`, i.e. exactly today's behaviour. An elk property
+    // will still show a whitetail-calendar phase here until that field
+    // exists; per-observation rut (`ObservationsService.create`) is already
+    // species-aware and refuses for elk.
     return rows.map((p) => ({
       ...p,
-      rut:
-        p.centerLat !== null
-          ? readRut(new Date(), { latitude: p.centerLat })
-          : null,
+      rut: p.centerLat !== null ? readRut(new Date(), { latitude: p.centerLat }) : null,
     }));
   }
 
@@ -96,6 +102,8 @@ export class PropertiesService {
     return {
       ...property,
       boundary,
+      // See the list() comment above — no per-property species field exists
+      // yet, so this defaults to the Whitetail overload (today's behaviour).
       rut:
         property.centerLat !== null
           ? readRut(new Date(), {
@@ -232,11 +240,7 @@ export class PropertiesController {
   }
 
   @Patch(':id')
-  update(
-    @CurrentUser() user: AuthedUser,
-    @Param('id') id: string,
-    @Body() dto: UpdatePropertyDto,
-  ) {
+  update(@CurrentUser() user: AuthedUser, @Param('id') id: string, @Body() dto: UpdatePropertyDto) {
     return this.properties.update(user.id, id, dto);
   }
 
@@ -246,11 +250,7 @@ export class PropertiesController {
   }
 
   @Post(':id/members')
-  addMember(
-    @CurrentUser() user: AuthedUser,
-    @Param('id') id: string,
-    @Body() dto: AddMemberDto,
-  ) {
+  addMember(@CurrentUser() user: AuthedUser, @Param('id') id: string, @Body() dto: AddMemberDto) {
     return this.properties.addMember(user.id, id, dto);
   }
 
