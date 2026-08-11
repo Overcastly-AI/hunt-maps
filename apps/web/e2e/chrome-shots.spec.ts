@@ -1,4 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+// `test`/`expect` come from ./fixtures, not @playwright/test: that import is what
+// attaches the DEM tile relay and runs the elevation preflight (BACKLOG R76).
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type maplibregl from 'maplibre-gl';
 
 /**

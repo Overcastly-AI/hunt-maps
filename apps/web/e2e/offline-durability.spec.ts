@@ -1,4 +1,7 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+// `test`/`expect` come from ./fixtures, not @playwright/test: that import is what
+// attaches the DEM tile relay and runs the elevation preflight (BACKLOG R76).
+import { type Page, type Route } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /**
  * The three silent failures.
@@ -132,7 +135,16 @@ async function mockApi(page: Page, opts: { properties?: unknown[] } = {}): Promi
     if (path.startsWith('/properties/')) return json(PROPERTY);
     if (path === '/observations' && req.method() === 'POST') {
       const sent = req.postDataJSON() as Record<string, unknown>;
-      return json({ ...sent, id: 'server-obs-1', userId: USER.id, version: 1, createdAt: new Date().toISOString() }, 201);
+      return json(
+        {
+          ...sent,
+          id: 'server-obs-1',
+          userId: USER.id,
+          version: 1,
+          createdAt: new Date().toISOString(),
+        },
+        201,
+      );
     }
     if (path === '/observations') return json([]);
     if (path === '/waypoints') return json([]);
@@ -144,7 +156,9 @@ async function mockApi(page: Page, opts: { properties?: unknown[] } = {}): Promi
 }
 
 /** The persisted offline queue, parsed. `null` when the key was never written. */
-async function readQueue(page: Page): Promise<Array<{ op: { kind: string }; status: string }> | null> {
+async function readQueue(
+  page: Page,
+): Promise<Array<{ op: { kind: string }; status: string }> | null> {
   return page.evaluate((key) => {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as Array<{ op: { kind: string }; status: string }>) : null;
@@ -279,7 +293,10 @@ test.describe('offline writes survive', () => {
     await expect
       .poll(() => api.hits.filter((h) => h === 'POST /observations').length, { timeout: 10_000 })
       .toBe(1);
-    expect(await readQueue(page), 'a write that succeeded online must not be left in the queue').toEqual(null);
+    expect(
+      await readQueue(page),
+      'a write that succeeded online must not be left in the queue',
+    ).toEqual(null);
   });
 });
 
@@ -331,7 +348,9 @@ test.describe('a sick server is not an invalid session', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     await expect
-      .poll(async () => page.evaluate((k) => localStorage.getItem(k), AUTH_KEY), { timeout: 15_000 })
+      .poll(async () => page.evaluate((k) => localStorage.getItem(k), AUTH_KEY), {
+        timeout: 15_000,
+      })
       .toBeNull();
   });
 
@@ -355,7 +374,9 @@ test.describe('a sick server is not an invalid session', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('the remembered property survives no signal', () => {
-  test('an offline reload keeps the selected property and never says "create one"', async ({ page }) => {
+  test('an offline reload keeps the selected property and never says "create one"', async ({
+    page,
+  }) => {
     await seedSession(page, { propertyId: PROPERTY.id });
     const api = await mockApi(page);
     await gotoWorkspace(page);
@@ -424,7 +445,9 @@ test.describe('the remembered property survives no signal', () => {
     await page.getByRole('tab', { name: 'Sightings' }).click();
 
     await expect
-      .poll(async () => page.evaluate((k) => localStorage.getItem(k), PROPERTY_KEY), { timeout: 10_000 })
+      .poll(async () => page.evaluate((k) => localStorage.getItem(k), PROPERTY_KEY), {
+        timeout: 10_000,
+      })
       .toBeNull();
   });
 });
