@@ -220,12 +220,26 @@ jobs:
             docker logs api
             exit 1
           fi
-          curl -fsS http://localhost:3001/api/health | tee /dev/stderr
+
+          # Assert the CONTENT of the health response, not just a 2xx.
+          # /api/health answers 200 with {"status":"degraded","postgis":null}
+          # when it cannot query PostGIS, so `curl -fsS` alone is green for an
+          # API that can serve no spatial query at all — every map request 500s
+          # and CI never notices. `ok` requires postgis_version() to answer.
+          body=$(curl -fsS http://localhost:3001/api/health)
+          echo "$body"
+          case "$body" in
+            *'"status":"ok"'*) ;;
+            *)
+              echo "::error::API health is not 'ok' — it is reachable but cannot query PostGIS: $body"
+              docker logs api | tail -40
+              exit 1 ;;
+          esac
 
           curl -fsS http://localhost:8080/index.html >/dev/null \
             || { echo "::error::web did not serve index.html"; docker logs web; exit 1; }
 
-          echo "api and web both healthy as non-root"
+          echo "api and web both healthy as non-root, with PostGIS reachable"
 
       - name: Container state and logs on failure
         if: failure()
@@ -239,6 +253,121 @@ jobs:
             code=$(docker inspect -f '{{.State.ExitCode}}' "$c" 2>/dev/null || echo '?')
             echo "--- $c (exit=$code) ---"
             docker logs "$c" 2>&1 | tail -60 || true
+          done
+
+  shipped-artifact:
+    # Assert what the IMAGE SERVES, not what the source tree says. (R81)
+    #
+    # This job exists because of a P0 that made the product useless for months
+    # and that every other gate in this repository was structurally incapable
+    # of seeing:
+    #
+    #   apps/web/Dockerfile declared `ARG VITE_DEM_TEMPLATE=""`, so the variable
+    #   was defined-and-EMPTY in every image. Vite inlines import.meta.env at
+    #   build time, so the bundle got `""`, every DEM tile URL resolved to `""`,
+    #   and every terrain layer — hillshade, slope, aspect, landform, bedding,
+    #   corridors — rendered blank in every container ever deployed. Nothing
+    #   threw. All 330 web tests passed, because locally and in CI the variable
+    #   is simply UNSET and the fallback fires. The tests exercised a code path
+    #   production never takes.
+    #
+    # The one environment that was broken was the only environment nothing
+    # exercised, because CI never built or ran the Docker image with the
+    # configuration release.yml uses. That is the defect this job closes: the
+    # image is built here with NO build args, exactly as release.yml builds it,
+    # started, and then asserted against over HTTP.
+    #
+    # `smoke` above proves the containers START. This proves what they RETURN.
+    # They are different failure classes: the P0 image started perfectly.
+    #
+    # The API is deliberately NOT rebuilt here. `smoke` already builds it, runs
+    # it against a real PostGIS, and now asserts /api/health reports
+    # status:"ok" rather than merely 200 — which is the build/start/answer gate
+    # for the API artifact. Standing up a second Postgres in a second job to
+    # repeat that would double the cost of the slowest gate in CI for no new
+    # information. The API has no build-time-inlined configuration, so the
+    # class of defect this job hunts does not apply to it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: Build the web image with NO build args, exactly as release.yml does
+        # No `--build-arg` of any kind, deliberately. Passing one here would
+        # test a configuration no release ever ships and would have hidden the
+        # original bug all over again.
+        run: docker build -f apps/web/Dockerfile -t ridgeline-web:artifact .
+
+      - name: Serve the image and assert the bytes it returns
+        run: |
+          # --add-host api:127.0.0.1 is required, and it is worth knowing why:
+          # the nginx.conf baked into the image proxy_passes to the literal host
+          # `api`, and nginx resolves a literal upstream once at startup and
+          # EXITS if the name does not resolve. So the web image cannot start
+          # alone — it is only ever startable next to a container named `api`.
+          # This stub satisfies the resolve; nothing here talks to the API.
+          docker run -d --name web-artifact --add-host api:127.0.0.1 \
+            -p 8080:8080 ridgeline-web:artifact
+
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8080/index.html >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          ./deploy/verify-served-artifact.sh http://localhost:8080
+
+      - name: Assert the Kubernetes-served artifact carries the same policy
+        run: |
+          # The chart REPLACES the image's nginx.conf wholesale with a
+          # ConfigMap, so every cache rule in apps/web/nginx.conf has to be
+          # restated there or it is silently absent on Kubernetes. That is not
+          # hypothetical: the ConfigMap shipped without the index.html
+          # `no-cache` rule that the image gained in bc95b24, so the "a
+          # published release is invisible" P0 was fixed for compose and left
+          # live for every cluster install — which is the deployment path
+          # actually in use. Verifying only the image would have kept missing
+          # it, so the chart's own config is run against the same image and put
+          # through the same assertions.
+          #
+          # dnsResolver is overridden to a literal address because the chart's
+          # default is a cluster DNS *name*, which nginx cannot resolve outside
+          # a cluster. It is the only difference from what a cluster runs.
+          helm template rl ./deploy/helm/ridgeline \
+            -s templates/web-configmap.yaml \
+            --set web.dnsResolver=127.0.0.11 > /tmp/web-configmap.yaml
+
+          awk '/^  default\.conf: \|/{f=1;next}
+               f{ if ($0 !~ /^    / && $0 !~ /^$/) exit; sub(/^    /,""); print }' \
+            /tmp/web-configmap.yaml > /tmp/nginx-chart.conf
+
+          # Guard the extraction itself. If the ConfigMap's shape changes, an
+          # empty file would mount cleanly, nginx would fall back to its own
+          # default server, and this whole step would pass while testing
+          # nothing at all.
+          grep -q 'listen 8080' /tmp/nginx-chart.conf || {
+            echo "::error::could not extract default.conf from the rendered ConfigMap — this check was about to pass vacuously"
+            cat /tmp/web-configmap.yaml
+            exit 1
+          }
+
+          docker run -d --name web-k8s -p 8081:8080 \
+            -v /tmp/nginx-chart.conf:/etc/nginx/conf.d/default.conf:ro \
+            ridgeline-web:artifact
+
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8081/index.html >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          ./deploy/verify-served-artifact.sh http://localhost:8081
+
+      - name: Container state and logs on failure
+        if: failure()
+        run: |
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+          for c in web-artifact web-k8s; do
+            echo "--- $c ---"
+            docker logs "$c" 2>&1 | tail -40 || true
           done
 
   chart:

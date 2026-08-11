@@ -36,9 +36,39 @@ data:
         try_files $uri $uri/ /index.html;
       }
 
+      # index.html must revalidate on every request, and this is not optional.
+      #
+      # This block replaces the nginx.conf baked into the image, so every rule
+      # the image had must be repeated here or it is silently LOST on
+      # Kubernetes. That is not hypothetical: this ConfigMap shipped without
+      # the index.html rule that apps/web/nginx.conf gained in bc95b24, so the
+      # "a published release is invisible" P0 was fixed for compose and left
+      # live for every cluster install — the deployment path actually in use.
+      #
+      # index.html is the only unhashed file that names the hashed bundles, so
+      # it is the single point where a deploy becomes visible. With no explicit
+      # Cache-Control, nginx sends only Last-Modified/ETag and browsers fall
+      # back to heuristic freshness — typically 10% of the file's age — serving
+      # the old shell with no request at all. That shell references the previous
+      # /assets/ hashes, which are cached immutable for a year below. Net
+      # effect: a correct build, correctly published and correctly rolled out,
+      # that nobody can see. `no-cache` still allows a 304, so this costs one
+      # conditional request per load, not a re-download.
+      #
+      # deploy/verify-served-artifact.sh asserts this against a running
+      # deployment, and CI asserts it against this rendered config.
+      location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate";
+        expires 0;
+      }
+
       # The service worker must never be cached, or users get stuck on a stale
       # shell and their "offline app" is last week's build.
-      location = /sw.js {
+      #
+      # registerSW.js and the manifest belong here for the same reason: both are
+      # unhashed, both are fetched by URL, and a cached registerSW.js can keep
+      # pointing a client at a service worker generation that no longer exists.
+      location ~ ^/(sw\.js|registerSW\.js|manifest\.webmanifest)$ {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         expires 0;
       }

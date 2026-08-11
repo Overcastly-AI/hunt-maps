@@ -103,18 +103,99 @@ resolved by Vite at build time, so setting it in `.env` only does anything with
 ## Upgrading
 
 ```bash
-git pull
-docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+./upgrade.sh                 # pull, apply, wait for health, verify the artifact
+./upgrade.sh v1.2.3          # to a specific tag
+./upgrade.sh --build         # build on this host instead of pulling
 ```
 
-Migrations run automatically on API start (`prisma migrate deploy` in the
-image's command). **Back up first** — that command applies schema changes to a
-live database:
+`upgrade.sh` does the four things a hand-run upgrade forgets, in order: dumps
+the database (migrations run on API start, against live data), **pulls**,
+applies, waits for the API to report PostGIS reachable, and then verifies the
+bytes actually being served. It exits non-zero if any of that fails and prints
+the rollback command.
+
+**`docker compose up -d` does not pull.** That is the single most expensive
+thing to not know about this deployment. A published release can sit in the
+registry for weeks while the host happily keeps running the image it already
+has, and every symptom of it looks like "the new version did not fix anything"
+rather than "the new version was never fetched". By hand it is always two
+commands:
 
 ```bash
-docker compose exec -T db \
-  pg_dump -U ridgeline ridgeline | gzip > ridgeline-$(date +%F).sql.gz
+docker compose pull && docker compose up -d
 ```
+
+### Verifying an upgrade actually landed
+
+```bash
+../verify-served-artifact.sh http://localhost:8080     # or your public URL
+```
+
+This asserts against the bytes the site returns, not the source tree or the
+container state:
+
+- the served JavaScript embeds a usable DEM tile template — the P0 that made
+  every terrain layer render blank in every deployed container started fine,
+  passed every health check, and served an empty tile URL;
+- `index.html` comes back `no-cache`, without which a correct deploy is
+  invisible to anyone who has loaded the site before;
+- `/assets/` are `immutable` and `/sw.js` is `no-store`.
+
+The same script runs in CI against the freshly built image (`shipped-artifact`
+in `.github/workflows/ci.yml`), so a release that cannot render terrain is
+supposed to be stopped before it is ever published. Run it here anyway — CI
+proves the image is good, this proves _your host is serving that image_.
+
+## Unattended updates, if you want them
+
+**Off by default, and that default is deliberate.** Opt in with a profile:
+
+```bash
+docker compose --profile autoupdate up -d
+```
+
+That starts [Watchtower](https://containrrr.dev/watchtower/), which polls GHCR
+on a schedule, pulls a newer image behind the tag you are running, and recreates
+the `api` and `web` containers. No inbound access, no SSH key in GitHub, no
+secrets stored anywhere — the host makes an outbound HTTPS request on a timer,
+and that is the whole mechanism.
+
+**What you are accepting:**
+
+|                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Restarts happen without you**             | The containers are recreated. Anyone using the map loses it for a few seconds and in-flight requests fail. The PWA keeps serving from cache and queued writes are idempotent, so it is survivable — but a restart at first light on opening morning is a real cost, and nobody decided it should happen then. The default schedule is **13:00 local**, the middle of the day, for exactly this reason. Set `TZ` in `.env` or 13:00 is UTC and means nothing. |
+| **Watchtower holds the Docker socket**      | Root-equivalent on the host. It is mounted read-only, which removes the easy write paths but not the risk.                                                                                                                                                                                                                                                                                                                                                   |
+| **It only follows a moving tag**            | With `RIDGELINE_TAG` pinned to a version — which is what this README recommends — there is nothing to move to and Watchtower does nothing, forever, silently. Auto-update and pinning are mutually exclusive. Choose on purpose.                                                                                                                                                                                                                             |
+| **No canary, no rollback**                  | A bad release lands unattended. Recovery is manual: set `RIDGELINE_TAG` to the previous version and `docker compose up -d`.                                                                                                                                                                                                                                                                                                                                  |
+| **It updates images, not the compose file** | New environment variables, new services, changed ports — none of that arrives. Those still need a `git pull` and a deliberate `up -d`.                                                                                                                                                                                                                                                                                                                       |
+| **The database is never touched**           | `db` carries no Watchtower label. An unattended Postgres major-version bump would refuse to start against the existing data directory, and that is not a discovery to make from a truck.                                                                                                                                                                                                                                                                     |
+
+Set `WATCHTOWER_NOTIFICATION_URL` so an update at least tells you it happened.
+Silent updates are the worst version of this.
+
+Turn it off again:
+
+```bash
+docker compose --profile autoupdate down watchtower
+```
+
+### Why there is no GitHub Actions deploy job
+
+A workflow that SSHes into the VPS after a release would need `SSH_HOST`,
+`SSH_USER` and an `SSH_KEY` secret, plus the host reachable from GitHub's
+runners. **None of those exist in this repository**, and a workflow that
+references secrets nobody has configured does not fail — it runs, substitutes
+empty strings, and either no-ops or fails with an error that reads like a
+network problem. That failure mode is the exact one this project keeps getting
+bitten by, so the workflow is deliberately absent rather than present and inert.
+
+If you want one, the operator work is: create a deploy user on the VPS with
+permission to run docker, add its private key as the `SSH_KEY` repository
+secret along with `SSH_HOST` and `SSH_USER`, then add a job that runs
+`ssh … 'cd /srv/ridgeline/deploy/compose && ./upgrade.sh'` and **fails loudly
+when any of the three secrets is empty**. Until those secrets exist, `ssh` from
+your laptop is the same command with less machinery.
 
 ## If it does not come up
 

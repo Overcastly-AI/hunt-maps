@@ -88,8 +88,17 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VITE_DEM_TEMPLATE=${{ github.event.inputs.dem_template || '' }}
+          # Pass the build arg ONLY when a template was actually supplied.
+          #
+          # The previous form always passed `VITE_DEM_TEMPLATE=` — an empty
+          # value — which is the exact shape of the P0 that shipped every image
+          # with no elevation source and every terrain layer blank. The
+          # Dockerfile and demSource.ts both guard against it now, but a dev
+          # image should be built the same way a release image is (release.yml
+          # passes no build args at all), or the images CI verifies and the
+          # images people test are not built alike.
+          build-args: ${{ github.event.inputs.dem_template && format('VITE_DEM_TEMPLATE={0}',
+            github.event.inputs.dem_template) || '' }}
           # amd64 only. Hostinger VPS plans are x86, and adding arm64 here
           # roughly triples build time under QEMU for an architecture nothing
           # in this project currently deploys to. Add linux/arm64 when there
