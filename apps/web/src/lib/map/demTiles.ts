@@ -30,6 +30,7 @@ import {
   type TileCoord,
 } from '@hunt-maps/terrain';
 import type { TileKey } from '../offline/tileStore';
+import { DEM_SOURCE } from './demSource';
 
 /** Store namespace for elevation tiles. Rendered layers are never cached. */
 export const DEM_LAYER = 'dem';
@@ -40,16 +41,51 @@ export const DEM_TILE_SIZE = 256;
 /**
  * Deepest zoom the DEM source is requested at.
  *
- * Above this MapLibre overzooms the z15 tile rather than asking for a new one,
- * which is why "covered at z15" is covered for good — see {@link demSourceZoom}.
+ * Above this MapLibre overzooms the deepest tile rather than asking for a new
+ * one, which is why "covered at max zoom" is covered for good — see
+ * {@link demSourceZoom}.
+ *
+ * Read from the active source rather than fixed at 15, because the sources do
+ * not agree: Terrarium and 3DEP's 1/3 arc-second product are ~10 m and cap at
+ * 15, while 3DEP 1 m carries real detail to 17. Pinning 15 for all of them
+ * would throw away most of what 1 m LiDAR is *for* — the sub-metre structure
+ * of a bench lip — by never requesting a tile fine enough to contain it.
  */
-export const DEM_MAX_ZOOM = 15;
+export const DEM_MAX_ZOOM = DEM_SOURCE.maxZoom;
 
 /** Web Mercator's latitude cut-off. Beyond it `lngLatToTile` runs off the grid. */
 export const MERCATOR_MAX_LAT = 85.051129;
 
-export function demTileKey(tile: TileCoord): TileKey {
-  return { layer: DEM_LAYER, z: tile.z, x: tile.x, y: tile.y };
+/**
+ * The offline-store key for one elevation tile.
+ *
+ * ## The source has to be part of the identity
+ *
+ * `z/x/y` alone was enough while there was exactly one DEM source. There are
+ * now three, and they disagree about the ground: a z15 tile of Terrarium
+ * (~10 m, canopy included) and a z15 tile of 3DEP 1 m (bare earth) describe the
+ * same square of Kentucky with different numbers. Sharing a key between them
+ * means a region downloaded at 1 m is read back as whatever was cached first,
+ * and *nothing surfaces* — the badge is green, the tile decodes, the analysis
+ * runs, and the hillshade is of the treetops.
+ *
+ * That is exactly `R8` — "what you were told to download", "what got stored"
+ * and "what the analysis reads" drifting apart — which is the bug this whole
+ * module exists to make impossible. So the source id joins the key, and every
+ * caller (the protocol, the height loader, the coverage probe, the region
+ * downloader) gets it for free by calling this function.
+ *
+ * The default source keeps the bare `dem` namespace so that already-cached
+ * regions stay valid: a hunter who downloaded a region last week must not find
+ * it silently empty because the key format moved under them.
+ */
+export function demTileKey(tile: TileCoord, sourceId: string = DEM_SOURCE.id): TileKey {
+  return {
+    layer: sourceId === 'terrarium' ? DEM_LAYER : `${DEM_LAYER}:${sourceId}`,
+    z: tile.z,
+    x: tile.x,
+    y: tile.y,
+  };
 }
 
 /** Stable string form of a tile — set membership, change detection, adjacency. */
@@ -123,7 +159,7 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 function wrapLng(lng: number): number {
-  return (((lng + 180) % 360) + 360) % 360 - 180;
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
 }
 
 /**

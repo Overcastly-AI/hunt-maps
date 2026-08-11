@@ -9,6 +9,7 @@ import {
   type BBox,
 } from '@hunt-maps/terrain';
 import { DemService, type DemSource } from './dem.service';
+import { Dem3depService } from './dem3dep.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -68,6 +69,8 @@ const SOURCE: DemSource = {
   tileSize: TILE_SIZE,
   maxZoom: 18,
   attribution: '',
+  kind: 'tiles',
+  resolutionNote: 'synthetic fixture',
 };
 
 /** A bbox strictly inside tile (TX, TY) — no floating-point edge ambiguity. */
@@ -85,7 +88,7 @@ describe('DemService.gridForBBox — mosaic halo (R41)', () => {
   it('fills the halo with real neighbour terrain instead of leaving it NODATA', async () => {
     const HEIGHT_M = 500;
     const fetchSpy = stubFlatFetch(flatTilePng(TILE_SIZE, HEIGHT_M));
-    const dem = new DemService(fakePrisma());
+    const dem = new DemService(fakePrisma(), new Dem3depService());
 
     const { grid } = await dem.gridForBBox(singleTileBBox(), ZOOM, SOURCE, 20);
 
@@ -107,7 +110,7 @@ describe('DemService.gridForBBox — mosaic halo (R41)', () => {
 
   it('refuses (InsufficientHaloError) rather than allocate a halo deeper than one tile can supply', async () => {
     stubFlatFetch(flatTilePng(TILE_SIZE, 500));
-    const dem = new DemService(fakePrisma());
+    const dem = new DemService(fakePrisma(), new Dem3depService());
 
     let caught: unknown;
     try {
@@ -129,7 +132,7 @@ describe('DemService.gridForBBox — mosaic halo (R41)', () => {
     // straight into the halo this test is about.
     const HALO = 20;
     stubFlatFetch(flatTilePng(TILE_SIZE, 500));
-    const dem = new DemService(fakePrisma());
+    const dem = new DemService(fakePrisma(), new Dem3depService());
     const { grid } = await dem.gridForBBox(singleTileBBox(), ZOOM, SOURCE, HALO);
 
     // Wind from the north: the ray for every cell marches toward decreasing y,

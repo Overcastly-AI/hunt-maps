@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   decodePixel,
   decodeRgbaToHeights,
+  encodeHeightsToRgba,
   encodePixel,
+  isElevation,
   NODATA,
   type DemEncoding,
 } from './encoding.js';
@@ -52,6 +54,41 @@ describe('DEM encodings', () => {
     expect(heights[0]).toBeCloseTo(0, 6);
     expect(heights[1]).toBe(NODATA);
   });
+
+  for (const enc of encodings) {
+    it(`${enc} round-trips a height field through RGBA`, () => {
+      const heights = new Float32Array([-86, 0, 137.5, 1609, 4200]);
+      const back = decodeRgbaToHeights(encodeHeightsToRgba(heights, enc), enc);
+      for (let i = 0; i < heights.length; i++) {
+        expect(Math.abs(back[i] - heights[i])).toBeLessThan(enc === 'terrarium' ? 0.01 : 0.06);
+      }
+    });
+
+    /**
+     * The regression that makes this function necessary rather than obvious.
+     * Both encodings clamp at their low end, so a NODATA cell encodes to black
+     * and decodes as -10000 m (terrain-rgb) or -32768 m (terrarium): finite
+     * numbers that pass every `Number.isFinite` guard and read as terrain
+     * kilometres below the viewer — the `R30` failure, where a void becomes the
+     * most "open" ground the encoding can express and every horizon operator
+     * reports full sky over it. Alpha = 0 is what carries the void across.
+     */
+    it(`${enc} carries NODATA across as alpha 0, not as ground far below`, () => {
+      const rgba = encodeHeightsToRgba(new Float32Array([250, NODATA]), enc);
+      expect(rgba[3]).toBe(255);
+      expect(rgba[7]).toBe(0);
+      const back = decodeRgbaToHeights(rgba, enc);
+      expect(back[0]).toBeCloseTo(250, 1);
+      expect(back[1]).toBe(NODATA);
+      expect(isElevation(back[1])).toBe(false);
+    });
+
+    it(`${enc} treats NaN as no-data rather than encoding it as zero`, () => {
+      const rgba = encodeHeightsToRgba(new Float32Array([NaN]), enc);
+      expect(rgba[3]).toBe(0);
+      expect(decodeRgbaToHeights(rgba, enc)[0]).toBe(NODATA);
+    });
+  }
 });
 
 describe('tile math', () => {

@@ -9,6 +9,12 @@ import { resolve } from 'node:path';
 export default defineConfig({
   resolve: {
     alias: {
+      // More specific first: an exact-string alias for the package root would
+      // otherwise shadow the `/testing` subpath entry point.
+      '@hunt-maps/terrain/testing': resolve(
+        __dirname,
+        '../../packages/terrain/src/testing/index.ts',
+      ),
       '@hunt-maps/terrain': resolve(__dirname, '../../packages/terrain/src/index.ts'),
       '@hunt-maps/shared': resolve(__dirname, '../../packages/shared/src/index.ts'),
     },

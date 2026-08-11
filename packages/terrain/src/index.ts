@@ -22,6 +22,10 @@ export * from './dem/projection.js';
 export * from './dem/verticalDatum.js';
 export * from './dem/cog.js';
 export * from './dem/usgs3dep.js';
+// The `fetch` binding for the COG reader (the engine's only network I/O), and
+// the 1 m project discovery built on it.
+export * from './dem/rangeFetch.js';
+export * from './dem/oneMeterIndex.js';
 
 export * from './analysis/horizon.js';
 export * from './analysis/surface.js';

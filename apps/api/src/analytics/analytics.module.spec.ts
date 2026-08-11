@@ -5,6 +5,7 @@ import { binIndex, SLOPE_BANDS } from '@hunt-maps/shared';
 import type { GeoGeometry } from '@hunt-maps/shared';
 import { AnalyticsService } from './analytics.module';
 import { DemService, type DemSource } from '../terrain/dem.service';
+import { Dem3depService } from '../terrain/dem3dep.service';
 import { GeometryService } from '../prisma/geometry.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { PropertyAccessService } from '../auth/property-access.service';
@@ -45,6 +46,8 @@ const SOURCE: DemSource = {
   tileSize: TILE,
   maxZoom: 18,
   attribution: '',
+  kind: 'tiles',
+  resolutionNote: 'synthetic fixture',
 };
 
 /**
@@ -125,7 +128,7 @@ describe('AnalyticsService.terrainProfile — availability is clipped to the bou
     stubFetch(rise);
 
     const prisma = fakePrisma();
-    const dem = new DemService(prisma);
+    const dem = new DemService(prisma, new Dem3depService());
     vi.spyOn(dem, 'resolveSource').mockReturnValue(SOURCE);
 
     const geometry = new GeometryService(prisma);

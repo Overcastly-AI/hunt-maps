@@ -60,6 +60,50 @@ export function encodePixel(height: number, encoding: DemEncoding): [number, num
 }
 
 /**
+ * Encode a height field into RGBA bytes, ready to be written as a PNG tile.
+ *
+ * The inverse of {@link decodeRgbaToHeights}, and the piece that lets the API
+ * serve real 3DEP COG data through the same PNG tile pipeline the browser and
+ * the offline store already speak.
+ *
+ * ## NODATA travels as alpha = 0, and this is not cosmetic
+ *
+ * Both encodings are unsigned and clamped at their low end: `encodePixel` maps
+ * anything at or below the floor to black. So a `NODATA` cell (-32768) encodes
+ * to RGB (0,0,0), which decodes back as **-10000 m** under `terrain-rgb` and
+ * **-32768 m** under `terrarium` — a finite number that sails past every
+ * `Number.isFinite` guard and reads as ground 10 km below the viewer. That is
+ * exactly the `R30` failure class: a void silently becoming the most "open"
+ * terrain the encoding can express, so every horizon operator reports full sky
+ * and zero shelter over it.
+ *
+ * Writing alpha = 0 instead is what `decodeRgbaToHeights` already looks for on
+ * the way back in, so a void survives the round trip *as a void*. Measured
+ * cells get alpha = 255.
+ */
+export function encodeHeightsToRgba(
+  heights: Float32Array,
+  encoding: DemEncoding,
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(heights.length * 4);
+  for (let i = 0; i < heights.length; i++) {
+    const o = i * 4;
+    const h = heights[i];
+    if (!isElevation(h)) {
+      // RGB left at 0 deliberately; alpha is what carries the meaning.
+      out[o + 3] = 0;
+      continue;
+    }
+    const [r, g, b] = encodePixel(h, encoding);
+    out[o] = r;
+    out[o + 1] = g;
+    out[o + 2] = b;
+    out[o + 3] = 255;
+  }
+  return out;
+}
+
+/**
  * Decode an RGBA byte buffer (e.g. from `ImageData` or `sharp().raw()`) into a
  * Float32Array of metres.
  *
