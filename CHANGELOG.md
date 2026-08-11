@@ -1,3 +1,9 @@
+## [1.2.5](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.4...v1.2.5) (2026-08-11)
+
+### Fixes
+
+* **web:** serve the PWA manifest as application/manifest+json ([#18](https://github.com/Overcastly-AI/hunt-maps/issues/18)) ([e88202e](https://github.com/Overcastly-AI/hunt-maps/commit/e88202e8cb3b58d0aac9aa3c7a5a40265927bc35)), closes [#17](https://github.com/Overcastly-AI/hunt-maps/issues/17)
+
 ## [1.2.4](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.3...v1.2.4) (2026-08-10)
 
 ### Documentation

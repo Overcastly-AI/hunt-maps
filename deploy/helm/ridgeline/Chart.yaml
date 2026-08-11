@@ -6,8 +6,8 @@ description: >-
 type: application
 
 # Chart version moves when the packaging changes; appVersion tracks the app.
-version: 1.2.4
-appVersion: "1.2.4"
+version: 1.2.5
+appVersion: "1.2.5"
 
 keywords:
   - hunting
