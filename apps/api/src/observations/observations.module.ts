@@ -32,7 +32,7 @@ import {
   SignType,
   Species,
 } from '@prisma/client';
-import { GameSpecies, readRut, RutPhase } from '@hunt-maps/shared';
+import { readRut, RutPhase } from '@hunt-maps/shared';
 import type { GeoPoint } from '@hunt-maps/shared';
 import { AuthModule } from '../auth/auth.module';
 import { TerrainModule } from '../terrain/terrain.module';
@@ -43,6 +43,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GeometryService } from '../prisma/geometry.service';
 import { TerrainService } from '../terrain/terrain.service';
 import { DemService } from '../terrain/dem.service';
+import { SPECIES_TO_GAME_SPECIES } from '../common/species-mapping';
 
 class CreateObservationDto {
   @IsString() propertyId!: string;
@@ -82,27 +83,6 @@ const RUT_PHASE_TO_PRISMA: Record<RutPhase, PrismaRutPhase> = {
   [RutPhase.PostRut]: PrismaRutPhase.POST_RUT,
   [RutPhase.SecondRut]: PrismaRutPhase.SECOND_RUT,
   [RutPhase.LateSeason]: PrismaRutPhase.LATE_SEASON,
-};
-
-/**
- * Prisma's `Species` enum (SCREAMING_SNAKE_CASE, no runtime relation to
- * `@hunt-maps/shared`) mapped to `@hunt-maps/shared`'s `GameSpecies`, so an
- * observation's logged species can be threaded into `readRut` (R83). Every
- * member maps 1:1 — there is deliberately no fallback branch, so a species
- * added to one enum and not the other fails to compile instead of silently
- * defaulting.
- */
-const SPECIES_TO_GAME_SPECIES: Record<Species, GameSpecies> = {
-  [Species.WHITETAIL]: GameSpecies.Whitetail,
-  [Species.MULE_DEER]: GameSpecies.Mule,
-  [Species.BLACKTAIL]: GameSpecies.Blacktail,
-  [Species.ELK]: GameSpecies.Elk,
-  [Species.MOOSE]: GameSpecies.Moose,
-  [Species.PRONGHORN]: GameSpecies.Pronghorn,
-  [Species.BEAR]: GameSpecies.Bear,
-  [Species.TURKEY]: GameSpecies.Turkey,
-  [Species.HOG]: GameSpecies.Hog,
-  [Species.OTHER]: GameSpecies.Other,
 };
 
 @Injectable()

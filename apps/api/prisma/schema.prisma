@@ -94,6 +94,26 @@ model Property {
   /// Per-property rut calibration in days, learned from logged observations.
   rutOffsetDays Int?
 
+  /// The species this property's rut/behaviour modelling should target.
+  ///
+  /// `null` means "not stated" — deliberately, not "assume whitetail". Before
+  /// this field existed, `PropertiesService.list`/`get` had no way to know a
+  /// property was an elk property, so they always called `readRut()` with no
+  /// species and got the whitetail photoperiod curve back as a confident
+  /// reading — at 45.5°N that showed "OffSeason" on the day of peak bugling
+  /// and "Lockdown" five to nine weeks after the real elk rut (R83,
+  /// `docs/EVIDENCE.md` Pass 7). Defaulting this column to `WHITETAIL` on
+  /// migration would have made that bug permanent-by-default: every existing
+  /// property, elk or not, would carry an explicit, asserted "whitetail"
+  /// label nobody actually chose. `null` instead means the API withholds the
+  /// rut reading (renders nothing, per CLAUDE.md's "say when you do not
+  /// know" / "grey out layers whose inputs are unset") until an owner
+  /// states a species — including for today's existing rows, which is a
+  /// deliberate behaviour change: every property's rut section goes from "a
+  /// possibly-wrong whitetail phase" to "nothing" until stated. That is the
+  /// point, not a regression to patch over.
+  targetSpecies Species?
+
   timezone    String   @default("UTC")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

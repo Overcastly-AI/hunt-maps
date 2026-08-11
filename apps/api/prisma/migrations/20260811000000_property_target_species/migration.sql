@@ -1,0 +1,41 @@
+-- Property.targetSpecies — the field `readRut`'s species-aware refusal (R83)
+-- needed all along.
+--
+-- Before this column existed, `PropertiesService.list`/`get` had no way to
+-- know a property targeted anything other than whitetail, so they always
+-- called `readRut()` with no species and always got the whitetail
+-- photoperiod curve back as a confident reading. At 45.5°N (Montana HD 320)
+-- that showed "OffSeason — not to burn sits" on the day of peak bugling, and
+-- "Lockdown" five to nine weeks after the real elk rut finished. See
+-- `docs/EVIDENCE.md` Pass 7 for the citations (Noyes et al., Starkey, ODFW).
+--
+-- ## The default is deliberately NULL, not 'WHITETAIL'
+--
+-- Two options were on the table for existing rows:
+--
+--   1. Default to 'WHITETAIL'. Preserves today's rendered behaviour exactly
+--      (every property keeps showing the whitetail-calendar phase it shows
+--      today) — but it does so by *asserting* a target species nobody
+--      actually chose. That is precisely the assumption that caused the bug
+--      this migration exists to close: silently deciding "no species stated"
+--      means "whitetail" is how an elk property ends up rendering a
+--      whitetail rut phase as fact in the first place.
+--
+--   2. Leave it NULL — "not stated". `PropertiesService` treats a NULL
+--      `targetSpecies` as insufficient basis for a rut reading and omits
+--      `rut` from the response entirely (the same sentinel already used when
+--      `centerLat` is unset), rather than defaulting to the whitetail
+--      overload. This matches CLAUDE.md's "say when you do not know" /
+--      "grey out layers whose inputs are unset rather than rendering a
+--      default" non-negotiable.
+--
+-- Chosen: (2), NULL, no default. This is a deliberate, known behaviour
+-- change for every *existing* property: the rut section that used to render
+-- a (possibly wrong) whitetail phase now renders nothing until an owner
+-- states a species via `PATCH /properties/:id`. That includes the founder's
+-- own Montana HD 320 elk property — it will show nothing until `targetSpecies`
+-- is set to `ELK`, at which point it correctly shows the refusal
+-- (`RutUnsupported`) rather than a whitetail phase. Anyone tempted to "fix"
+-- this by adding `DEFAULT 'WHITETAIL'` in a later migration should re-read
+-- this comment first: that is reintroducing R83, not fixing a regression.
+ALTER TABLE "Property" ADD COLUMN "targetSpecies" "Species";

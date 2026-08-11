@@ -12,15 +12,16 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Injectable } from '@nestjs/common';
-import { IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { PropertyRole } from '@prisma/client';
-import { readRut, type GeoGeometry } from '@hunt-maps/shared';
+import { IsEnum, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { PropertyRole, Species } from '@prisma/client';
+import { readRut, type GeoGeometry, type RutResult } from '@hunt-maps/shared';
 import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, type AuthedUser } from '../auth/current-user.decorator';
 import { PropertyAccessService } from '../auth/property-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeometryService } from '../prisma/geometry.service';
+import { SPECIES_TO_GAME_SPECIES } from '../common/species-mapping';
 
 class CreatePropertyDto {
   @IsString() @MinLength(1) @MaxLength(120) name!: string;
@@ -28,6 +29,8 @@ class CreatePropertyDto {
   /** GeoJSON Polygon or MultiPolygon outlining the ground. */
   @IsObject() boundary!: Record<string, unknown>;
   @IsOptional() @IsString() timezone?: string;
+  /** The species this property's rut modelling should target. See `Property.targetSpecies` in schema.prisma for why this is optional and has no default. */
+  @IsOptional() @IsEnum(Species) targetSpecies?: Species;
 }
 
 class UpdatePropertyDto {
@@ -35,6 +38,35 @@ class UpdatePropertyDto {
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
   @IsOptional() @IsObject() boundary?: Record<string, unknown>;
   @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsEnum(Species) targetSpecies?: Species;
+}
+
+/**
+ * Compute the rut reading for a property, or withhold it.
+ *
+ * `centerLat === null` (no boundary yet) and `targetSpecies === null` ("not
+ * stated") are both treated as insufficient basis for a reading — the second
+ * one deliberately does *not* fall back to `readRut`'s own species-omitted
+ * default (which resolves to the whitetail overload), because that fallback
+ * exists for callers that predate species-awareness, not for a property that
+ * has been asked and has not answered. See the migration comment on
+ * `targetSpecies` (`20260811000000_property_target_species`) for the full
+ * trade-off. A stated species — including a stated `WHITETAIL` — is passed
+ * through to `readRut` for real, which is what lets a stated non-whitetail
+ * species (elk, above all — R83) reach the refusal branch (`RutUnsupported`)
+ * instead of being silently coerced into one.
+ */
+export function propertyRut(property: {
+  centerLat: number | null;
+  targetSpecies: Species | null;
+  rutOffsetDays: number | null;
+}): RutResult | null {
+  if (property.centerLat === null || property.targetSpecies === null) return null;
+  return readRut(new Date(), {
+    latitude: property.centerLat,
+    offsetDays: property.rutOffsetDays ?? undefined,
+    species: SPECIES_TO_GAME_SPECIES[property.targetSpecies],
+  });
 }
 
 class AddMemberDto {
@@ -64,6 +96,8 @@ export class PropertiesService {
         timezone: true,
         ownerId: true,
         createdAt: true,
+        targetSpecies: true,
+        rutOffsetDays: true,
         _count: { select: { waypoints: true, observations: true } },
       },
       orderBy: { name: 'asc' },
@@ -71,19 +105,15 @@ export class PropertiesService {
 
     // The rut reading is per-property because it depends on latitude and the
     // property's own calibration — a hunter with ground in Michigan and Alabama
-    // is genuinely in two different phases on the same day.
-    //
-    // No `species` is passed here because `Property` has no target-species
-    // field (R83 territory is `packages/shared/src/**` and `apps/api/src/**`;
-    // adding one is a schema change, out of scope for this pass — see the
-    // R83 handoff notes). Omitting `species` resolves to the `Whitetail`
-    // overload of `readRut`, i.e. exactly today's behaviour. An elk property
-    // will still show a whitetail-calendar phase here until that field
-    // exists; per-observation rut (`ObservationsService.create`) is already
-    // species-aware and refuses for elk.
-    return rows.map((p) => ({
+    // is genuinely in two different phases on the same day. It is also now
+    // species-aware (R83): a property with a stated non-whitetail species
+    // (elk, above all) gets `readRut`'s refusal (`RutUnsupported`) here
+    // instead of a confidently wrong whitetail phase, and a property with no
+    // stated species gets no reading at all rather than a silent whitetail
+    // assumption. See `propertyRut` above.
+    return rows.map(({ rutOffsetDays, ...p }) => ({
       ...p,
-      rut: p.centerLat !== null ? readRut(new Date(), { latitude: p.centerLat }) : null,
+      rut: propertyRut({ ...p, rutOffsetDays }),
     }));
   }
 
@@ -102,15 +132,8 @@ export class PropertiesService {
     return {
       ...property,
       boundary,
-      // See the list() comment above — no per-property species field exists
-      // yet, so this defaults to the Whitetail overload (today's behaviour).
-      rut:
-        property.centerLat !== null
-          ? readRut(new Date(), {
-              latitude: property.centerLat,
-              offsetDays: property.rutOffsetDays ?? undefined,
-            })
-          : null,
+      // See the list() comment above — species-aware via `propertyRut`.
+      rut: propertyRut(property),
     };
   }
 
@@ -130,6 +153,7 @@ export class PropertiesService {
         areaHectares: extent.areaHectares,
         centerLat: centroid.lat,
         centerLng: centroid.lng,
+        targetSpecies: dto.targetSpecies,
         memberships: { create: { userId, role: PropertyRole.OWNER } },
       },
     });
@@ -145,6 +169,13 @@ export class PropertiesService {
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.timezone !== undefined) data.timezone = dto.timezone;
+    // Explicit species-setting is how a property leaves "not stated" — see
+    // `targetSpecies` in schema.prisma. There is deliberately no way to send
+    // `targetSpecies: null` here (the DTO field is `Species | undefined`,
+    // never `null`): un-stating a species once it is set is not a use case
+    // this endpoint needs to support, so there is no path back to the
+    // withheld-reading state other than never having set it.
+    if (dto.targetSpecies !== undefined) data.targetSpecies = dto.targetSpecies;
 
     if (dto.boundary) {
       const boundary = dto.boundary as unknown as GeoGeometry;
