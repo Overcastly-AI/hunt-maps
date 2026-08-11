@@ -9,7 +9,8 @@ import {
   Sheet,
   ToggleRow,
 } from '@hunt-maps/design';
-import { LAYER_GROUPS, LAYERS, missingInputs } from '../lib/layers';
+import { LAYER_GROUPS, LAYERS, missingInputs, speciesBlockedReason } from '../lib/layers';
+import type { WireSpecies } from '../lib/api/types';
 import type { CoverageState } from '../lib/offline/coverage';
 import { describeCoverage } from '../lib/offline/coverageLabel';
 import {
@@ -44,6 +45,12 @@ export interface LayersSheetProps {
   active: Set<string>;
   opacities: Record<string, number>;
   windFromDeg: number | null;
+  /**
+   * The active property's stated `Property.targetSpecies` — `null`/omitted
+   * means "not stated", which never blocks anything (R84/R85, `lib/layers.ts`'s
+   * `speciesBlockedReason`). Threaded from `App.tsx`'s `useCurrentProperty()`.
+   */
+  targetSpecies?: WireSpecies | null;
   savedFilters: SavedFilterSummary[];
   /**
    * Offline coverage **for the view currently on screen**, recomputed as the
@@ -103,6 +110,7 @@ export function LayersSheet({
   active,
   opacities,
   windFromDeg,
+  targetSpecies = null,
   savedFilters,
   coverage,
   demCoverage = { kind: 'checking' },
@@ -114,7 +122,7 @@ export function LayersSheet({
   onEditFilter,
   canCreateFilters = true,
 }: LayersSheetProps) {
-  const warnings = missingInputs(active, windFromDeg);
+  const warnings = missingInputs(active, windFromDeg, targetSpecies);
   const offline = describeCoverage(coverage);
   // A source the hunter has tapped but not yet confirmed — switching reloads
   // the app (`lib/map/demSource.ts`'s header comment explains why: dozens of
@@ -274,9 +282,13 @@ export function LayersSheet({
               onToggle={() => onToggle(layer.id)}
               blurb={layer.blurb}
               blockedReason={
-                layer.requiresWind && windFromDeg === null
+                // Species takes priority: if the model does not exist for this
+                // animal at all, that is the reason, regardless of whether wind
+                // also happens to be unset (R84/R85).
+                speciesBlockedReason(layer, targetSpecies) ??
+                (layer.requiresWind && windFromDeg === null
                   ? 'Set a wind direction first — without one this layer would render against a default, which would be misleading rather than merely wrong.'
-                  : undefined
+                  : undefined)
               }
             >
               {layer.grade && (

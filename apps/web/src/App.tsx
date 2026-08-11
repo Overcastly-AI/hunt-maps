@@ -612,6 +612,7 @@ function MapWorkspace() {
                 active={active}
                 opacities={opacities}
                 windFromDeg={windFromDeg}
+                targetSpecies={currentProperty.property?.targetSpecies ?? null}
                 savedFilters={savedFilterRows}
                 coverage={coverage}
                 demCoverage={demCoverage}

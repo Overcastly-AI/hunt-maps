@@ -1,7 +1,30 @@
-import { RutPhase } from '@hunt-maps/shared';
+import { GameSpecies, RutPhase } from '@hunt-maps/shared';
 import type { ChipTone } from '@hunt-maps/design';
 import { ApiError, type ApiErrorKind } from '../../lib/api';
 import type { PropertyRutReading } from '../../lib/api/types';
+
+/**
+ * Lowercase, mid-sentence species names for the rut refusal ("No rut model
+ * for elk"). Deliberately its own small map rather than reusing
+ * `components/observations/meta.ts`'s `SPECIES_LABEL` — that one is keyed on
+ * `WireSpecies` (Prisma's `SCREAMING_SNAKE_CASE`, per `lib/api/types.ts`'s
+ * header comment), while `RutUnsupported.species` is `@hunt-maps/shared`'s
+ * `GameSpecies` (lowercase `snake_case`). The two enums are not the same type
+ * and mixing their casing at a lookup site is exactly the kind of silent
+ * drift that comment warns about.
+ */
+const GAME_SPECIES_LABEL: Record<GameSpecies, string> = {
+  [GameSpecies.Whitetail]: 'whitetail',
+  [GameSpecies.Mule]: 'mule deer',
+  [GameSpecies.Elk]: 'elk',
+  [GameSpecies.Moose]: 'moose',
+  [GameSpecies.Blacktail]: 'blacktail',
+  [GameSpecies.Pronghorn]: 'pronghorn',
+  [GameSpecies.Bear]: 'bear',
+  [GameSpecies.Turkey]: 'turkey',
+  [GameSpecies.Hog]: 'hog',
+  [GameSpecies.Other]: 'that species',
+};
 
 const RUT_PHASE_LABEL: Record<RutPhase, string> = {
   [RutPhase.OffSeason]: 'Off-season',
@@ -40,9 +63,51 @@ export function rutConfidenceLabel(confidence: number): { label: string; tone: C
   return { label: 'Low confidence — rut timing is more variable this far south', tone: 'warn' };
 }
 
-export function formatRut(rut: PropertyRutReading | null): { phase: string; note: string; confidence: { label: string; tone: ChipTone } } | null {
+/** A real, renderable rut phase — `RutReading` formatted for display. */
+export interface FormattedRutReading {
+  supported: true;
+  phase: string;
+  note: string;
+  confidence: { label: string; tone: ChipTone };
+}
+
+/**
+ * The refusal, formatted for display — `RutUnsupported` (R83, `docs/EVIDENCE.md`
+ * Pass 7). Carries no `phase`/`confidence` by construction, matching the wire
+ * type it is built from: there is nothing here for a careless render to fall
+ * back to.
+ */
+export interface FormattedRutUnsupported {
+  supported: false;
+  /** Short heading, safe to render directly — "No rut model for elk." */
+  headline: string;
+  /** The full, honest reason, from `RutUnsupported.reason`. */
+  reason: string;
+}
+
+export type FormattedRut = FormattedRutReading | FormattedRutUnsupported;
+
+/**
+ * Formats `PropertiesService.propertyRut()`'s result for a screen.
+ *
+ * The `supported` discriminant on the input (`RutResult`) is preserved on the
+ * output on purpose, rather than collapsed into one shape — a caller that
+ * reaches for `.phase` on the `supported: false` branch fails to compile,
+ * which is the whole point of R83's refusal: there must be no path, careless
+ * or otherwise, from "this model has no basis for this species" to a phase
+ * label appearing on screen anyway.
+ */
+export function formatRut(rut: PropertyRutReading | null): FormattedRut | null {
   if (!rut) return null;
+  if (!rut.supported) {
+    return {
+      supported: false,
+      headline: `No rut model for ${GAME_SPECIES_LABEL[rut.species] ?? rut.species}`,
+      reason: rut.reason,
+    };
+  }
   return {
+    supported: true,
     phase: rutPhaseLabel(rut.phase),
     note: rut.note,
     confidence: rutConfidenceLabel(rut.confidence),
@@ -57,14 +122,23 @@ export function formatArea(areaHectares: number | null): string {
 }
 
 /** A short, honest read of an `ApiError` for a list/detail screen — never "log in again" for a connectivity failure. */
-export function describePropertiesError(err: unknown): { tone: 'warn' | 'danger'; message: string } {
+export function describePropertiesError(err: unknown): {
+  tone: 'warn' | 'danger';
+  message: string;
+} {
   if (err instanceof ApiError) {
     const kind: ApiErrorKind = err.kind;
     if (kind === 'network') {
-      return { tone: 'warn', message: 'Could not reach the server. Showing what was last loaded, if anything.' };
+      return {
+        tone: 'warn',
+        message: 'Could not reach the server. Showing what was last loaded, if anything.',
+      };
     }
     if (kind === 'auth') {
-      return { tone: 'warn', message: 'Your session needs refreshing. Sign in again to see your properties.' };
+      return {
+        tone: 'warn',
+        message: 'Your session needs refreshing. Sign in again to see your properties.',
+      };
     }
     if (kind === 'forbidden') {
       return { tone: 'danger', message: 'You do not have access to this property.' };

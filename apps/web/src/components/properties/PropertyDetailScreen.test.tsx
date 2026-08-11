@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { RutPhase } from '@hunt-maps/shared';
+import { GameSpecies, RutPhase } from '@hunt-maps/shared';
 import { AuthProvider } from '../../lib/api';
 import { tokenStore } from '../../lib/api/tokenStore';
 import { PropertyDetailScreen } from './PropertyDetailScreen';
@@ -47,7 +47,10 @@ afterEach(() => {
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 /** Routes every request by pathname suffix — `/api/properties/p1` vs. `/api/auth/me` need different bodies in the same test. */
@@ -87,12 +90,32 @@ const BASE_PROPERTY: PropertyDetailDto = {
   ownerId: 'owner-1',
   createdAt: '2026-01-01T00:00:00Z',
   _count: { waypoints: 3, observations: 12 },
-  rut: { phase: RutPhase.Chasing, daysFromPeak: -6, confidence: 0.9, note: 'Sit all day near doe bedding.' },
-  memberships: [{ role: 'OBSERVER', user: { id: 'someone-else', displayName: 'Jess', email: 'jess@example.com' } }],
+  rut: {
+    supported: true,
+    phase: RutPhase.Chasing,
+    daysFromPeak: -6,
+    confidence: 0.9,
+    note: 'Sit all day near doe bedding.',
+  },
+  targetSpecies: null,
+  memberships: [
+    {
+      role: 'OBSERVER',
+      user: { id: 'someone-else', displayName: 'Jess', email: 'jess@example.com' },
+    },
+  ],
   terrainProfile: null,
   boundary: {
     type: 'Polygon',
-    coordinates: [[[-82.501, 39.399], [-82.499, 39.399], [-82.499, 39.401], [-82.501, 39.401], [-82.501, 39.399]]],
+    coordinates: [
+      [
+        [-82.501, 39.399],
+        [-82.499, 39.399],
+        [-82.499, 39.401],
+        [-82.501, 39.401],
+        [-82.501, 39.399],
+      ],
+    ],
   },
 };
 
@@ -112,7 +135,10 @@ describe('PropertyDetailScreen', () => {
   });
 
   it('never claims a terrain profile that does not exist — no fabricated slope/bench figures', async () => {
-    vi.stubGlobal('fetch', routedFetch({ '/properties/p1': { ...BASE_PROPERTY, terrainProfile: null } }));
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({ '/properties/p1': { ...BASE_PROPERTY, terrainProfile: null } }),
+    );
     const el = mount(withProviders(<PropertyDetailScreen />));
     await flush();
     expect(el.textContent).not.toMatch(/mean slope/i);
@@ -150,13 +176,29 @@ describe('PropertyDetailScreen', () => {
       accessToken: 'a',
       refreshToken: 'r',
       expiresAt: Date.now() + 60_000,
-      user: { id: 'someone-else', email: 'jess@example.com', displayName: 'Jess', unitSystem: 'IMPERIAL', createdAt: '2026-01-01' },
+      user: {
+        id: 'someone-else',
+        email: 'jess@example.com',
+        displayName: 'Jess',
+        unitSystem: 'IMPERIAL',
+        createdAt: '2026-01-01',
+      },
     });
-    vi.stubGlobal('fetch', routedFetch({ '/properties/p1': BASE_PROPERTY, '/auth/me': BASE_PROPERTY.memberships[0].user }));
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        '/properties/p1': BASE_PROPERTY,
+        '/auth/me': BASE_PROPERTY.memberships[0].user,
+      }),
+    );
     const el = mount(withProviders(<PropertyDetailScreen />));
     await flush();
 
-    expect(Array.from(el.querySelectorAll('a')).some((a) => /edit boundary|draw boundary/i.test(a.textContent ?? ''))).toBe(false);
+    expect(
+      Array.from(el.querySelectorAll('a')).some((a) =>
+        /edit boundary|draw boundary/i.test(a.textContent ?? ''),
+      ),
+    ).toBe(false);
     expect(el.textContent).toMatch(/Observer access/i);
     expect(el.querySelector('.rl-btn--danger')).toBeNull();
   });
@@ -166,20 +208,38 @@ describe('PropertyDetailScreen', () => {
       accessToken: 'a',
       refreshToken: 'r',
       expiresAt: Date.now() + 60_000,
-      user: { id: 'owner-1', email: 'owner@example.com', displayName: 'Owner', unitSystem: 'IMPERIAL', createdAt: '2026-01-01' },
+      user: {
+        id: 'owner-1',
+        email: 'owner@example.com',
+        displayName: 'Owner',
+        unitSystem: 'IMPERIAL',
+        createdAt: '2026-01-01',
+      },
     });
     const owned: PropertyDetailDto = {
       ...BASE_PROPERTY,
-      memberships: [{ role: 'OWNER', user: { id: 'owner-1', displayName: 'Owner', email: 'owner@example.com' } }],
+      memberships: [
+        {
+          role: 'OWNER',
+          user: { id: 'owner-1', displayName: 'Owner', email: 'owner@example.com' },
+        },
+      ],
     };
-    vi.stubGlobal('fetch', routedFetch({ '/properties/p1': owned, '/auth/me': owned.memberships[0].user }));
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({ '/properties/p1': owned, '/auth/me': owned.memberships[0].user }),
+    );
     const el = mount(withProviders(<PropertyDetailScreen />));
     await flush();
 
-    const editLink = Array.from(el.querySelectorAll('a')).find((a) => /edit boundary/i.test(a.textContent ?? ''));
+    const editLink = Array.from(el.querySelectorAll('a')).find((a) =>
+      /edit boundary/i.test(a.textContent ?? ''),
+    );
     expect(editLink?.getAttribute('href')).toBe('/properties/p1/boundary');
 
-    const deleteButton = Array.from(el.querySelectorAll('button')).find((b) => b.textContent === 'Delete this property')!;
+    const deleteButton = Array.from(el.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Delete this property',
+    )!;
     expect(deleteButton).toBeTruthy();
     // First press only arms the confirmation — it must not delete on one tap.
     act(() => deleteButton.dispatchEvent(new MouseEvent('click', { bubbles: true })));
@@ -187,11 +247,41 @@ describe('PropertyDetailScreen', () => {
     expect(el.querySelector('a[href="/properties"]')).toBeTruthy();
   });
 
+  it('renders the R83 rut refusal for a stated non-whitetail species — never a whitetail phase (docs/EVIDENCE.md Pass 7)', async () => {
+    const elkProperty: PropertyDetailDto = {
+      ...BASE_PROPERTY,
+      targetSpecies: 'ELK',
+      rut: {
+        supported: false,
+        species: GameSpecies.Elk,
+        reason:
+          'No rut model for elk — this photoperiod curve is fitted to whitetail breeding data only (docs/EVIDENCE.md Pass 7).',
+      },
+    };
+    vi.stubGlobal('fetch', routedFetch({ '/properties/p1': elkProperty }));
+    const el = mount(withProviders(<PropertyDetailScreen />));
+    await flush();
+
+    expect(el.textContent).toMatch(/No rut model for elk/i);
+    expect(el.textContent).toContain('fitted to whitetail breeding data only');
+    // The specific failure this guards: a refusal must never render any of
+    // the whitetail phase vocabulary, borrowed or otherwise.
+    for (const phase of [
+      'Off-season',
+      'Pre-rut',
+      'Seeking',
+      'Chasing',
+      'Peak breeding',
+      'Post-rut',
+      'Second rut',
+      'Late season',
+    ]) {
+      expect(el.textContent).not.toContain(phase);
+    }
+  });
+
   it('says the property was not found rather than rendering a blank screen', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(jsonResponse({ message: 'Not found.' }, 404)),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ message: 'Not found.' }, 404)));
     const el = mount(withProviders(<PropertyDetailScreen />));
     await flush();
     const alert = el.querySelector('[role="alert"]');

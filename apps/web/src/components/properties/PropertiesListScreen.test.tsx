@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { RutPhase } from '@hunt-maps/shared';
+import { GameSpecies, RutPhase } from '@hunt-maps/shared';
 import { PropertiesListScreen } from './PropertiesListScreen';
 import type { PropertySummaryDto } from '../../lib/api/types';
 
@@ -58,7 +58,10 @@ function withProviders(ui: JSX.Element) {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 const HOME_80: PropertySummaryDto = {
@@ -72,7 +75,14 @@ const HOME_80: PropertySummaryDto = {
   ownerId: 'u1',
   createdAt: '2026-01-01T00:00:00Z',
   _count: { waypoints: 3, observations: 12 },
-  rut: { phase: RutPhase.Seeking, daysFromPeak: -15, confidence: 0.9, note: 'Cover ground.' },
+  rut: {
+    supported: true,
+    phase: RutPhase.Seeking,
+    daysFromPeak: -15,
+    confidence: 0.9,
+    note: 'Cover ground.',
+  },
+  targetSpecies: null,
 };
 
 describe('PropertiesListScreen — renders from cached data, treats error as an annotation', () => {
@@ -91,6 +101,29 @@ describe('PropertiesListScreen — renders from cached data, treats error as an 
     expect(el.textContent).toMatch(/Seeking/);
   });
 
+  it('renders the R83 rut refusal chip for an elk property, never a borrowed whitetail phase', async () => {
+    const elkProperty: PropertySummaryDto = {
+      ...HOME_80,
+      id: 'p-elk',
+      name: 'Tobacco Root Ridge',
+      targetSpecies: 'ELK',
+      rut: {
+        supported: false,
+        species: GameSpecies.Elk,
+        reason: 'No rut model for elk — fitted to whitetail breeding data only.',
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([elkProperty]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const el = mount(withProviders(<PropertiesListScreen />));
+    await flush();
+
+    expect(el.textContent).toContain('Tobacco Root Ridge');
+    expect(el.textContent).toMatch(/No rut model for elk/i);
+    expect(el.textContent).not.toMatch(/Seeking|Chasing|Peak breeding/);
+  });
+
   it('shows an explained empty state, with a way to draw the first property, when there are none yet', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
@@ -99,7 +132,9 @@ describe('PropertiesListScreen — renders from cached data, treats error as an 
     await flush();
 
     expect(el.textContent).toMatch(/No ground yet/i);
-    const link = Array.from(el.querySelectorAll('a')).find((a) => /Draw your first property/i.test(a.textContent ?? ''));
+    const link = Array.from(el.querySelectorAll('a')).find((a) =>
+      /Draw your first property/i.test(a.textContent ?? ''),
+    );
     expect(link).toBeTruthy();
     expect(link?.getAttribute('href')).toBe('/properties/new');
   });
@@ -109,7 +144,9 @@ describe('PropertiesListScreen — renders from cached data, treats error as an 
     vi.stubGlobal('fetch', fetchMock);
 
     const el = mount(withProviders(<PropertiesListScreen />));
-    const link = Array.from(el.querySelectorAll('a')).find((a) => /Draw a new property/i.test(a.textContent ?? ''));
+    const link = Array.from(el.querySelectorAll('a')).find((a) =>
+      /Draw a new property/i.test(a.textContent ?? ''),
+    );
     expect(link?.getAttribute('href')).toBe('/properties/new');
   });
 

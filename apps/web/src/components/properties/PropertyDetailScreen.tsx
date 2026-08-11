@@ -1,14 +1,18 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { Button, Callout, Chip, SectionHeading } from '@hunt-maps/design';
-import { useAuth, useDeleteProperty, useProperty } from '../../lib/api';
+import { Button, Callout, Chip, Field, SectionHeading } from '@hunt-maps/design';
+import { useAuth, useDeleteProperty, useProperty, useUpdateProperty } from '../../lib/api';
 import type { GeoPolygon } from '@hunt-maps/shared';
+import type { PropertyDetailDto, WireSpecies } from '../../lib/api/types';
+import { SPECIES_LABEL } from '../observations/meta';
 import { PropertyBoundaryPreview } from './PropertyBoundaryPreview';
 import { describePropertiesError, formatArea, formatRut } from './propertyFormat';
 
 /** `PropertyDetailDto.boundary` is typed as `GeoPolygon | Record<string, unknown> | null` — see its own doc comment for the MultiPolygon gap. Only a real `Polygon` has a preview and an edit flow today. */
 function asPolygon(boundary: GeoPolygon | Record<string, unknown> | null): GeoPolygon | null {
-  return boundary && (boundary as { type?: string }).type === 'Polygon' ? (boundary as GeoPolygon) : null;
+  return boundary && (boundary as { type?: string }).type === 'Polygon'
+    ? (boundary as GeoPolygon)
+    : null;
 }
 
 /**
@@ -36,7 +40,9 @@ export function PropertyDetailScreen() {
   }
 
   if (!property) {
-    const info = error ? describePropertiesError(error) : { tone: 'danger' as const, message: 'This property could not be loaded.' };
+    const info = error
+      ? describePropertiesError(error)
+      : { tone: 'danger' as const, message: 'This property could not be loaded.' };
     return (
       <div className="property-screen">
         <PropertyDetailHeader title="Property" />
@@ -103,9 +109,13 @@ export function PropertyDetailScreen() {
           </dl>
         </section>
 
-        {property.description && <p className="property-detail__description">{property.description}</p>}
+        {property.description && (
+          <p className="property-detail__description">{property.description}</p>
+        )}
 
-        {rut && (
+        <TargetSpeciesField property={property} canEdit={canEdit} />
+
+        {rut && rut.supported && (
           <section className="rl-group">
             <SectionHeading>Rut phase</SectionHeading>
             <p className="property-detail__rut-phase">{rut.phase}</p>
@@ -114,20 +124,37 @@ export function PropertyDetailScreen() {
           </section>
         )}
 
+        {/*
+          R83's refusal, rendered rather than silently dropped (`docs/EVIDENCE.md`
+          Pass 7): a stated non-whitetail species gets an explicit "no model",
+          never a phase borrowed from whitetail photoperiod. `rut.reason` is
+          `RutUnsupported.reason` verbatim — written to be safe to surface
+          directly, per its own doc comment in `packages/shared/src/rut.ts`.
+        */}
+        {rut && !rut.supported && (
+          <section className="rl-group">
+            <SectionHeading>Rut phase</SectionHeading>
+            <Callout tone="warn" role="status">
+              <p>{rut.headline}</p>
+              <p className="rl-hint">{rut.reason}</p>
+            </Callout>
+          </section>
+        )}
+
         <section className="rl-group">
           <SectionHeading>Terrain analytics</SectionHeading>
           {property.terrainProfile ? (
             <p className="rl-hint">
               Computed from a {property.terrainProfile.cellSizeM} m DEM — mean slope{' '}
-              {property.terrainProfile.meanSlopeDeg.toFixed(1)}°, {(property.terrainProfile.benchShare * 100).toFixed(0)}%
-              bench.
+              {property.terrainProfile.meanSlopeDeg.toFixed(1)}°,{' '}
+              {(property.terrainProfile.benchShare * 100).toFixed(0)}% bench.
             </p>
           ) : (
             <Callout tone="warn" role="status">
               <p>
                 Not computed yet. This fills in once the terrain engine has processed this
-                property's boundary — every selection analytic (BACKLOG's use-vs-availability
-                rule) needs it as the denominator, so charts stay hidden rather than guess at it.
+                property's boundary — every selection analytic (BACKLOG's use-vs-availability rule)
+                needs it as the denominator, so charts stay hidden rather than guess at it.
               </p>
             </Callout>
           )}
@@ -174,7 +201,11 @@ export function PropertyDetailScreen() {
             )}
             {confirmDelete ? (
               <div className="property-detail__actions">
-                <Button variant="danger" disabled={deleteProperty.isPending} onClick={() => void handleDelete()}>
+                <Button
+                  variant="danger"
+                  disabled={deleteProperty.isPending}
+                  onClick={() => void handleDelete()}
+                >
                   Delete property for good
                 </Button>
                 <Button variant="link" onClick={() => setConfirmDelete(false)}>
@@ -190,6 +221,91 @@ export function PropertyDetailScreen() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The R83 control the rut refusal and R84/R85's layer greying both depend
+ * on — `Property.targetSpecies` was nullable and stated (`93a29ca`,
+ * `20260811000000_property_target_species`) but had no way for a hunter to
+ * actually set it, which left the field unreachable and the elk refusal with
+ * nowhere to be triggered from except a database edit. "Not stated" is kept
+ * as a real, selectable, un-nagged option here — a hunter who has not yet
+ * decided what they are chasing on a piece of ground is not making a
+ * mistake, and CLAUDE.md is explicit that a missing input gets said out
+ * loud, not treated as a validation error.
+ *
+ * Once a species is stated it cannot be reset to "Not stated" through this
+ * screen — `UpdatePropertyDto` has no path back (see the comment on
+ * `PropertiesService.update` in `apps/api/src/properties/properties.module.ts`),
+ * so the option is removed from the list entirely rather than offered and
+ * silently doing nothing.
+ */
+function TargetSpeciesField({
+  property,
+  canEdit,
+}: {
+  property: PropertyDetailDto;
+  canEdit: boolean;
+}) {
+  const updateProperty = useUpdateProperty(property.id);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const current = property.targetSpecies;
+
+  async function handleChange(value: string) {
+    if (value === '') return;
+    setSaveError(null);
+    try {
+      await updateProperty.mutateAsync({ targetSpecies: value as WireSpecies });
+    } catch (err) {
+      setSaveError(describePropertiesError(err).message);
+    }
+  }
+
+  return (
+    <section className="rl-group">
+      <SectionHeading hint="Drives the rut section below, and (once set) the bedding and corridor layers on the map">
+        Target species
+      </SectionHeading>
+      <p className="rl-hint">
+        Every biological model on this map — the rut calendar most of all — is fitted to one
+        species, not a generic "deer". Stating yours here is what lets those sections tell you
+        honestly whether they apply to your hunt, instead of quietly assuming whitetail.
+      </p>
+      {canEdit ? (
+        <>
+          <Field id="target-species" label="Species">
+            <select
+              id="target-species"
+              className="rl-input"
+              value={current ?? ''}
+              disabled={updateProperty.isPending}
+              onChange={(e) => void handleChange(e.target.value)}
+            >
+              {current === null && <option value="">Not stated</option>}
+              {Object.entries(SPECIES_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {current === null && (
+            <p className="rl-hint">
+              You can leave this unset for now — but once you pick a species here it cannot be
+              changed back to "Not stated" on this screen.
+            </p>
+          )}
+          {saveError && (
+            <Callout tone="danger" role="alert">
+              <p>{saveError}</p>
+            </Callout>
+          )}
+        </>
+      ) : (
+        <p className="rl-hint">{current ? SPECIES_LABEL[current] : 'Not stated.'}</p>
+      )}
+    </section>
   );
 }
 

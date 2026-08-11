@@ -2,6 +2,8 @@ import { useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, Callout, Field } from '@hunt-maps/design';
 import { useCreateProperty } from '../../lib/api';
+import type { WireSpecies } from '../../lib/api/types';
+import { SPECIES_LABEL } from '../observations/meta';
 import { BoundaryEditor, type BoundaryEditorSnapshot } from './BoundaryEditor';
 import { describePropertiesError } from './propertyFormat';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -53,9 +55,15 @@ export function PropertyCreateScreen() {
   const [snapshot, setSnapshot] = useState<BoundaryEditorSnapshot>(EMPTY_SNAPSHOT);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  // '' is "Not stated" — a real, un-nagged choice (R83's targetSpecies
+  // completion), not a placeholder waiting to be filled in. See
+  // `TargetSpeciesField` in `PropertyDetailScreen.tsx` for why it cannot be
+  // reached again once a species is picked here.
+  const [targetSpecies, setTargetSpecies] = useState<WireSpecies | ''>('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const nameId = useId();
   const descriptionId = useId();
+  const speciesId = useId();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -66,6 +74,7 @@ export function PropertyCreateScreen() {
         name: name.trim(),
         description: description.trim() || undefined,
         boundary: snapshot.polygon,
+        targetSpecies: targetSpecies || undefined,
       });
       navigate(`/properties/${created.id}`, { replace: true });
     } catch (err) {
@@ -130,6 +139,25 @@ export function PropertyCreateScreen() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Access notes, who else hunts it, whatever helps later"
                 />
+              </Field>
+              <Field
+                id={speciesId}
+                label="Target species (optional)"
+                hint="Every biological model here — the rut calendar most of all — is fitted to one species. Leave this as Not stated if you have not decided; you can set it later, but not back to Not stated once chosen."
+              >
+                <select
+                  id={speciesId}
+                  className="rl-input"
+                  value={targetSpecies}
+                  onChange={(e) => setTargetSpecies(e.target.value as WireSpecies | '')}
+                >
+                  <option value="">Not stated</option>
+                  {Object.entries(SPECIES_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Button
                 type="submit"

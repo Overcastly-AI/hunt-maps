@@ -42,7 +42,7 @@ import type {
   GeoLineString,
   GeoPoint,
   GeoPolygon,
-  RutPhase,
+  RutResult,
   SelectionAnalysisDto,
 } from '@hunt-maps/shared';
 
@@ -82,12 +82,24 @@ export interface LoginInput {
 // Properties — `apps/api/src/properties/properties.module.ts`
 // ---------------------------------------------------------------------------
 
-export interface PropertyRutReading {
-  phase: RutPhase;
-  daysFromPeak: number;
-  confidence: number;
-  note: string;
-}
+/**
+ * `PropertiesService.propertyRut()`'s return type (`apps/api/src/properties/
+ * properties.module.ts`) — the real `RutResult` union from `@hunt-maps/shared`,
+ * not a type invented for the wire (R83's web half).
+ *
+ * `.supported` is the discriminant, and it is deliberately load-bearing at
+ * compile time, not just at runtime: the `true` branch (`RutReading`) carries
+ * `phase`/`daysFromPeak`/`confidence`/`note` exactly as before — bit-identical
+ * for a whitetail property, per `readRut`'s own overload comment in
+ * `packages/shared/src/rut.ts`. The `false` branch (`RutUnsupported`) carries
+ * `{ species, reason }` and **has no `phase` field at all**, so a caller that
+ * forgets to check `.supported` and reaches for `.phase` fails to compile
+ * instead of rendering `undefined` or a stale whitetail phase for an elk
+ * property. See `propertyFormat.ts#formatRut` for the render-side branch this
+ * exists to force, and `docs/EVIDENCE.md` Pass 7 for why the refusal exists at
+ * all (the model is confidently backwards for elk, not merely uncalibrated).
+ */
+export type PropertyRutReading = RutResult;
 
 /** `PropertiesService.list`'s row shape. */
 export interface PropertySummaryDto {
@@ -102,6 +114,15 @@ export interface PropertySummaryDto {
   createdAt: string;
   _count: { waypoints: number; observations: number };
   rut: PropertyRutReading | null;
+  /**
+   * `Property.targetSpecies` (`apps/api/prisma/schema.prisma`) — nullable
+   * with **no default**, and `null` ("not stated") is a legitimate, common
+   * state, not a validation gap to be nagged about. This is what
+   * `propertyRut()` keys its withhold-vs-refuse-vs-answer decision on
+   * server-side, and what the web app keys the elk-invalid-layer greying on
+   * (R84/R85, `docs/EVIDENCE.md` Pass 7) — see `lib/layers.ts`.
+   */
+  targetSpecies: WireSpecies | null;
 }
 
 export type WirePropertyRole = 'OWNER' | 'MANAGER' | 'HUNTER' | 'OBSERVER';
@@ -127,6 +148,15 @@ export interface CreatePropertyInput {
   /** GeoJSON Polygon or MultiPolygon. `GeoPolygon` covers the common case; a MultiPolygon boundary is accepted server-side but not modelled in `@hunt-maps/shared` today. */
   boundary: GeoPolygon | Record<string, unknown>;
   timezone?: string;
+  /**
+   * The species this property's rut modelling (and, once R84/R85 land in the
+   * corridor UI, its bedding/corridor layers) should target. Optional with no
+   * default sent when omitted — the server leaves `targetSpecies` unset
+   * ("not stated") rather than assuming whitetail, and the create/edit UI
+   * must offer "Not stated" as a real, un-nagged choice for the same reason
+   * (`apps/api/src/properties/properties.module.ts`'s `CreatePropertyDto`).
+   */
+  targetSpecies?: WireSpecies;
 }
 
 export type UpdatePropertyInput = Partial<CreatePropertyInput>;
