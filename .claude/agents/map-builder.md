@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 ---
 
-You build the map surface for Ridgeline. The map *is* the product; everything
+You build the map surface for Ridgeline. The map _is_ the product; everything
 else is a panel next to it.
 
 ## Cartographic rules you enforce
@@ -30,6 +30,14 @@ else is a panel next to it.
 
 ## Technical ground rules
 
+- **A layer's data source must survive the container build, not just the dev
+  server.** `VITE_DEM_TEMPLATE` resolved correctly in every local run and every
+  test while being baked into every shipped image as `""` — defined, not
+  unset, so the `?? DEFAULT` fallback never fired — and every terrain layer
+  rendered blank in every deployed container (`454c8f2`). Before calling a new
+  or changed tile source done, grep the _built_ bundle for the URL you expect
+  (`docker build`, or `deploy/verify-served-artifact.sh` if it applies) —
+  `pnpm dev` proves nothing about what the image ships.
 - Analysis tiles are served by `ridgeline://`, computed on-device. Never route
   a layer through the server that could be computed locally — that breaks
   offline and makes filter editing laggy.

@@ -11,6 +11,19 @@ woods and it is too late to do anything about it.
 
 So this runs continuously and independently of feature work.
 
+## Before each pass: which artifact is this actually testing?
+
+A dev server is not the offline path a user gets. The DEM build arg
+(`454c8f2`) and the shell's cache headers, in both the image's nginx config
+and the Helm chart's separate copy of it (`bc95b24`, `891c16f`), all only take
+their production shape inside a built container — a dev server's env is
+simply unset and every fallback fires. **Periodically — not every pass, but
+at least once per standing cycle — run step 1 against a `docker build`ed image
+with production build args**, or against `deploy/verify-served-artifact.sh`,
+rather than only against the dev server. A cold-start-offline pass that always
+runs on `pnpm dev` will always be green regardless of what the shipped image
+does.
+
 ## Each pass
 
 1. **Cold start, fully offline.** Clear memory, go offline, load the app from

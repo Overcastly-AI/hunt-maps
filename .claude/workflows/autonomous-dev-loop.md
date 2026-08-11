@@ -26,8 +26,13 @@ propose nothing new, or the user says stop.
    **disjoint** items concurrently, each in its own git worktree. For each:
    implement via the owning specialist → `code-reviewer` → `field-qa`
    (**including a real offline cold-start run**) → `analytics-auditor` if the
-   change surfaces any number. Commit and tick the board **only if green**;
-   otherwise discard the worktree and leave the item on the board.
+   change surfaces any number. **If the diff touches a deploy-config surface**
+   (`apps/web/Dockerfile`, `apps/web/nginx.conf`, `vite.config.ts`'s env
+   handling, anything under `deploy/`, or a health/readiness response) —
+   `docker build` the image with the args the release pipeline actually passes
+   and run `deploy/verify-served-artifact.sh` against it before calling the
+   item green. Commit and tick the board **only if green**; otherwise discard
+   the worktree and leave the item on the board.
 
 ## Guardrails
 
@@ -36,6 +41,15 @@ propose nothing new, or the user says stop.
   tests do not catch OPFS eviction, service-worker activation races, or a
   partially-populated store.
 - **Never merge a new user-facing number without an analytics-auditor pass.**
+- **"Green" has never meant "the built image serves the right bytes," and
+  three P0s (`454c8f2`, `bc95b24`, `891c16f`) shipped and stayed live through
+  this exact loop before that changed.** `code-reviewer`, `field-qa` and
+  `analytics-auditor` are all source-tree-or-dev-server checks; none of them
+  builds `apps/web/Dockerfile` with production args or reads what a container
+  actually serves. `deploy/verify-served-artifact.sh` and CI's
+  `shipped-artifact` job now do exactly that — the loop's own definition of
+  done for a deploy-config change is incomplete without running it, not just
+  relying on CI to catch it after the fact on push.
 - Bounded batch size (N ≈ 2–4) so each run stays reviewable.
 - Read-only roles (auditors, QA) never touch app code.
 - `packages/terrain` must remain dependency-free.
@@ -47,29 +61,47 @@ export const meta = {
   name: 'autonomous-dev-loop',
   description: 'Audit → groom → build, looping on completion',
   phases: [{ title: 'Audit' }, { title: 'Groom' }, { title: 'Build' }],
-}
+};
 
-phase('Audit')
+phase('Audit');
 await parallel([
-  () => agent('Deep product audit; append docs/AUDIT-PRODUCT.md; return ready items.',
-              { agentType: 'product-auditor' }),
-  () => agent('Deep engineering audit; append docs/AUDIT-ENGINEERING.md; return ready items.',
-              { agentType: 'engineering-auditor' }),
-  () => agent('Audit every user-facing number; append docs/AUDIT-ANALYTICS.md.',
-              { agentType: 'analytics-auditor' }),
-  () => agent('Vet every biological parameter against the literature; update docs/EVIDENCE.md grades.',
-              { agentType: 'game-biologist' }),
-])
+  () =>
+    agent('Deep product audit; append docs/AUDIT-PRODUCT.md; return ready items.', {
+      agentType: 'product-auditor',
+    }),
+  () =>
+    agent('Deep engineering audit; append docs/AUDIT-ENGINEERING.md; return ready items.', {
+      agentType: 'engineering-auditor',
+    }),
+  () =>
+    agent('Audit every user-facing number; append docs/AUDIT-ANALYTICS.md.', {
+      agentType: 'analytics-auditor',
+    }),
+  () =>
+    agent(
+      'Vet every biological parameter against the literature; update docs/EVIDENCE.md grades.',
+      { agentType: 'game-biologist' },
+    ),
+]);
 
-phase('Groom')
-await agent('Reconcile against git log, dedupe, refresh the Ready queue in docs/BACKLOG.md.',
-            { agentType: 'backlog-groomer' })
+phase('Groom');
+await agent('Reconcile against git log, dedupe, refresh the Ready queue in docs/BACKLOG.md.', {
+  agentType: 'backlog-groomer',
+});
 
-phase('Build')
-const ready = /* parse top N disjoint Ready items from docs/BACKLOG.md */ []
-await parallel(ready.map((item) => () =>
-  agent(`Implement, review, field-QA offline, and commit-if-green: ${item}`,
-        { isolation: 'worktree' })
-))
+phase('Build');
+const ready = /* parse top N disjoint Ready items from docs/BACKLOG.md */ [];
+await parallel(
+  ready.map(
+    (item) => () =>
+      agent(
+        `Implement, review, field-QA offline, and commit-if-green: ${item}.
+         If the diff touches a Dockerfile, nginx config, deploy/, or a
+         health/readiness response, docker build with production args and
+         run deploy/verify-served-artifact.sh before calling it green.`,
+        { isolation: 'worktree' },
+      ),
+  ),
+);
 // on completion: integrate green branches, then launch the next batch
 ```

@@ -15,6 +15,15 @@ You own `docs/BACKLOG.md`.
 2. **Reconcile reality.** Tick anything that shipped but was never recorded.
    Advance the ROADMAP phase headers to match git history. A stale roadmap is a
    defect and fixing it is your job, not someone else's.
+   **"Shipped" means the running container does the thing, not that the
+   commit merged.** `docs/VISION.md`'s scorecard read "✅ ahead" on every
+   terrain row while every deployed image rendered blank terrain (`454c8f2`)
+   — reconciling against git log instead of the artifact is exactly the gap
+   `c68c485` had to correct by hand. When a surface has a build/deploy
+   representation (anything touching a Dockerfile, nginx config, or Helm
+   template), check the item against `deploy/verify-served-artifact.sh` or
+   the equivalent built artifact where one is available, not only against the
+   tree.
 3. Dedupe across sources — the auditors do not coordinate, so they will file
    the same thing twice from different angles. Merge, do not stack.
 4. Reprioritise and refresh the **Ready** queue: items that are specific,

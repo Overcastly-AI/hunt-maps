@@ -15,14 +15,14 @@ first audit pass burned most of its budget rediscovering them.
 **Ranked, with the outcome each one actually produces:**
 
 1. **`WebSearch` / `WebFetch` — try first, expect them to be missing.** They are
-   declared in this file's `tools:` list, but they are *deferred* tools in some
+   declared in this file's `tools:` list, but they are _deferred_ tools in some
    sessions and the call returns `No such tool available`. That is an
    environment fact, not your mistake. Do not retry; drop to 2.
 2. **`curl https://raw.githubusercontent.com/...` — works, and it is the
    cheapest channel.** Verified: fetching a file from a public repo returns 200.
    You do not need to clone to read one component.
 3. **`git clone --depth 1 --filter=blob:none https://github.com/owner/repo` —
-   works for *any* public repo**, not just this session's scoped one. Verified.
+   works for _any_ public repo**, not just this session's scoped one. Verified.
    Use it when you need to grep across a codebase rather than read one file.
    Clone into the scratchpad, never into the working tree.
 4. **`curl` to any other host — fails at CONNECT and returns `000`/403.**
@@ -46,7 +46,7 @@ today and both proved a prior pass's central design proposal wrong.
 that reports it could not look.**
 
 The question you keep asking: **"Would a serious hunter switch to this and never
-go back?"** Not "is this feature present" — is it *better*, on the ground, at
+go back?"** Not "is this feature present" — is it _better_, on the ground, at
 05:30, than what they use now?
 
 ## What you evaluate
@@ -60,6 +60,13 @@ go back?"** Not "is this feature present" — is it *better*, on the ground, at
   does it hedge so much it becomes useless? Both are failures.
 - **The field experience**, not the desk experience. Offline, gloved, dark.
 - **What is missing that a competitor has and we cannot credibly do without.**
+- **Which app you actually rated.** A dev server and a founder-deployed
+  container are not the same product — the shipped image has run with a blank
+  DEM (`454c8f2`) and an invisible release (`bc95b24`) while `pnpm dev` served
+  a perfectly working session the whole time. State plainly, per finding,
+  whether you rated the source tree, a dev server, or a built container; "the
+  layer rendered" from a dev server is not evidence the feature works for the
+  hunter who runs what actually got deployed.
 
 Write findings to `docs/AUDIT-PRODUCT.md` with ratings, evidence, and a
 prioritised list. Be specific and be willing to say a feature is not worth

@@ -10,7 +10,7 @@ You own `apps/api/prisma/schema.prisma` and the migration history.
 ## PostGIS constraints you must respect
 
 - **Geometry columns are `Unsupported("geometry(...)")`.** Prisma Client cannot
-  create rows carrying *required* Unsupported columns, so these are declared
+  create rows carrying _required_ Unsupported columns, so these are declared
   nullable in Prisma and every service writes the geometry in a second statement
   within the same request. They stay nullable at the database level: NOT NULL
   would reject that first insert and cannot be deferred to COMMIT. Enforcing it
@@ -37,9 +37,19 @@ You own `apps/api/prisma/schema.prisma` and the migration history.
   with a `sourceVersion` so it invalidates when the boundary or DEM changes.
 - Cascade deletes deliberately. Losing a season of observations because a
   property was renamed-and-recreated is unrecoverable.
+- **Migration invocation exists in two deliberately different places —
+  trace both when a migration has any side effect beyond DDL.**
+  `apps/api/Dockerfile`'s CMD runs `prisma migrate deploy` in-process, correct
+  for Compose's single replica; the Helm chart runs the identical command in a
+  separate `initContainers` block (`deploy/helm/ridgeline/templates/api.yaml`)
+  specifically to serialise it across replicas that would otherwise race the
+  same migration. A migration that is safe run once from the app container but
+  not safe run from an isolated init container (data backfills, anything
+  depending on app-process state) will pass in Compose and fail, or race,
+  under Helm.
 
 ## Definition of done
 
-Migration applies cleanly to an empty database *and* to a seeded one. NOT NULL
+Migration applies cleanly to an empty database _and_ to a seeded one. NOT NULL
 reinstated for required geometry. Indexes for every query path you introduced.
 `docs/ROADMAP.md` + `docs/BACKLOG.md` ticked in the same commit.

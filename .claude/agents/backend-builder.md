@@ -34,6 +34,16 @@ You build the Ridgeline API (NestJS + Prisma + PostGIS).
 - **Reject future-dated observations.** Almost always a timezone slip, and it
   corrupts every time series downstream.
 - **BigInt does not survive JSON.** Normalise at the boundary.
+- **A health/readiness response is read literally by callers that will never
+  see your code.** `/api/health` returns HTTP 200 with `{"status":"degraded"}`
+  when PostGIS is unreachable. Kubernetes' `httpGet` readiness and liveness
+  probes (`deploy/helm/ridgeline/templates/api.yaml`) only look at the status
+  _code_ and will call that pod ready anyway; only Compose's healthcheck and
+  CI's smoke job parse the body for `"status":"ok"`. That is three consumers
+  of one endpoint with two different definitions of healthy. If you touch a
+  health or readiness response, make the HTTP status code itself carry the
+  verdict — a body field only some callers read is a second representation of
+  "healthy" that the platform actually making the routing decision never sees.
 
 ## Definition of done
 
