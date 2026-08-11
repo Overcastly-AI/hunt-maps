@@ -58,6 +58,16 @@ export interface MapViewProps {
    * *text* verdict is never suppressed this way.
    */
   showCoverage?: boolean;
+  /**
+   * Corner for MapLibre's own scale control. Defaults to the bottom-right,
+   * clear on the mobile/legacy chrome (nothing else lives there). The desktop
+   * rail (Direction C, `App.tsx`) docks a ~208px translucent panel to the
+   * right edge, so `App.tsx` passes `'bottom-left'` there instead — the scale
+   * bar sits with the zoom/locate/offline control cluster, "left of the
+   * rail, not under it" per the founder's brief, rather than painting under
+   * chrome it can never be seen through.
+   */
+  scaleAnchor?: 'bottom-left' | 'bottom-right';
 }
 
 /**
@@ -85,6 +95,7 @@ export function MapView({
   showCoverage = false,
   onViewChange,
   regionBox = null,
+  scaleAnchor = 'bottom-right',
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -148,13 +159,26 @@ export function MapView({
       // disoriented users and screenshots nobody can interpret.
       dragRotate: false,
       pitchWithRotate: false,
+      // Attribution is added explicitly below, at the same corner as the
+      // scale control — see that block for why the default (always
+      // bottom-right) cannot be trusted on the desktop rail.
+      attributionControl: false,
     });
 
     // Zoom and locate live in our own rail, so MapLibre's default controls are
     // deliberately not added — two stacks of buttons doing the same job is how
     // a map UI starts feeling unowned. Scale and attribution stay: one is a
-    // reading aid, the other a licence requirement.
-    instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-right');
+    // reading aid, the other a licence requirement — attribution is not
+    // optional chrome (`CLAUDE.md`'s "attribution is a legal requirement, not
+    // a nicety"), so both are pinned to `scaleAnchor` rather than left at
+    // MapLibre's default `'bottom-right'`. On the desktop rail that corner is
+    // the ~220px translucent panel itself; a hunter cannot read licence text
+    // through it, and the attribution control would have been silently
+    // painted underneath the rail's own glass — present in the DOM, invisible
+    // on screen, the exact "rendered state, not DOM state" gap CLAUDE.md's
+    // fourth non-negotiable exists to close.
+    instance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), scaleAnchor);
+    instance.addControl(new maplibregl.AttributionControl({ compact: true }), scaleAnchor);
 
     instance.on('contextmenu', (e) => onPointInspect?.(e.lngLat));
     const publishView = (): void => {
@@ -200,7 +224,8 @@ export function MapView({
     const instance = map.current;
     if (!instance) return;
 
-    const apply = () => syncLayers(instance, activeLayers, opacities, windFromDeg, atUtc, filterStackId);
+    const apply = () =>
+      syncLayers(instance, activeLayers, opacities, windFromDeg, atUtc, filterStackId);
 
     // Once the style has loaded for the first time, every later dependency
     // change (a layer toggle, a wind scrub, a date change) applies straight
@@ -341,11 +366,7 @@ function syncLayers(
       );
     }
 
-    map.setPaintProperty(
-      sourceId,
-      'raster-opacity',
-      opacities[id] ?? def?.defaultOpacity ?? 0.6,
-    );
+    map.setPaintProperty(sourceId, 'raster-opacity', opacities[id] ?? def?.defaultOpacity ?? 0.6);
   }
 }
 

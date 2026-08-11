@@ -45,14 +45,16 @@ import {
 } from './helpers/terrain-pixels';
 
 /**
- * The patch of map every measurement below uses: the top-right of the canvas.
+ * The patch of map every measurement below uses: the upper-middle of the
+ * canvas.
  *
- * One rule that works on both viewports without branching. The layers panel is
- * a left drawer on desktop and a bottom sheet on mobile, so the top-right
- * quadrant is map on both, whether or not a panel is open — which keeps the
- * measurement about terrain rather than about chrome that happened to be over
- * it. The rail buttons live bottom-left and the zoom controls top-right corner,
- * so the rect stops short of the right edge too.
+ * One rule that works on every chassis without branching. Below 861px the
+ * layers panel is a bottom sheet and the desktop rail does not mount at all;
+ * above it the desktop rail (Direction C, `DesktopRail.tsx`) docks the full
+ * height of the *right* edge (`--layout-rail-width`, 240px — ~16.7% of a
+ * 1440px viewport). `0.4-0.8` of the canvas width stops well short of that
+ * (the rail's left edge sits at ~83.3%), so this patch is never sampling
+ * blurred chrome instead of terrain on any viewport this suite runs at.
  */
 async function mapPatch(page: Page): Promise<Rect> {
   const box = await page.getByTestId('map-canvas').boundingBox();
@@ -60,7 +62,7 @@ async function mapPatch(page: Page): Promise<Rect> {
   return {
     x: box.x + box.width * 0.4,
     y: box.y + box.height * 0.08,
-    width: box.width * 0.5,
+    width: box.width * 0.4,
     height: box.height * 0.37,
   };
 }
@@ -89,14 +91,19 @@ async function settledFrame(page: Page, rect: Rect): Promise<TerrainFrame> {
   return previous;
 }
 
+// The desktop rail (Direction C, `DesktopRail.tsx`) has no Layers open/close
+// toggle at all — the layer chips are permanent chrome. `.isVisible()` on a
+// selector that matches nothing resolves `false` rather than waiting/timing
+// out, which is what makes both helpers below safe no-ops there.
 async function openLayers(page: Page): Promise<void> {
   const button = page.getByRole('button', { name: 'Layers' });
+  if (!(await button.isVisible().catch(() => false))) return;
   if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
 }
 
 async function closeLayers(page: Page): Promise<void> {
   const close = page.getByRole('button', { name: 'Close panel' });
-  if (await close.isVisible()) await close.click();
+  if (await close.isVisible().catch(() => false)) await close.click();
   await page.waitForTimeout(600); // the sheet's own slide-out transition
 }
 

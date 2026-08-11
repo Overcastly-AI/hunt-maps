@@ -518,6 +518,168 @@ export function ToggleRow({
 }
 
 // ---------------------------------------------------------------------------
+// SegmentedControl — pick one of N, full width, fixed row height
+// ---------------------------------------------------------------------------
+
+export interface SegmentedOption<T extends string> {
+  value: T;
+  /** Short — this sits in a 2-4up row, not a sentence. */
+  label: string;
+  /** Reachable-on-hover explanation (`title`) — never required to be read to use the control. */
+  title?: string;
+  disabled?: boolean;
+  /** Shown as `title` instead of `title` when disabled, so a blocked option still explains itself. */
+  disabledReason?: string;
+}
+
+export interface SegmentedControlProps<T extends string> {
+  ariaLabel: string;
+  options: Array<SegmentedOption<T>>;
+  value: T;
+  onChange: (value: T) => void;
+}
+
+/**
+ * A row of mutually-exclusive choices with no wasted glass — every option is
+ * `flex: 1 1 0`, so the container's own painted box is always exactly the sum
+ * of its options (the R43 lesson `.rl-command`'s doc comment states: a
+ * fixed-width child inside a stretched container leaves dead glass a gloved
+ * tap can land on and miss).
+ *
+ * Built for the desktop rail's base-map and elevation-source pickers
+ * (`DesktopRail.tsx`), which need the same "pick one" interaction
+ * `ToggleRow`'s base-map group already gives the mobile sheet, in a fraction
+ * of the vertical space — a full `ToggleRow` per option does not fit a
+ * 200px-wide rail without scrolling.
+ */
+export function SegmentedControl<T extends string>({
+  ariaLabel,
+  options,
+  value,
+  onChange,
+}: SegmentedControlProps<T>) {
+  return (
+    <div className="rl-segmented" role="radiogroup" aria-label={ariaLabel}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="radio"
+          aria-checked={opt.value === value}
+          disabled={opt.disabled}
+          title={opt.disabled ? opt.disabledReason : opt.title}
+          className={cx('rl-segmented__opt', opt.value === value && 'rl-segmented__opt--active')}
+          onClick={() => {
+            if (opt.disabled) return;
+            onChange(opt.value);
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LayerChip — a compact toggle row for a dense list (the desktop rail)
+// ---------------------------------------------------------------------------
+
+export interface LayerChipProps {
+  id: string;
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+  swatch?: string;
+  /**
+   * One sentence on what this shows and why it matters — CLAUDE.md non-
+   * negotiable #6 ("a layer nobody understands is a layer nobody turns on")
+   * and this design system's own map-builder rule. A compact chip has no room
+   * to print it, so it is never *removed* — it becomes the row's `title`
+   * (a real hover tooltip) and an `aria-describedby` target that is
+   * `visibility: hidden` at rest and `visibility: visible` on hover/focus
+   * (`.rl-chip-row__desc`, `packages/design/src/styles.css`), which is
+   * reachable both to a mouse (hover), a keyboard (focus) and a screen reader
+   * (the description is in the accessibility tree regardless of visibility)
+   * — never simply deleted, the failure `demSourceHonesty.test.ts` and
+   * `layers.test.ts` exist to catch further upstream in the data itself.
+   */
+  blurb?: string;
+  /**
+   * When set, the chip is struck through and inert — same contract as
+   * `ToggleRow.blockedReason`, rendered instead of `blurb` in the hover
+   * description so the row always explains *why* it cannot be used right now.
+   */
+  blockedReason?: string;
+}
+
+/**
+ * `ToggleRow` compacted to a single ~44px-tall row for the desktop rail —
+ * still a real `<input type="checkbox">` behind a `<label>`, so every
+ * existing assertion pattern (`getByRole('checkbox', …)`, `toBeDisabled()`,
+ * a forced click provably doing nothing) keeps working unchanged; only the
+ * always-visible description paragraph is gone, moved to hover/focus. The
+ * checkbox's own `<label>` still meets the gloved-fingertip floor
+ * (`--space-touch`) — density here comes from removing the blurb, the
+ * opacity slider and the legend from the default view, laid out two-up in
+ * the rail's grid, never from shrinking the tap target itself.
+ */
+export function LayerChip({
+  id,
+  label,
+  checked,
+  onToggle,
+  swatch,
+  blurb,
+  blockedReason,
+}: LayerChipProps) {
+  const blocked = Boolean(blockedReason);
+  const description = blockedReason ?? blurb;
+  const describedBy = description ? `${id}-desc` : undefined;
+
+  return (
+    <div
+      className={cx(
+        'rl-chip-row',
+        checked && !blocked && 'rl-chip-row--on',
+        blocked && 'rl-chip-row--blocked',
+      )}
+    >
+      <label className="rl-chip-row__label" htmlFor={id} title={description}>
+        {/*
+         * The checkbox *is* the state dot — `appearance: none` plus a small
+         * round fill, rather than a visually-hidden input beside a decorative
+         * dot span. That matters for `ui-invariants.spec.ts`'s hit-testing
+         * invariant: a `pointer-events: none`/zero-size input hit-tests to
+         * whatever paints on top of it (its own label), which is exactly the
+         * "visible and unclickable" shape that suite exists to catch. A real,
+         * on-flow, normally-hit-testable input sidesteps that entirely, and
+         * still meets the gloved-tap floor via the label's own
+         * `min-height: var(--space-touch)` (`dom-audit.ts` already measures a
+         * checkbox by its wrapping `<label>`, not the glyph).
+         */}
+        <input
+          id={id}
+          type="checkbox"
+          className="rl-chip-row__check"
+          checked={checked}
+          disabled={blocked}
+          onChange={onToggle}
+          aria-describedby={describedBy}
+        />
+        {swatch && <span className="rl-swatch" style={{ background: swatch }} aria-hidden="true" />}
+        <span className="rl-chip-row__text">{label}</span>
+      </label>
+      {description && (
+        <span id={describedBy} className="rl-chip-row__desc">
+          {description}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Legend
 // ---------------------------------------------------------------------------
 
@@ -643,6 +805,15 @@ export interface PopoverProps {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
+  /**
+   * Which edge of the anchor the popover hangs from. `'start'` (the
+   * default) opens rightward from the anchor's left edge — right for a
+   * trigger near the left of the screen. `'end'` opens leftward from the
+   * anchor's right edge instead, for a trigger docked near the *right* edge
+   * (the desktop rail's Wind/Time rows, `DesktopRail.tsx`) where the default
+   * would run the popover off-screen.
+   */
+  align?: 'start' | 'end';
 }
 
 /**
@@ -668,7 +839,7 @@ export interface PopoverProps {
  * anchor next to the trigger, so it follows the trigger wherever the layout puts
  * it. No measuring, no reflow on resize, nothing to get stale.
  */
-export function Popover({ title, onClose, children }: PopoverProps) {
+export function Popover({ title, onClose, children, align = 'start' }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -694,7 +865,7 @@ export function Popover({ title, onClose, children }: PopoverProps) {
   return (
     <div
       ref={ref}
-      className="rl-popover rl-glass"
+      className={cx('rl-popover rl-glass', align === 'end' && 'rl-popover--align-end')}
       role="dialog"
       aria-label={typeof title === 'string' ? title : 'Editor'}
     >

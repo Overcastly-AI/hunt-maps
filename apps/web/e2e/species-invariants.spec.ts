@@ -199,6 +199,15 @@ for (const viewport of [DESKTOP, MOBILE]) {
       await bedding.click({ force: true }).catch(() => undefined);
       await expect(bedding).not.toBeChecked();
 
+      // On the desktop rail (`DesktopRail.tsx`, `LayerChip`) the blocked
+      // reason is reachable on hover/focus rather than always-visible prose
+      // — same id (`#layer-bedding-desc`), same `aria-describedby` wiring,
+      // just `visibility: hidden` at rest (`.rl-chip-row__desc`). Hover the
+      // row (not the disabled checkbox itself, which cannot take focus) to
+      // prove it is genuinely reachable, not merely present in the DOM.
+      const isDesktop = viewport.width > 860;
+      if (isDesktop) await page.locator('.rl-chip-row:has(#layer-bedding-desc)').hover();
+
       const reason = page.locator('#layer-bedding-desc');
       await expect(reason).toBeVisible();
       await expect(reason).toContainText('Millspaugh');
@@ -206,9 +215,10 @@ for (const viewport of [DESKTOP, MOBILE]) {
       // `speciesCaveat` doc comment) — the absence of a model is not the
       // same claim as `Confidence`'s "assumed" grade, and rendering both on
       // the same disabled row would blur that distinction on screen.
-      await expect(page.locator('.rl-toggle:has(#layer-bedding-desc)')).not.toContainText(
-        'Assumption',
+      const row = page.locator(
+        isDesktop ? '.rl-chip-row:has(#layer-bedding-desc)' : '.rl-toggle:has(#layer-bedding-desc)',
       );
+      await expect(row).not.toContainText('Assumption');
     });
   });
 

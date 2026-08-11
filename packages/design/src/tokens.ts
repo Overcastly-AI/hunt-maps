@@ -150,6 +150,17 @@ export const glass = {
   blur: 'blur(18px) saturate(140%)',
   border: 'rgb(255 255 255 / 0.09)',
   highlight: 'inset 0 1px 0 rgb(255 255 255 / 0.06)',
+  /**
+   * The desktop rail's own material (`DesktopRail.tsx`, Direction C) — a
+   * lighter translucency than `bg-strong` so the map genuinely reads through
+   * a surface that is up permanently rather than a panel opened for seconds
+   * at a time (cartographic rule #1, "overlay opacity defaults stay below
+   * 0.7" for *analysis* layers; chrome glass is a different budget, but the
+   * same instinct applies at a lower floor). `rgb(10 15 20 …)` is
+   * `color.ground` — not a new colour, a new opacity of an existing one.
+   */
+  'bg-rail': 'rgb(10 15 20 / 0.86)',
+  'blur-rail': 'blur(10px)',
 } as const satisfies TokenGroup;
 
 /**
@@ -325,6 +336,19 @@ export const layout = {
    * other's reserved clearance.
    */
   'tabbar-height': '45px',
+  /**
+   * The desktop rail (Direction C, the founder's pick off three chrome
+   * directions reviewed 2026-08-11, `DesktopRail.tsx`) — a thin, dense,
+   * always-visible control surface docked to the right edge of the map,
+   * replacing the 360px `sheet-width` drawer above the 860px breakpoint. The
+   * founder's own mock called it "~184px"; 220px is what it actually takes to
+   * hold two-column, 44px-tall gloved-tap chips (`LayerChip`) without
+   * truncating every label to illegibility — density here comes from
+   * removing content (blurbs, opacity sliders, legends default to hidden,
+   * see `DesktopRail`'s own doc comment), not from a narrower box than a
+   * chip's own text needs.
+   */
+  'rail-width': '240px',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */

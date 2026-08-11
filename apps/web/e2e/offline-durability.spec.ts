@@ -196,7 +196,7 @@ test.describe('offline writes survive', () => {
     const api = await mockApi(page);
     await gotoWorkspace(page);
 
-    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await page.getByRole('radio', { name: 'Sightings' }).click();
     await page.getByRole('button', { name: 'Log a blank sit' }).click();
     await page.getByRole('button', { name: 'Save blank sit' }).waitFor({ state: 'visible' });
 
@@ -249,7 +249,7 @@ test.describe('offline writes survive', () => {
     const afterReload = await readQueue(page);
     expect(afterReload?.length ?? 0, 'the queued write did not survive a reload').toBe(1);
 
-    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await page.getByRole('radio', { name: 'Sightings' }).click();
     await expect(
       page.getByText('Queued').first(),
       'a write still waiting to sync must be visible after a cold start, not just remembered in localStorage',
@@ -286,7 +286,7 @@ test.describe('offline writes survive', () => {
     const api = await mockApi(page);
     await gotoWorkspace(page);
 
-    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await page.getByRole('radio', { name: 'Sightings' }).click();
     await page.getByRole('button', { name: 'Log a blank sit' }).click();
     await page.getByRole('button', { name: 'Save blank sit' }).click();
 
@@ -326,7 +326,7 @@ test.describe('a sick server is not an invalid session', () => {
     expect(new URL(page.url()).pathname).not.toBe('/login');
 
     // And the app must still behave as signed in, not show the signed-out copy.
-    await page.getByRole('tab', { name: 'Stands' }).click();
+    await page.getByRole('radio', { name: 'Stands' }).click();
     await expect(page.getByText(/Sign in to log stands/i)).toHaveCount(0);
 
     // A gated route must still be reachable rather than bouncing to /login.
@@ -383,8 +383,13 @@ test.describe('the remembered property survives no signal', () => {
 
     // Confirmed selected while online first, so the offline case below is a
     // regression from a known-good state rather than a cold guess.
-    await page.getByRole('tab', { name: 'Sightings' }).click();
-    await expect(page.getByText(PROPERTY.name)).toBeVisible();
+    //
+    // The property name now appears twice on the desktop rail — the rail's
+    // own header badge (`.rail__property`) and the docked panel's property
+    // banner (`.rail-panel-dock .rl-property-banner`) — so the assertion is
+    // scoped to the panel, which is the surface this test is actually about.
+    await page.getByRole('radio', { name: 'Sightings' }).click();
+    await expect(page.locator('.rail-panel-dock').getByText(PROPERTY.name)).toBeVisible();
 
     api.offline.value = true;
     await page.addInitScript(() => {
@@ -392,7 +397,7 @@ test.describe('the remembered property survives no signal', () => {
     });
     await page.reload();
     await page.getByTestId('map-canvas').waitFor({ state: 'visible', timeout: 60_000 });
-    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await page.getByRole('radio', { name: 'Sightings' }).click();
 
     // Six seconds, not one: the id used to survive the first render and only
     // get wiped once the query's retries were exhausted (~4s here). A short
@@ -410,7 +415,7 @@ test.describe('the remembered property survives no signal', () => {
     // its inline <Link>, and a `getByText` regex silently matches nothing —
     // which is how a broken assertion here would pass while the false message
     // was on screen. Read what was actually painted.
-    const drawerText = await page.locator('.rl-drawer').innerText();
+    const drawerText = await page.locator('.rail-panel-dock').innerText();
     expect(
       drawerText,
       'told an offline hunter to go create a property they already have',
@@ -428,10 +433,10 @@ test.describe('the remembered property survives no signal', () => {
     await page.route('**/api/**', (route) => route.abort('internetdisconnected'));
 
     await gotoWorkspace(page);
-    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await page.getByRole('radio', { name: 'Sightings' }).click();
     await page.waitForTimeout(6_000); // outlast the query's retries
 
-    const drawerText = await page.locator('.rl-drawer').innerText();
+    const drawerText = await page.locator('.rail-panel-dock').innerText();
     expect(drawerText).not.toMatch(/needs a property first/i);
     expect(drawerText).toMatch(/could not check your properties/i);
   });
@@ -442,7 +447,7 @@ test.describe('the remembered property survives no signal', () => {
     // the one case where clearing it is correct.
     await mockApi(page, { properties: [] });
     await gotoWorkspace(page);
-    await page.getByRole('tab', { name: 'Sightings' }).click();
+    await page.getByRole('radio', { name: 'Sightings' }).click();
 
     await expect
       .poll(async () => page.evaluate((k) => localStorage.getItem(k), PROPERTY_KEY), {

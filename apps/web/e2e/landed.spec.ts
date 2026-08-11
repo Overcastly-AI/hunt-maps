@@ -32,8 +32,13 @@ async function waitForTiles(page: Page): Promise<void> {
   await page.waitForTimeout(3000);
 }
 
+// The desktop rail (Direction C, `DesktopRail.tsx`) has no Layers open/close
+// toggle — the layer chips are permanent chrome — so this is a safe no-op
+// there. `.isVisible()` on a selector matching nothing resolves `false`
+// rather than hanging.
 async function openLayers(page: Page): Promise<void> {
   const btn = page.getByRole('button', { name: 'Layers' });
+  if (!(await btn.isVisible().catch(() => false))) return;
   if ((await btn.getAttribute('aria-pressed')) !== 'true') await btn.click();
 }
 
@@ -159,7 +164,10 @@ test.describe('R21/R11/R22 — the corrected bedding layer', () => {
     await expect(bedding).toBeEnabled();
     await bedding.click();
     await waitForTiles(page);
-    await page.getByRole('button', { name: 'Close panel' }).click();
+    // "Close panel" only exists on the mobile drawer — the desktop rail is
+    // permanent chrome with nothing to dismiss before this screenshot.
+    const closeBtn = page.getByRole('button', { name: 'Close panel' });
+    if (await closeBtn.isVisible().catch(() => false)) await closeBtn.click();
     await page.waitForTimeout(700);
     await page.screenshot({ path: `${OUT}/06b-bedding-corrected-nw.png` });
   });

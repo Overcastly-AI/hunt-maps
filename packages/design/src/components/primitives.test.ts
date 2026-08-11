@@ -44,3 +44,26 @@ describe('.rl-btn--link meets the 44x44 gloved-tap floor', () => {
     expect(Number(match?.[1])).toBeGreaterThanOrEqual(44);
   });
 });
+
+/**
+ * `LayerChip` (the desktop rail's compact toggle, `DesktopRail.tsx`) —
+ * pinned the same way `.rl-btn--link` is above, for the same reason. The
+ * chip's own visual state dot is 8px; the box a real tap has to land in is
+ * `.rl-chip-row__label`'s `min-height: var(--space-touch)`. A two-column
+ * chip grid is exactly the layout that makes it tempting to shave that
+ * height back down to fit "one more row" — this fails first if that
+ * happens, before `ui-invariants.spec.ts` group 3/14 would catch it in a
+ * real browser.
+ */
+describe('.rl-chip-row__label meets the 44x44 gloved-tap floor', () => {
+  const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
+  const rule = css.match(/\.rl-chip-row__label\s*\{([^}]*)\}/);
+
+  it('the rule exists', () => {
+    expect(rule, 'expected a .rl-chip-row__label rule in styles.css').not.toBeNull();
+  });
+
+  it('sets min-height to the touch token', () => {
+    expect(rule?.[1] ?? '').toMatch(/min-height:\s*var\(--space-touch\)/);
+  });
+});
