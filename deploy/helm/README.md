@@ -7,7 +7,27 @@ the machine running the cluster.
 ## Quick start
 
 ```bash
-helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline --set ingress.enabled=true
+# 1. GHCR packages are PRIVATE by default and package visibility does not
+#    follow repository visibility. Skip this only if you have made
+#    hunt-maps-api, hunt-maps-web and the chart public. Getting it wrong shows
+#    up as ImagePullBackOff, which reads like a missing tag rather than a
+#    permissions problem — it is the most likely first failure on a fresh
+#    local cluster.
+kubectl create secret docker-registry ghcr \
+  --docker-server=ghcr.io \
+  --docker-username=<your-github-username> \
+  --docker-password=<PAT with read:packages>
+
+echo "<PAT>" | helm registry login ghcr.io -u <your-github-username> --password-stdin
+
+# 2. Install a specific chart version. Always name it — see "Upgrading".
+helm install ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
+  --version 1.1.3 \
+  --set image.pullSecrets[0].name=ghcr \
+  --set ingress.enabled=true
+
+# 3. Prove what is running and what it serves. Not optional — see "Verifying".
+deploy/verify-k8s-release.sh ridgeline default
 ```
 
 Then http://ridgeline.localtest.me — `*.localtest.me` resolves to 127.0.0.1
@@ -44,17 +64,154 @@ fall back to the chart's `appVersion`. `.github/workflows/release.yml` bumps
 a given chart revision always installs the images built from its own source.
 There is no way for the chart and the images it pulls to drift apart.
 
-Override only to pin something older, or to test a development image from
-`publish-images.yml`:
+That design has one consequence that has cost this project real time, and it is
+worth stating on its own line:
+
+> **The running image only changes when the chart version changes.**
+
+`image.tag` is empty → the tag comes from `Chart.appVersion` → `appVersion`
+changes only when a new chart version is published. Upgrade to the same chart
+version and the rendered Deployment is byte-identical, so Kubernetes computes
+the same pod-template hash and performs **no rollout at all**. Nothing is wrong,
+nothing is reported, and the cluster keeps serving the release it first
+installed. Combined with `pullPolicy: IfNotPresent` — which means the node does
+not even check the registry for a tag it already has — a cluster installed once
+can sit on an old build indefinitely while every pod reads `Running`.
+
+Released images carry `X.Y.Z`, `X.Y`, `X` and `latest`. **Pin `X.Y.Z`** — the
+moving aliases exist so a patch can be adopted deliberately, not picked up by
+surprise on a pod reschedule.
+
+### The `:latest` trap
+
+```bash
+# DOES NOT DO WHAT IT LOOKS LIKE
+helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
+  --set web.image.tag=latest
+```
+
+`image.pullPolicy` is `IfNotPresent`. A node that already has _something_
+tagged `:latest` will not re-pull, ever — the tag moving in the registry is
+invisible to it. The pod comes up green on a months-old image, and because you
+asked for `latest` you will read that green as "running the newest build". This
+is the single easiest way to recreate the bug this repository just spent a day
+on. If you want a moving tag, you must also change the pull policy:
+
+```bash
+--set web.image.tag=latest --set api.image.tag=latest --set image.pullPolicy=Always
+```
+
+Prefer pinning `X.Y.Z` and upgrading on purpose. `Always` also makes every pod
+start depend on the registry being reachable, which is a poor trade on a laptop
+cluster.
+
+## Upgrading
+
+**State the version. Every time.**
 
 ```bash
 helm upgrade ridgeline oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline \
-  --set api.image.tag=1.2.3 --set web.image.tag=1.2.3
+  --version 1.2.3 \
+  --reuse-values
+
+deploy/verify-k8s-release.sh ridgeline default        # then prove it
 ```
 
-Released images carry `X.Y.Z`, `X.Y`, `X` and `latest`. **Pin `X.Y.Z` in
-production** — the moving aliases exist so a patch can be adopted deliberately,
-not picked up by surprise on a pod reschedule.
+Omitting `--version` is not safe shorthand. What Helm does with a versionless
+OCI reference depends on your Helm build: 3.16 (tested) queries the registry's
+tag list and resolves the highest SemVer tag, while older 3.x releases require
+the version or look for a `latest` tag that this chart never publishes. Either
+way you cannot tell from the command what you got, and if the resolved chart
+matches the installed one the upgrade succeeds having changed nothing — no
+rollout, no new image, no error. `--version` makes the deploy deliberate,
+auditable and rollback-able.
+
+`--reuse-values` keeps the `--set` flags from the previous install. Without it,
+every override you supplied at install time — pull secret, ingress, CORS —
+reverts to defaults, and the first symptom is usually `ImagePullBackOff` or a
+hostname that stops routing.
+
+### Finding the newest published chart version
+
+The chart version, the app version and the git tag are all the same number:
+`.releaserc.json` has semantic-release rewrite both `version` and `appVersion`
+in `Chart.yaml` on every release. So any of these answers it:
+
+```bash
+# Authoritative — what is actually in the registry (public package):
+curl -s "https://ghcr.io/token?scope=repository:overcastly-ai/hunt-maps/ridgeline:pull&service=ghcr.io" \
+  | sed -E 's/.*"token":"([^"]+)".*/\1/' \
+  | xargs -I{} curl -s -H "Authorization: Bearer {}" \
+      https://ghcr.io/v2/overcastly-ai/hunt-maps/ridgeline/tags/list
+
+# Same number, less typing (needs the gh CLI, works for a private repo):
+gh release view --repo Overcastly-AI/hunt-maps --json tagName -q .tagName
+
+# What your Helm would resolve to, without installing anything:
+helm show chart oci://ghcr.io/overcastly-ai/hunt-maps/ridgeline | grep '^version:'
+```
+
+For a private package the registry call needs a PAT: pass
+`-u <user>:<PAT with read:packages>` to the token request.
+
+## Verifying a deploy — do not skip this
+
+A green rollout is not evidence. During the months when every terrain layer
+rendered blank, every pod was `Running`, every probe passed, and `helm list`
+said `deployed`. The failure was in the bytes being served.
+
+```bash
+deploy/verify-k8s-release.sh                 # release "ridgeline", namespace "default"
+deploy/verify-k8s-release.sh myrel hunting   # release, namespace
+```
+
+It prints two things and then asserts a third:
+
+1. **The image each Deployment asks for**, with its pull policy — and
+   separately, **the image and digest the kubelet actually started**. Those two
+   differ exactly when a pull was skipped, which is the `IfNotPresent` trap
+   above. This is the command that replaces "is the new version deployed?"
+   with a fact:
+
+   ```bash
+   kubectl -n default get deploy -l app.kubernetes.io/instance=ridgeline \
+     -o custom-columns='DEPLOYMENT:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,PULLPOLICY:.spec.template.spec.containers[0].imagePullPolicy'
+
+   kubectl -n default get pods -l app.kubernetes.io/instance=ridgeline \
+     -o custom-columns='POD:.metadata.name,IMAGE:.status.containerStatuses[*].image,DIGEST:.status.containerStatuses[*].imageID'
+   ```
+
+2. **What the web tier actually serves**, over a temporary port-forward, via
+   `deploy/verify-served-artifact.sh`:
+   - the served JavaScript embeds a usable DEM tile template. An empty
+     `VITE_DEM_TEMPLATE` compiled into the bundle produced no error, no log
+     line and no crash — just every elevation-derived layer rendering nothing.
+     This assertion is what catches it.
+   - `index.html` returns `Cache-Control: no-cache`. Without it browsers apply
+     heuristic freshness and keep serving the previous shell, which references
+     `/assets/` hashes cached `immutable` for a year — a correct deploy that
+     nobody can see.
+   - `/assets/` are `immutable`, `/sw.js` is `no-store`.
+
+Both scripts exit non-zero on failure, so they can be chained after an upgrade
+or run from a CI job against a real cluster. The same served-bytes assertions
+run in `.github/workflows/ci.yml` (`shipped-artifact`) against the image _and_
+against this chart's rendered nginx ConfigMap, so a release that cannot render
+terrain should never reach a registry — these scripts are how you prove your
+cluster is running that release.
+
+Against an ingress host, skip the port-forward:
+
+```bash
+deploy/verify-served-artifact.sh http://ridgeline.localtest.me
+```
+
+If the web image was built with a custom elevation source, tell the script:
+
+```bash
+deploy/verify-served-artifact.sh http://ridgeline.localtest.me \
+  --dem-template='https://your-host/dem/{z}/{x}/{y}.png'
+```
 
 ## If the pull fails
 
@@ -134,9 +291,12 @@ layer.
 
 **The elevation source is baked into the web bundle at build time.**
 `VITE_DEM_TEMPLATE` is read by Vite during `pnpm build` (see
-`apps/web/src/App.tsx`), not by the running container. No Helm value can
-change it, because by the time Kubernetes sees the image the URL is already
-inside the JavaScript. To point at a different source:
+`apps/web/src/lib/map/demSource.ts`), not by the running container. No Helm
+value can change it, because by the time Kubernetes sees the image the URL is
+already inside the JavaScript. That is also why it is worth verifying after a
+deploy: a wrong or empty value here is invisible to every Kubernetes-level
+check, and `deploy/verify-k8s-release.sh` is the one thing that sees it. To
+point at a different source:
 
 ```bash
 docker build -t ridgeline/web:dev \
@@ -166,6 +326,20 @@ burned into the data volume at initialisation. The Secret carries
 `helm.sh/resource-policy: keep` for the same reason — an uninstall that removes
 it while a retained PVC survives leaves a database nothing can authenticate
 against.
+
+**The web tier's nginx config is replaced wholesale.** The chart mounts its own
+`default.conf` from a ConfigMap, because the one baked into the image
+hardcodes `proxy_pass http://api:3001/api/` and the Service here is named after
+the release. The cost of that is a second copy of every rule — and a rule
+added to `apps/web/nginx.conf` and not to the ConfigMap is silently absent on
+Kubernetes. That already happened once: the `index.html` `no-cache` rule that
+fixed "a published release is invisible" for compose was never added here, so
+the fix did not exist on the deployment path actually in use. CI now runs the
+chart's rendered config against the real image and asserts the same headers
+(`shipped-artifact` in `.github/workflows/ci.yml`), so the two cannot drift
+silently again. Changing the ConfigMap also rolls the web pods on upgrade —
+the Deployment carries a `checksum/config` annotation — which is one of the
+few ways a same-version `helm upgrade` does produce a rollout.
 
 **nginx resolves the API at request time.** The upstream is assigned to a
 variable with an explicit `resolver`. nginx otherwise resolves a literal
