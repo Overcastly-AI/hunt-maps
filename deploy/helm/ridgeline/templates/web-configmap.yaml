@@ -95,6 +95,17 @@ data:
         add_header Cache-Control "public, immutable";
       }
 
+      # nginx's stock mime.types has no entry for .webmanifest, so the PWA manifest
+      # is served as application/octet-stream. Chrome still installs from it, which
+      # is why this went unnoticed, but the spec type is application/manifest+json
+      # and some user agents and link-preview crawlers do check. Declared here
+      # rather than by editing the image's mime.types, so the compose and
+      # Kubernetes paths pick it up from the same place as every other rule.
+      types {
+        application/manifest+json  webmanifest;
+      }
+
       gzip on;
-      gzip_types text/css application/javascript application/json image/svg+xml;
+      gzip_types text/css application/javascript application/json
+                  application/manifest+json image/svg+xml;
     }
