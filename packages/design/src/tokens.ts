@@ -325,6 +325,29 @@ export const layout = {
    * other's reserved clearance.
    */
   'tabbar-height': '45px',
+  /**
+   * The persistent desktop dock (`docs/design/PLAN-direction-a.md` §c,
+   * `BACKLOG R63`). Fixed, not fluid — a dock that quietly narrows as other
+   * chrome grows is the F7-class defect (`docs/AUDIT-PRODUCT.md`) the old
+   * rail died of, so this is one number every consumer reads rather than a
+   * percentage of *something else's* width. `apps/web`'s bottom-left chrome
+   * group (the command bar + conditions bar) also reserves exactly this much
+   * left margin on desktop, permanently, whether the dock is expanded or
+   * collapsed — see that CSS's own comment for why: collapsing the dock must
+   * not move the one row of chrome (wind, in particular) a hunter's thumb
+   * already knows the position of.
+   */
+  'dock-width': '300px',
+  /**
+   * The collapsed dock's width. `0`, not a slim icon rail — Direction A's own
+   * file does not specify an icon-rail collapsed state, and inventing one
+   * would need its own icon-only affordance audit (`docs/AUDIT-PRODUCT.md`
+   * F4) for a state this plan already gives an explicit re-open control to
+   * (a labelled `CommandBar` "Layers" cell, desktop-only, shown only while
+   * collapsed). A named token rather than a literal `0` in the component so
+   * a future slim-rail decision is a one-line change here, not a search.
+   */
+  'dock-collapsed-width': '0',
 } as const satisfies TokenGroup;
 
 /** Motion. Every consumer must also honour `prefers-reduced-motion`. */

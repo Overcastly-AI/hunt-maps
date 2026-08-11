@@ -69,6 +69,13 @@ export const CloseIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** A single chevron, pointing left — the desktop dock's collapse control. */
+export const ChevronLeftIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M14 5 8 12l6 7" />
+  </Icon>
+);
+
 /**
  * Contour lines — the app mark.
  *

@@ -114,10 +114,7 @@ export async function auditInteractiveElements(
 
             let effectiveRect = rect;
             const input = el as HTMLInputElement;
-            if (
-              el.tagName === 'INPUT' &&
-              (input.type === 'checkbox' || input.type === 'radio')
-            ) {
+            if (el.tagName === 'INPUT' && (input.type === 'checkbox' || input.type === 'radio')) {
               const label = el.closest('label');
               if (label) effectiveRect = label.getBoundingClientRect();
             }
@@ -142,8 +139,10 @@ export async function auditInteractiveElements(
               let ancestor = element.parentElement;
               while (ancestor && ancestor !== document.documentElement) {
                 const cs = window.getComputedStyle(ancestor);
-                const clipsX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
-                const clipsY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
+                const clipsX =
+                  cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
+                const clipsY =
+                  cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
                 if (clipsX || clipsY) {
                   const ar = ancestor.getBoundingClientRect();
                   box = {
@@ -177,10 +176,7 @@ export async function auditInteractiveElements(
               el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
               rect = el.getBoundingClientRect();
               visible = visibleRect(el);
-              if (
-                el.tagName === 'INPUT' &&
-                (input.type === 'checkbox' || input.type === 'radio')
-              ) {
+              if (el.tagName === 'INPUT' && (input.type === 'checkbox' || input.type === 'radio')) {
                 const label = el.closest('label');
                 effectiveRect = label ? label.getBoundingClientRect() : rect;
               } else {
@@ -334,8 +330,10 @@ export async function collectChromeTextNodes(
           let ancestor = el.parentElement;
           while (ancestor && ancestor !== document.documentElement) {
             const cs = window.getComputedStyle(ancestor);
-            const clipsX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
-            const clipsY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
+            const clipsX =
+              cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
+            const clipsY =
+              cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll';
             if (clipsX || clipsY) {
               const ar = ancestor.getBoundingClientRect();
               box = {
@@ -357,7 +355,9 @@ export async function collectChromeTextNodes(
           if (box.right <= box.left || box.bottom <= box.top) continue;
 
           out.push({
-            selectorHint: el.className ? `.${String(el.className).trim().split(/\s+/).join('.')}` : el.tagName,
+            selectorHint: el.className
+              ? `.${String(el.className).trim().split(/\s+/).join('.')}`
+              : el.tagName,
             text: (el.textContent ?? '').trim().slice(0, 40),
             // The *visible* box, so the sampling grid can only ever land on
             // pixels this element actually painted.
@@ -406,6 +406,15 @@ export interface ChromeRects {
   bottomLeftGroup: { x: number; y: number; width: number; height: number } | null;
   sheet: { x: number; y: number; width: number; height: number } | null;
   popover: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * The persistent desktop dock (`BACKLOG R63`). `null` on every viewport
+   * below the desktop breakpoint and whenever it has not mounted yet —
+   * `App.tsx` renders it only at `≥861px`, the mobile drawer standing in for
+   * it below that width. Present (mounted) even while collapsed, since the
+   * collapse is a width transition rather than an unmount — see `Dock`'s own
+   * doc comment (`packages/design/src/components/dock.tsx`).
+   */
+  dock: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** Bounding boxes for the named floating chrome groups, `null` when absent. */
@@ -424,6 +433,7 @@ export async function collectChromeRects(page: Page): Promise<ChromeRects> {
       bottomLeftGroup: rectOf('.chrome-bottomleft'),
       sheet: rectOf('.rl-sheet'),
       popover: rectOf('.rl-popover'),
+      dock: rectOf('.rl-dock'),
     };
   });
 }
@@ -459,7 +469,13 @@ export async function measureGlassSurplus(
   childSelector: string,
 ): Promise<GlassSurplus> {
   return page.evaluate(
-    ({ containerSelector, childSelector }: { containerSelector: string; childSelector: string }) => {
+    ({
+      containerSelector,
+      childSelector,
+    }: {
+      containerSelector: string;
+      childSelector: string;
+    }) => {
       const container = document.querySelector(containerSelector);
       if (!container) return { container: null, childUnion: null };
       const cr = container.getBoundingClientRect();

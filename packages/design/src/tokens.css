@@ -116,6 +116,8 @@
   --layout-conditions-bar-height: 56px;
   --layout-command-bar-height: 48px;
   --layout-tabbar-height: 45px;
+  --layout-dock-width: 300px;
+  --layout-dock-collapsed-width: 0;
 
   /* motion */
   --motion-fast: 120ms;

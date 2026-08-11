@@ -114,6 +114,115 @@
 }
 
 /*
+ * The desktop dock's left-margin reservation for `.chrome-bottomleft`
+ * (`BACKLOG R63`, `docs/design/PLAN-direction-a.md` §c).
+ *
+ * Permanent, not conditional on whether the dock is currently expanded or
+ * collapsed — that is the whole point. The dock replaced a togglable
+ * overlay with persistent chrome that can still collapse to reclaim width
+ * for the *map*, but `ui-invariants.spec.ts` group 2 (trigger stability)
+ * requires that collapsing or expanding it never moves the command bar or
+ * the conditions bar: a hunter's thumb already knows where "Wind from" is,
+ * and that muscle memory must survive a chrome state it never asked to
+ * change. Reserving `layout.dock-width` unconditionally, rather than
+ * reserving it only while expanded and reclaiming it when collapsed, is
+ * what makes that true by construction instead of by luck — the map
+ * underneath is what reclaims the width when the dock collapses (its own
+ * canvas already fills `.app-shell` edge to edge, exactly like it did before
+ * the dock existed), not this row of chrome.
+ *
+ * `.inspect-card` (the terrain readout) gets the identical treatment just
+ * below, for the same reason: it is real, currently-mounted chrome
+ * (`App.tsx`'s `inspect` state) that shares the bottom-left corner's
+ * horizontal origin and would otherwise render directly underneath the
+ * dock. `.rl-readout` (`TerrainReadout.tsx`) is not wired into `App.tsx` yet
+ * — kept in sync anyway so it is correct the day it is.
+ */
+@media (min-width: 861px) {
+  /*
+   * Padding on the grid *container*, not a margin on the grid item, and not
+   * a fixed first column either — both of the earlier attempts here were
+   * real, invariant-caught defects, not style preferences:
+   *
+   *  1. `margin-left` directly on `.chrome-bottomleft` failed group 6 ("no
+   *     horizontal page scroll"). `.map-chrome`'s first grid column is
+   *     `auto`, sized to its item's own intrinsic (max-content) box, and
+   *     CSS Grid's auto-sizing counts a margin as part of that box. A
+   *     ~312px margin on the item inflated the auto column by the same
+   *     amount, the `1fr` middle column cannot shrink below its own content
+   *     to compensate, and the grid's total intrinsic width exceeded the
+   *     viewport — hidden by `overflow: hidden` on `html`/`body`, but still
+   *     real and still reported by `document.documentElement.scrollWidth`,
+   *     which is exactly the gap between "hidden" and "not there" group 6
+   *     exists to catch.
+   *  2. Widening the first *column* to `calc(dock-width + space-3)` instead
+   *     (no item margin) failed group 4b's own collision proof — the click
+   *     literally could not land on "Collapse dock", intercepted by
+   *     `.chrome-bottomleft`. `justify-self: start` places an item at the
+   *     start of *its own grid cell*, and that cell's start is the grid's
+   *     own left edge (x = 0) regardless of how wide the column is — making
+   *     the column wider gives the item more unclaimed space to its right,
+   *     it does not push the item itself anywhere. `.chrome-bottomleft`
+   *     never moved off `x = 0` at all, and the dock (also `x: 0`–`300`)
+   *     sat directly underneath it the whole time.
+   *
+   * Padding on `.map-chrome` itself sidesteps both: it shrinks the grid's
+   * own *content box* from the left before any track sizing happens, so
+   * `auto` columns size against the smaller available width (no margin to
+   * inflate anything) and `justify-self: start` naturally lands at the new,
+   * shifted inner edge (no separate push needed). The grid's own outer box
+   * is still exactly the viewport (`.map-chrome` is `inset: 0`), so nothing
+   * about this changes what `.chrome-topright` (right-anchored, unaffected
+   * by a change to the *left* padding) or the dock (a separate, self-
+   * positioned sibling element, not a grid child at all) do.
+   */
+  .map-chrome {
+    padding-left: calc(var(--layout-dock-width) + var(--space-3));
+  }
+
+  .inspect-card,
+  .rl-readout {
+    left: calc(var(--layout-dock-width) + var(--space-3));
+  }
+}
+
+/*
+ * `CommandBar`'s "Layers"/"Offline" re-open row, hidden while the desktop
+ * dock is expanded (`BACKLOG R63`).
+ *
+ * On desktop there is nothing left for "Layers" to open while the dock is
+ * showing (it always is), and "Offline" has its own entry point inside the
+ * dock's Offline Coverage section — so the whole bar would be dead glass
+ * sitting on top of a persistent panel that already covers both jobs. The
+ * class is applied unconditionally from `App.tsx` state (`!dockCollapsed`);
+ * this media query is what confines its effect to the desktop breakpoint, so
+ * mobile — where `CommandBar` is the *only* way to reach the drawer at all —
+ * never loses it. `App.tsx`'s own comment on this class name explains why a
+ * CSS rule was chosen over a second `isDesktop` branch in the JSX: the class
+ * is always present in the DOM at every viewport, and only this rule decides
+ * whether it does anything.
+ */
+@media (min-width: 861px) {
+  .chrome-command-bar-wrap--dock-open {
+    /*
+     * `visibility: hidden`, not `display: none` — found by this exact
+     * invariant failing red the first time it ran (`BACKLOG R63`).
+     * `.chrome-bottomleft` is a flex row (`CommandBar` wrapper +
+     * `ConditionsBar`, `gap: var(--space-3)`); `display: none` removes the
+     * wrapper from flex layout entirely, so `ConditionsBar` — the very
+     * thing this rule exists to keep still — reflows left by the wrapper's
+     * own width plus the gap the instant the dock expands. Measured: 208px,
+     * a bigger version of the exact `.chrome-bottomleft`-translation defect
+     * `docs/index.css`'s own history already tells this story about.
+     * `visibility: hidden` removes the wrapper from the accessibility tree,
+     * the tab order and hit-testing (`elementFromPoint` skips it) while
+     * leaving its box in the flex flow, so `ConditionsBar` never moves.
+     */
+    visibility: hidden;
+  }
+}
+
+/*
  * Lift the whole chrome layer above any open sheet, so the wind and time
  * popovers — which open upward out of the conditions bar — are clickable
  * while the Layers sheet (or the region picker, which shares the same drawer
@@ -401,6 +510,67 @@
   /* `.rl-drawer` already animates in as a unit; animating the inner panel
      too on every tab switch would read as a flicker, not a transition. */
   animation: none;
+}
+
+/* --------------------------------------------------------------------------
+ * Desktop dock — the same tabbed drawer above, nested inside the persistent
+ * chassis instead of floating on its own (`BACKLOG R63`,
+ * `docs/design/PLAN-direction-a.md` §c).
+ *
+ * The conflict this reconciles: the plan was written against a desktop
+ * drawer that toggled open and closed (`Layers` button -> overlay), and
+ * predates the tabbed drawer that shipped after it (`d7d861c`, invariant
+ * group 13) — Layers/Stands/Sightings sharing one slot. Rebuilding that
+ * three-tab content as the plan's own `Base`/`Relief`/`Terrain analysis`/
+ * `Offline coverage` dock sections would mean editing `LayersSheet.tsx`,
+ * `WaypointsSheet` and `ObservationsSheet` — components this agent's file
+ * territory does not include, and a genuinely separate, larger piece of
+ * work. Instead: `.rl-drawer` (TabBar + tab panel) mounts completely
+ * unmodified inside `Dock`'s scrollable body — the *chassis* around it is
+ * new (header, an Offline Coverage section, the footer legend + collapse
+ * control, all composed in `App.tsx`/`@hunt-maps/design`), the drawer's own
+ * markup is not. This is what keeps "`.rl-drawer .rl-sheet` is always
+ * exactly 1" true with zero new code: nothing about the drawer's internals
+ * changed, so every invariant already proving that (group 13) keeps proving
+ * it, at both viewports, unmodified.
+ *
+ * The rest of this block is the same "neutralise the nested panel's own
+ * absolute positioning" trick as the rule directly above it, one level up:
+ * `.rl-drawer` is normally a self-positioned floating overlay (`.rl-drawer`'s
+ * own rule, above); inside the dock it instead fills whatever box
+ * `.rl-dock__body` (`packages/design`) gives it. Four classes of specificity
+ * (`.rl-dock .rl-drawer`, `.rl-dock .rl-tabbar`, `.rl-dock
+ * .rl-drawer__body > .rl-sheet.rl-sheet--drawer`) beat every rule they
+ * override regardless of source order or viewport, the same reasoning as
+ * the block above.
+ */
+.rl-dock .rl-drawer {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  flex: 1 1 auto;
+  /* A floor, not a fixed height — `.rl-dock__body` is the one real scrolling
+     region (`docs/design/PLAN-direction-a.md` §c gap 2); this keeps the
+     drawer from being squeezed to nothing by the Offline Coverage section
+     below it while still letting the whole stack scroll if it ever needs to. */
+  min-height: 320px;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+/* Hard edges throughout, matching the dock's own flat-plate material —
+   Direction A's radius-to-zero pass, applied to the one place the rounded
+   mobile/standalone drawer chrome would otherwise leak into the dock. */
+.rl-dock .rl-tabbar {
+  border-radius: 0;
+}
+
+.rl-dock .rl-drawer__body > .rl-sheet.rl-sheet--drawer {
+  border-radius: 0;
 }
 
 /*

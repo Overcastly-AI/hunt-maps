@@ -594,6 +594,68 @@ export function Panel({
 export type EvidenceGrade = 'measured' | 'inferred' | 'doctrine' | 'assumed';
 
 /**
+ * Every grade, worst-to-best evidence... no — **best-to-worst**, matching the
+ * order `docs/EVIDENCE.md` and the dock's own footer legend both use. Exported
+ * so a legend (`Dock`'s footer, `packages/design/src/components/dock.tsx`) can
+ * enumerate every grade without re-typing the list and risking it drift from
+ * this type.
+ */
+export const EVIDENCE_GRADES: readonly EvidenceGrade[] = [
+  'measured',
+  'inferred',
+  'doctrine',
+  'assumed',
+];
+
+/**
+ * `Confidence`'s own label/tone/glyph, at module scope so a legend can read
+ * the same source of truth the chip itself renders from — never a second,
+ * independently-typed copy that can silently drift from what the chip
+ * actually says (`docs/design/PLAN-direction-a.md` §d).
+ */
+export const EVIDENCE_LABEL: Record<EvidenceGrade, string> = {
+  measured: 'Measured',
+  inferred: 'Inferred',
+  doctrine: 'Field doctrine',
+  assumed: 'Assumption',
+};
+
+export const EVIDENCE_TONE: Record<EvidenceGrade, ChipTone> = {
+  measured: 'ok',
+  inferred: 'info',
+  doctrine: 'warn',
+  // Not `danger` — that tone renders in hunter-safety orange
+  // (`--color-blaze`), reserved for real alerts, and an "Assumed" evidence
+  // grade sharing it with "your storage is not persisting" is the exact
+  // coincidence `docs/design/PLAN-direction-a.md` §a warns becomes a real
+  // confusion the day both appear on the same screen — which they do, in
+  // `LayersSheet`.
+  assumed: 'critical',
+};
+
+export const EVIDENCE_GLYPH: Record<EvidenceGrade, string> = {
+  measured: '●',
+  inferred: '◐',
+  doctrine: '○',
+  assumed: '?',
+};
+
+/**
+ * One line of what the grade means — the dock footer's legend gloss column.
+ * Paraphrased from `docs/EVIDENCE.md`'s own four-row table (its wording is
+ * a full sentence written for that doc, not a ~24-character legend cell), so
+ * this is kept short deliberately rather than copied verbatim — but it must
+ * never say something `docs/EVIDENCE.md` itself would disagree with, so a
+ * change to the grading language belongs in that doc first.
+ */
+export const EVIDENCE_GLOSS: Record<EvidenceGrade, string> = {
+  measured: 'Direct, peer-reviewed measurement',
+  inferred: 'Derived from measured findings',
+  doctrine: 'Field practice, not measured',
+  assumed: 'A number the model needed',
+};
+
+/**
  * Marks how well-supported a displayed value is.
  *
  * A design-system primitive rather than an app component on purpose.
@@ -603,34 +665,9 @@ export type EvidenceGrade = 'measured' | 'inferred' | 'doctrine' | 'assumed';
  * grade means and `.claude/agents/game-biologist.md` for who assigns them.
  */
 export function Confidence({ grade, note }: { grade: EvidenceGrade; note?: string }) {
-  const label: Record<EvidenceGrade, string> = {
-    measured: 'Measured',
-    inferred: 'Inferred',
-    doctrine: 'Field doctrine',
-    assumed: 'Assumption',
-  };
-  const tone: Record<EvidenceGrade, ChipTone> = {
-    measured: 'ok',
-    inferred: 'info',
-    doctrine: 'warn',
-    // Not `danger` — that tone renders in hunter-safety orange
-    // (`--color-blaze`), reserved for real alerts, and an "Assumed" evidence
-    // grade sharing it with "your storage is not persisting" is the exact
-    // coincidence `docs/design/PLAN-direction-a.md` §a warns becomes a real
-    // confusion the day both appear on the same screen — which they do, in
-    // `LayersSheet`.
-    assumed: 'critical',
-  };
-  const glyph: Record<EvidenceGrade, string> = {
-    measured: '●',
-    inferred: '◐',
-    doctrine: '○',
-    assumed: '?',
-  };
-
   return (
-    <Chip tone={tone[grade]} glyph={glyph[grade]} title={note}>
-      {label[grade]}
+    <Chip tone={EVIDENCE_TONE[grade]} glyph={EVIDENCE_GLYPH[grade]} title={note}>
+      {EVIDENCE_LABEL[grade]}
     </Chip>
   );
 }
