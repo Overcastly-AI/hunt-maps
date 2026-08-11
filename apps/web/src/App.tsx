@@ -40,6 +40,7 @@ import { useViewportCoverage } from './lib/offline/useViewportCoverage';
 import { useOfflineRegions } from './lib/offline/useOfflineRegions';
 import { DEM_TEMPLATE } from './lib/map/demSource';
 import { demSourceZoom, demTileKey, demTilesForBounds } from './lib/map/demTiles';
+import { useDemSourceCoverage } from './lib/map/demSourceCoverage';
 import { exposeDevHook } from './lib/devHook';
 import { useAuth, useSavedFilters, type SavedFilterDto, type WaypointDto } from './lib/api';
 import { useCurrentProperty } from './lib/currentProperty';
@@ -187,6 +188,14 @@ function MapWorkspace() {
    * is the one a hunter believes at the trailhead at 04:30.
    */
   const { coverage, refresh: refreshCoverage } = useViewportCoverage(map);
+
+  /**
+   * Does 1 m LiDAR actually exist under the ground on screen right now? A
+   * different question from `coverage` above (device storage) — this is
+   * upstream USGS survey coverage, needed so the DEM source picker in
+   * `LayersSheet` can say "no 1 m data here" instead of assuming.
+   */
+  const demCoverage = useDemSourceCoverage(map);
 
   /**
    * Saved offline regions, and the download running right now.
@@ -588,7 +597,9 @@ function MapWorkspace() {
                       without it this reads "Property — unknown" over ground
                       they chose by name themselves. */}
                   Property —{' '}
-                  <strong>{currentProperty.property?.name ?? currentProperty.rememberedName ?? 'unknown'}</strong>
+                  <strong>
+                    {currentProperty.property?.name ?? currentProperty.rememberedName ?? 'unknown'}
+                  </strong>
                 </span>
                 <Button variant="link" onClick={currentProperty.clear}>
                   Change
@@ -603,6 +614,7 @@ function MapWorkspace() {
                 windFromDeg={windFromDeg}
                 savedFilters={savedFilterRows}
                 coverage={coverage}
+                demCoverage={demCoverage}
                 onToggle={handleToggle}
                 onOpacity={handleOpacity}
                 onToggleFilter={handleToggleFilter}

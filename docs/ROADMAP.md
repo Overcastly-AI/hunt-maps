@@ -147,6 +147,28 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **1 m LiDAR is tap-reachable — an elevation source picker, not a rebuild.**
+      `R79`'s second half. `LayersSheet` gains an Elevation source section with
+      three rows sourced from the `DEM_SOURCES` registry, so the copy cannot
+      drift from the honesty guards. Coverage is **answered, not assumed** — a
+      hook calls `GET /terrain/dem/coverage` for the map centre with the same
+      staleness discipline as `useViewportCoverage`, and the 1 m row reads
+      "No 1 m data here" **only on a definite negative**; "checking" and "server
+      unreachable" never masquerade as absence. Switching persists a runtime
+      override and reloads, so all ~10 files reading `DEM_SOURCE` as a plain
+      constant agree by construction rather than by discipline, and the picker
+      warns _before_ the switch that offline regions do not carry over.
+      **A real overclaim was caught on the way in:** `VITE_DEM_TEMPLATE` won over
+      `DEM_SOURCE` unconditionally, so a hunter tapping "1 m LiDAR" on a
+      self-hosted deployment with a Terrarium mirror configured would have kept
+      fetching Terrarium under a LiDAR label — `a02793d`'s overclaim through a
+      second door. The template override now applies only while `terrarium` is
+      active, pinned by a regression test verified failing against the old
+      logic. The `multiHillshade` blurb no longer denies LiDAR service once a
+      LiDAR source is active; its guard was previously green only by vacuity.
+      Web tests 343 → 362, and the picker was verified **in the built Docker
+      image**, not the source tree.
+
 - [x] **The layers actually render — every deployed image had no DEM at all.**
       The founder's report was "none of the layers are working", and it was
       exactly true. `ARG VITE_DEM_TEMPLATE=""` left the variable defined and
@@ -237,10 +259,10 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       all rather than show a number it cannot stand behind.
 
       Property routes are wired; the stands, observations and filter panels are
-                  built and tested but **not yet reachable** — the `CommandBar` documents
-                  that a fourth and fifth cell is the wrong answer and they belong as tabs
-                  in the single drawer slot, which is a design decision rather than
-                  plumbing. Tracked, not forgotten.
+                      built and tested but **not yet reachable** — the `CommandBar` documents
+                      that a fourth and fifth cell is the wrong answer and they belong as tabs
+                      in the single drawer slot, which is a design decision rather than
+                      plumbing. Tracked, not forgotten.
 
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
@@ -261,12 +283,12 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
 
       Three defects found by rendered-state harnesses that every DOM query
-                  passed: a voided cell rendering **`-107507 ft`** because
-                  `Number.isFinite(-32768)` is `true` — the same finite-sentinel
-                  misconception as `R49`, now confirmed in all three packages; a
-                  drag/click race where the browser's synthetic `click` after `pointerup`
-                  made a dismiss-drag also fire a tap-toggle; and a register-screen link
-                  measuring 35×44 px against the 44 px gloved-use floor.
+                      passed: a voided cell rendering **`-107507 ft`** because
+                      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                      misconception as `R49`, now confirmed in all three packages; a
+                      drag/click race where the browser's synthetic `click` after `pointerup`
+                      made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                      measuring 35×44 px against the 44 px gloved-use floor.
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
@@ -380,19 +402,19 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-                              hit-testability against the viewport alone, so a row scrolled just past
-                              the *sheet's* clipped edge was hit-tested at its unpainted position and
-                              reported as visible-but-unclickable — a false failure indistinguishable
-                              from the real clipping bug the suite is named after; it now intersects
-                              against every clipping ancestor and hit-tests the centre of the visible
-                              region. Ground truth was measured before accepting the greener result:
-                              `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-                              and no painted control fails a hit test. Then (`7ff42cee`) two more
-                              guards on the helper itself: a synthetic fixture pinning both branches
-                              of the clipped-ancestor fix so neither can regress silently, and a check
-                              that the collision matrix's "no collision" result means a selector
-                              matched and did not overlap, not that a renamed selector stopped
-                              matching anything.
+                                  hit-testability against the viewport alone, so a row scrolled just past
+                                  the *sheet's* clipped edge was hit-tested at its unpainted position and
+                                  reported as visible-but-unclickable — a false failure indistinguishable
+                                  from the real clipping bug the suite is named after; it now intersects
+                                  against every clipping ancestor and hit-tests the centre of the visible
+                                  region. Ground truth was measured before accepting the greener result:
+                                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                                  and no painted control fails a hit test. Then (`7ff42cee`) two more
+                                  guards on the helper itself: a synthetic fixture pinning both branches
+                                  of the clipped-ancestor fix so neither can regress silently, and a check
+                                  that the collision matrix's "no collision" result means a selector
+                                  matched and did not overlap, not that a renamed selector stopped
+                                  matching anything.
 
 - [x] Deploy the `Confidence` primitive into the app (`BACKLOG R10`) — now used
       in **15** places across `apps/web`, including `TerrainReadout.tsx` and

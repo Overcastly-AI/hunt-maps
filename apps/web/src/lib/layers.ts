@@ -76,9 +76,20 @@ export const LAYERS: LayerDefinition[] = [
     group: 'relief',
     blurb:
       `Multi-directional shading over ${DEM_SOURCE.label} (${DEM_SOURCE.resolutionNote}). Lit ` +
-      'from several directions at once so a ridge never reads as a draw. Shows broad shape — ' +
-      'drainages, benches wide enough to matter, ridge lines — not old logging grades or skid ' +
-      'roads, which need finer LiDAR data this map does not yet serve.',
+      'from several directions at once so a ridge never reads as a draw. ' +
+      // Whether this map can show old logging grades and skid roads is a fact
+      // about the *active* elevation source, not a fixed claim — the source
+      // is now something a hunter can switch in the Layers sheet
+      // (`lib/map/demSource.ts`'s `DEM_SOURCE`), and `demSourceHonesty.test.ts`
+      // fails CI the moment this stops matching `DEM_SOURCE.isLidar`. Keep the
+      // two branches negated/affirmed rather than editing the prose in place —
+      // that guard checks for a negation word precisely because a rewrite
+      // that drops one is how the original mislabel shipped.
+      (DEM_SOURCE.isLidar
+        ? 'Fine enough at this source to also pick out old logging grades and skid roads — the ' +
+          'kind of micro-terrain a 10 m blend cannot resolve.'
+        : 'Shows broad shape — drainages, benches wide enough to matter, ridge lines — not old ' +
+          'logging grades or skid roads, which need finer LiDAR data this map does not yet serve.'),
     defaultOpacity: 0.55,
   },
   {

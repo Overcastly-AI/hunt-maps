@@ -445,6 +445,14 @@
   gap: var(--space-2);
 }
 
+/* Confirm/cancel row under the "switch elevation source?" callout in the
+   Layers sheet — same shape as `.wp-detail__confirm-row`. */
+.rl-source-confirm {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
 /*
  * Offline-coverage chip slot in the Layers sheet header.
  *

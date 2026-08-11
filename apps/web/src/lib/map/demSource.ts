@@ -140,34 +140,105 @@ export const DEM_SOURCES: Record<string, DemSourceDescriptor> = {
 };
 
 /**
- * Which source this build uses, from `VITE_DEM_SOURCE` at **build** time.
+ * The one place a hunter's own choice of DEM source is remembered.
  *
- * Defaults to `terrarium` — deliberately not to 3DEP. The 3DEP sources need
- * this project's own API reachable at `/api`, so defaulting to them would make
- * a static, API-less deployment render nothing, which is precisely the class of
- * silent-blank-map failure `DEFAULT_DEM_TEMPLATE`'s comment above documents.
+ * `VITE_DEM_SOURCE` only ever chose a default for the whole deployment, baked
+ * in at build time — the exact gap this ticket exists to close: "real LiDAR is
+ * reachable by rebuilding an image, which is not a feature." A hunter with a
+ * property under 1 m coverage has to be able to *tap* into it.
  *
- * An unrecognised value falls back to `terrarium` rather than throwing: a typo
- * in a deploy variable should degrade to a working map, and it is visible
+ * `DEM_SOURCE`, `DEM_TEMPLATE`, `DEM_MAX_ZOOM` (`demTiles.ts`) and every
+ * offline-store key built from `demTileKey`'s default parameter are all
+ * derived from this module at import time, and dozens of files read them as
+ * plain constants rather than plumbing a source id through every call site.
+ * Re-deriving all of that live, mid-session, would mean auditing every one of
+ * those call sites for "does this still agree with the others" — exactly the
+ * drift `R8` is named for. A full reload re-evaluates the module graph once,
+ * from one persisted value, so every consumer agrees by construction instead
+ * of by discipline. The cost is that switching source is not instant; the
+ * picker in `LayersSheet` says so before it reloads.
+ */
+const RUNTIME_SOURCE_KEY = 'ridgeline.demSourceOverride';
+
+/**
+ * The hunter's own on-device choice, if they have made one.
+ *
+ * Guarded the same way `tokenStore`/`currentProperty` guard `localStorage`:
+ * private browsing or a quota failure must degrade to "no override" rather
+ * than throwing during module init, which would blank the map before a single
+ * tile is requested.
+ */
+export function getDemSourceOverride(): string | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage.getItem(RUNTIME_SOURCE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist (or clear, with `null`) the hunter's chosen source.
+ *
+ * Does **not** reload — that decision belongs to the UI that knows whether an
+ * offline region is about to become unreachable and needs to say so first
+ * (`LayersSheet`'s picker). Writing here and reloading there keeps this module
+ * free of DOM side effects, which is what makes it safe to import from a
+ * worker-adjacent context and from tests.
+ */
+export function setDemSourceOverride(id: string | null): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (id === null) localStorage.removeItem(RUNTIME_SOURCE_KEY);
+    else localStorage.setItem(RUNTIME_SOURCE_KEY, id);
+  } catch {
+    // Storage unavailable — the picker still switches for this tab session
+    // (DEM_SOURCE is still re-evaluated on the reload the caller triggers),
+    // it just will not survive the *next* one. Not silent: nothing here
+    // claims the choice was remembered.
+  }
+}
+
+/**
+ * Which source this build uses.
+ *
+ * Resolution order, closest to the hunter wins: a runtime choice made in the
+ * picker, then the deployment's `VITE_DEM_SOURCE` build-time default, then
+ * `terrarium`. Defaulting to `terrarium` rather than 3DEP is deliberate for
+ * the same reason it always was — the 3DEP sources need this project's own
+ * API reachable at `/api`, so defaulting to them would make a static, API-less
+ * deployment render nothing, which is precisely the class of silent-blank-map
+ * failure `DEFAULT_DEM_TEMPLATE`'s comment above documents.
+ *
+ * An unrecognised value (either variable) falls back rather than throwing: a
+ * typo in a deploy variable, or a stale id left in storage by a build that no
+ * longer serves it, should degrade to a working map, and it is visible
  * because `DEM_SOURCE.label` is rendered in the attribution.
  */
+const runtimeSourceId = getDemSourceOverride();
 const configuredSource = import.meta.env.VITE_DEM_SOURCE;
 export const DEM_SOURCE: DemSourceDescriptor =
+  (runtimeSourceId && DEM_SOURCES[runtimeSourceId]) ||
   (typeof configuredSource === 'string' && DEM_SOURCES[configuredSource.trim()]) ||
   DEM_SOURCES.terrarium;
 
 const configured = import.meta.env.VITE_DEM_TEMPLATE;
 /**
- * `VITE_DEM_TEMPLATE` still wins when set — it is what a self-hoster points at
- * their own mirror and what a sandboxed test points at a relay. When it is not
- * set the template follows `VITE_DEM_SOURCE` via {@link DEM_SOURCE}, so
- * selecting 3DEP does not also require hand-typing its URL. That coupling is
- * worth avoiding specifically: two variables that must agree are two variables
- * that will eventually disagree, and the symptom would be a map labelled
- * "1 m LiDAR" serving Terrarium tiles.
+ * `VITE_DEM_TEMPLATE` still wins when set, but **only while the active source
+ * is `terrarium`**. It exists for a self-hoster mirroring the AWS Terrarium
+ * endpoint (or a sandboxed test pointing at a relay) — a raw URL template with
+ * no notion of "which 3DEP product". Before the source became switchable at
+ * runtime nobody would set this *and* pick 3DEP in the same session, so the
+ * two never actually collided. They can now: a self-hoster who mirrors
+ * Terrarium and sets `VITE_DEM_TEMPLATE` for their default deployment, whose
+ * hunters then tap "USGS 3DEP 1 m" in the picker, must not keep being served
+ * the Terrarium mirror under a LiDAR label — that is the exact overclaim
+ * `a02793d` removed, arriving through a second door. When the active source is
+ * 3DEP the template always follows `DEM_SOURCE.urlTemplate`, which is this
+ * server's own `/api/terrain/dem/...` route regardless of what mirror the
+ * operator configured.
  */
 export const DEM_TEMPLATE: string =
-  typeof configured === 'string' && configured.trim() !== ''
+  DEM_SOURCE.id === 'terrarium' && typeof configured === 'string' && configured.trim() !== ''
     ? configured.trim()
     : DEM_SOURCE.urlTemplate;
 

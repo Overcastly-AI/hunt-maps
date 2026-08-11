@@ -37,7 +37,14 @@
  * their own endpoint; they are simply not the same casing as each other.
  */
 
-import type { BoundingBox, GeoLineString, GeoPoint, GeoPolygon, RutPhase, SelectionAnalysisDto } from '@hunt-maps/shared';
+import type {
+  BoundingBox,
+  GeoLineString,
+  GeoPoint,
+  GeoPolygon,
+  RutPhase,
+  SelectionAnalysisDto,
+} from '@hunt-maps/shared';
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -233,15 +240,7 @@ export type WireSpecies =
   | 'OTHER';
 export type WireAnimalSex = 'BUCK' | 'DOE' | 'UNKNOWN';
 export type WireSignType =
-  | 'RUB'
-  | 'SCRAPE'
-  | 'BED'
-  | 'TRACK'
-  | 'SCAT'
-  | 'TRAIL'
-  | 'BROWSE'
-  | 'SHED_ANTLER'
-  | 'WALLOW';
+  'RUB' | 'SCRAPE' | 'BED' | 'TRACK' | 'SCAT' | 'TRAIL' | 'BROWSE' | 'SHED_ANTLER' | 'WALLOW';
 /** Prisma `RutPhase` labels — distinct casing from `@hunt-maps/shared`'s `RutPhase`; see this file's header comment. */
 export type WireRutPhase =
   | 'OFF_SEASON'
@@ -514,6 +513,26 @@ export interface TerrainPointQuery {
   source?: string;
   wind?: number;
   at?: string;
+}
+
+/**
+ * `GET /terrain/dem/coverage` — what elevation data actually exists at a
+ * point, so a DEM source picker can say "no 1 m data here" instead of
+ * assuming. See `apps/api/src/terrain/terrain.controller.ts#demCoverage`.
+ */
+export interface DemCoverageDto {
+  lng: number;
+  lat: number;
+  oneMeter: {
+    available: boolean;
+    /** Name of the USGS acquisition project, when available. */
+    project: string | null;
+    elevationMeters: number | null;
+    utmZone: number | null;
+  };
+  /** The source id the server recommends for this point. */
+  recommendedSource: string;
+  resolutionNote: string;
 }
 
 export interface EvaluateFilterInput {
