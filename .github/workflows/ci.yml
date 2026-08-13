@@ -370,6 +370,59 @@ jobs:
             docker logs "$c" 2>&1 | tail -40 || true
           done
 
+  renders-terrain:
+    # Does a terrain layer ACTUALLY PAINT, for a real user, over the real
+    # internet, from the artifact we ship? Nothing else in this repository
+    # asks that, and the founder's report — "nothing works, it's just a
+    # satellite map with nothing" — arrived while every other gate was green.
+    #
+    # The four blind spots this closes, all pointing the same way:
+    #   1. No CI job ran a browser AT ALL. `ui-invariants` — mandatory per
+    #      CLAUDE.md — has never run here.
+    #   2. Every local browser run attaches the DEM relay (`e2e/fixtures.ts`),
+    #      so tiles come from localhost and the real URL is never requested.
+    #      The only path a user is on was the only path never tested.
+    #   3. Unit tests import source, so they cannot see `import.meta.env`
+    #      inlined at build time — where the blank-layer P0 lived.
+    #   4. `shipped-artifact` greps served bytes. That caught (3) and is worth
+    #      keeping, but a grep cannot prove a pixel changed.
+    #
+    # `real-artifact.spec.ts` imports from `@playwright/test` directly rather
+    # than `./fixtures`, so NO relay is attached. That import is the gate. It
+    # also fails on zero tile requests rather than passing vacuously, because
+    # "asked for nothing, nothing failed" is how a rendering suite measures an
+    # empty map for weeks and reports success.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Install Chromium
+        run: pnpm --filter @hunt-maps/web exec playwright install --with-deps chromium
+
+      - name: Assert terrain renders from the real tile source
+        working-directory: apps/web
+        env:
+          # Opt in to real egress. Without it the spec SKIPS loudly rather than
+          # passing quietly — a skip is honest, a vacuous pass is not.
+          RIDGELINE_REAL_NETWORK: '1'
+        run: pnpm exec playwright test real-artifact --reporter=line
+
+      - name: Upload the failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renders-terrain-failure
+          path: apps/web/test-results/
+          retention-days: 7
+
   chart:
     # The chart is a release artefact, so it gets the same gate as the code.
     # Rendering only the default values is not enough: most chart bugs live in
