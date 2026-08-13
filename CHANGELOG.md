@@ -1,3 +1,19 @@
+## [1.3.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.5...v1.3.0) (2026-08-13)
+
+### Features
+
+* **design,web:** the desktop dock replaces the toggled Layers overlay ([0947a43](https://github.com/Overcastly-AI/hunt-maps/commit/0947a43bffd26be45fdd48a279df2b83b5ce92c6))
+
+### Fixes
+
+* **web:** the dock could not photograph itself, so it had no visual gate ([b8d8f6e](https://github.com/Overcastly-AI/hunt-maps/commit/b8d8f6eb5430a0b6eca1f7c5ff022f8613cfb3da))
+
+### Documentation
+
+* push to main — the branch gate was costing more than it caught ([1274de0](https://github.com/Overcastly-AI/hunt-maps/commit/1274de093b2cb1400a14e4ed6997ea15918ce786)), closes [#6](https://github.com/Overcastly-AI/hunt-maps/issues/6) [#4](https://github.com/Overcastly-AI/hunt-maps/issues/4)
+* the first engineering audit, and six P0s the diff reviews never saw ([0c5ad45](https://github.com/Overcastly-AI/hunt-maps/commit/0c5ad450b94b24ec12edb85de1b760ab33a5af74))
+* the product audit finds the map draws nothing the hunter owns ([a0d0b18](https://github.com/Overcastly-AI/hunt-maps/commit/a0d0b18761d828e4af22146d0ee0e561afcde504))
+
 ## [1.2.5](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.4...v1.2.5) (2026-08-11)
 
 ### Fixes
