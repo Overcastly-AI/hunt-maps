@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.4.0...v1.4.1) (2026-08-13)
+
+### Fixes
+
+* **api:** point nest start at the real entry file so pnpm dev boots ([80cfdfc](https://github.com/Overcastly-AI/hunt-maps/commit/80cfdfcd3cea79184598dafd875ba661f2cdc94b)), closes [#6](https://github.com/Overcastly-AI/hunt-maps/issues/6)
+
 ## [1.4.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.3.0...v1.4.0) (2026-08-13)
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "hunt-maps",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Ridgeline — a self-hosted hunting map & terrain-analytics platform. Deep LiDAR/topo analysis, offline-first PWA.",
   "license": "MIT",
