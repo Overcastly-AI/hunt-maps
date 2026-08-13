@@ -49,6 +49,13 @@ services:
 
   api:
     image: ghcr.io/overcastly-ai/hunt-maps-api:${RIDGELINE_TAG:-latest}
+    labels:
+      # Opts this container in to the optional `autoupdate` profile below. The
+      # label is inert unless Watchtower is actually running, and `db` is
+      # deliberately NOT labelled — an unattended major-version Postgres bump
+      # would refuse to start against an existing data directory, and that is
+      # not a failure you want discovered from a truck at 05:30.
+      com.centurylinklabs.watchtower.enable: 'true'
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ridgeline}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ridgeline}
       # No default. The app refuses to boot without a real secret rather than
@@ -67,7 +74,11 @@ services:
       # /api/health reports PostGIS reachability, so this tracks the thing that
       # actually matters — whether spatial queries can run. A TCP check would
       # call a container healthy that cannot serve a map.
-      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:3001/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://127.0.0.1:3001/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 15s
       timeout: 5s
       retries: 6
@@ -80,6 +91,8 @@ services:
 
   web:
     image: ghcr.io/overcastly-ai/hunt-maps-web:${RIDGELINE_TAG:-latest}
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
     depends_on:
       api:
         condition: service_started
@@ -91,6 +104,74 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    restart: always
+    security_opt: ['no-new-privileges:true']
+
+  # ---------------------------------------------------------------------------
+  # Optional: unattended updates. OFF unless you ask for it.
+  # ---------------------------------------------------------------------------
+  #
+  #   docker compose --profile autoupdate up -d
+  #
+  # Polls GHCR for a newer image behind the tag you are running, pulls it, and
+  # recreates the api and web containers with the same configuration. No
+  # inbound access, no SSH keys in GitHub, no secrets anywhere: the host makes
+  # an outbound HTTPS request on a schedule and that is the entire mechanism.
+  #
+  # The honest tradeoff, because this is a hunting app:
+  #
+  #   - An update RESTARTS the containers. A hunter mid-hunt loses the map for
+  #     the seconds that takes, and any request in flight fails. The PWA keeps
+  #     working from its cache and queued writes are idempotent, so this is
+  #     survivable — but "survivable" is not "free", and it happens without
+  #     anyone deciding it should happen right now.
+  #   - Watchtower needs the Docker socket, which is root-equivalent on the
+  #     host. Anything that compromises this container owns the machine. It is
+  #     mounted read-only, which raises the bar but does not remove it: the
+  #     socket API is still fully usable read-only-mounted.
+  #   - It follows a MOVING tag. With RIDGELINE_TAG pinned to a version — which
+  #     is what the README recommends — there is nothing to move to and this
+  #     service does nothing at all, forever, silently. Auto-update and pinning
+  #     are mutually exclusive; pick one on purpose.
+  #   - A bad release lands on the host with nobody watching. There is no
+  #     canary and no automatic rollback. Recovery is manual: set RIDGELINE_TAG
+  #     to the previous version and `docker compose up -d`.
+  #
+  # If any of that is unacceptable, use ./upgrade.sh instead — same result, at
+  # a moment you chose, with the artifact verified before you walk away.
+  watchtower:
+    profiles: ['autoupdate']
+    # Pinned, not `latest`: the thing that updates everything else must not
+    # update itself unattended. 1.7.1 is the last release of containrrr's
+    # Watchtower, which is lightly maintained — a reason to keep this optional
+    # rather than a reason to avoid it, but know it before you enable it.
+    image: containrrr/watchtower:1.7.1
+    # --label-enable: touch only the two containers labelled above, never the
+    # database. --cleanup: delete the superseded image, or a VPS disk fills up
+    # with old builds and the first symptom is Postgres unable to write.
+    command: --label-enable --cleanup
+    environment:
+      # Where the mounted registry credentials live. Watchtower reads
+      # $DOCKER_CONFIG/config.json exactly as the docker CLI does.
+      DOCKER_CONFIG: /config
+      # A six-field cron (with seconds), in the container's timezone. Default
+      # is 13:00 — the middle of the day, deliberately: between the morning
+      # sit and the evening sit is the only window where a restart costs
+      # nobody anything. Never leave this at a default that can fire at first
+      # light.
+      WATCHTOWER_SCHEDULE: ${WATCHTOWER_SCHEDULE:-0 0 13 * * *}
+      # Set this or the schedule runs in UTC and "13:00" is not your midday.
+      TZ: ${TZ:-UTC}
+      WATCHTOWER_NOTIFICATION_URL: ${WATCHTOWER_NOTIFICATION_URL:-}
+    volumes:
+      # Read-only: Watchtower only needs to inspect, pull, and recreate, and a
+      # read-only mount blocks nothing it needs while removing the easiest
+      # write paths. It does not make socket access safe — see above.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Registry credentials, if the GHCR packages are private. Without this a
+      # private package fails to pull and Watchtower logs it and carries on —
+      # which looks exactly like "there was no new version".
+      - ${DOCKER_CONFIG_DIR:-/root/.docker}:/config:ro
     restart: always
     security_opt: ['no-new-privileges:true']
 

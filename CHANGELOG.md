@@ -1,3 +1,27 @@
+## [1.2.5](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.4...v1.2.5) (2026-08-11)
+
+### Fixes
+
+* **web:** serve the PWA manifest as application/manifest+json ([#18](https://github.com/Overcastly-AI/hunt-maps/issues/18)) ([e88202e](https://github.com/Overcastly-AI/hunt-maps/commit/e88202e8cb3b58d0aac9aa3c7a5a40265927bc35)), closes [#17](https://github.com/Overcastly-AI/hunt-maps/issues/17)
+
+## [1.2.4](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.3...v1.2.4) (2026-08-10)
+
+### Documentation
+
+* make the scorecard tell the truth ([#16](https://github.com/Overcastly-AI/hunt-maps/issues/16)) ([c68c485](https://github.com/Overcastly-AI/hunt-maps/commit/c68c4856888e93270388a818b7d83f909d0c62f2))
+
+## [1.2.3](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.2...v1.2.3) (2026-08-10)
+
+### Documentation
+
+* sixth non-negotiable — test the artifact you ship ([#15](https://github.com/Overcastly-AI/hunt-maps/issues/15)) ([4c093e7](https://github.com/Overcastly-AI/hunt-maps/commit/4c093e792e1446c247e3e2df8b3ba53c80567736)), closes [#2](https://github.com/Overcastly-AI/hunt-maps/issues/2) [#4](https://github.com/Overcastly-AI/hunt-maps/issues/4)
+
+## [1.2.2](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.1...v1.2.2) (2026-08-10)
+
+### Fixes
+
+* **web:** every deployed image had no DEM at all, so no layer could render ([#14](https://github.com/Overcastly-AI/hunt-maps/issues/14)) ([9471b59](https://github.com/Overcastly-AI/hunt-maps/commit/9471b5907c18a7353cd11da65831cd999c2d3ca4))
+
 ## [1.2.1](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.0...v1.2.1) (2026-08-10)
 
 ### Fixes

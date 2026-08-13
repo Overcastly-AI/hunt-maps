@@ -147,6 +147,21 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **The layers actually render — every deployed image had no DEM at all.**
+      The founder's report was "none of the layers are working", and it was
+      exactly true. `ARG VITE_DEM_TEMPLATE=""` left the variable defined and
+      **empty** in every image; `demSource.ts` used `??`, which falls back only
+      on null/undefined, so Vite inlined `""` and every tile URL resolved to the
+      empty string. No elevation, therefore no hillshade, slope, aspect,
+      landform, bedding or corridors — and **nothing threw**. Proven by grepping
+      the built bundle: unset → the Terrarium URL is present; `=""` → zero
+      occurrences. It survived because that configuration exists only inside the
+      container: dev and CI leave the variable unset, so every web test passes
+      against a code path production never takes. Fixed at the resolver, at the
+      Dockerfile, and with a loud failure for a template that cannot address a
+      tile. The structural gap it exposed — CI never builds or runs the image —
+      is tracked as `R81`.
+
 - [x] **Real USGS 3DEP elevation is decodable — the reader, not the wiring.**
       `R77`, first half. Verified against a real staged product rather than a
       fixture: a 10012² float32 COG, LZW with the floating-point predictor,
@@ -359,10 +374,15 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       rather than merely fixed, and every control now carries a visible word
       instead of an icon and a `title` that touch devices never show. Bottom
       chrome at 390px: 216px → ~128px, ~88px of map back.
-- [ ] Property boundary drawing and editing on the map _(🔴 scorecard gap)_
-- [ ] Waypoint placement UI — stands, cameras, sign — with type-aware forms
-- [ ] Observation capture optimised for gloved, one-handed, in-the-field use
-- [ ] Saved-filter editor: build a predicate visually, see match share live
+- [x] Property boundary drawing and editing on the map — `BoundaryEditor.tsx`,
+      `PropertyBoundaryEditScreen.tsx`, `PropertyBoundaryPreview.tsx`
+- [x] Waypoint placement UI — stands, cameras, sign — with type-aware forms
+      (`WaypointForm.tsx`, `WaypointsSheet.tsx`, `WindCheckCard.tsx`)
+- [x] Observation capture optimised for gloved, one-handed, in-the-field use
+      (`ObservationForm.tsx`, `BlankSitQuickLog.tsx`, `ConditionsFields.tsx`)
+- [x] Saved-filter editor: build a predicate visually, see match share live
+      (`FilterEditor.tsx`, `PredicateNode.tsx`, `MatchShare.tsx`,
+      `useLiveMatchShare.ts`) — **the moat, and it is built**
 - [x] **Offline region picker — `BACKLOG R4`, the front door `R8` was missing.**
       `R8` shipped honest coverage reporting and the button to act on it was
       `onClick={() => undefined}`. Pick an area, see the estimate, download
@@ -380,8 +400,8 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       real defects, including a download button that hit-tested to `null`
       below the fold and an action bar that was visible and unclickable.
 - [ ] Corridor UI: pick two areas, solve, see band + pinch points
-- [ ] Terrain readout on long-press (API exists; UI pending — rebuild as a
-      peek-detent sheet with a map marker, not the current floating dialog)
+- [x] Terrain readout on long-press, rebuilt as a peek-detent sheet with a map
+      marker rather than a floating dialog (`TerrainReadout.tsx`, `R6`)
 - [x] `apps/web/e2e/ui-invariants.spec.ts` — automated UI invariants suite:
       **26 tests, all passing** (was 16/24 on its first run). Fixed and
       verified: chrome text now clears WCAG AA measured against a live map
@@ -405,9 +425,10 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
                                   matched and did not overlap, not that a renamed selector stopped
                                   matching anything.
 
-- [ ] Deploy the `Confidence` primitive into the app — it exists in
-      `packages/design`, is documented, and is used in **zero** places in
-      `apps/web` (`BACKLOG R10`)
+- [x] Deploy the `Confidence` primitive into the app (`BACKLOG R10`) — now used
+      in **15** places across `apps/web`, including `TerrainReadout.tsx` and
+      `LayersSheet.tsx`. This row read "used in zero places" long after that
+      stopped being true, which is the drift non-negotiable #6 is about.
 
 ## ⬜ Phase 3 — Closing the scorecard gaps
 

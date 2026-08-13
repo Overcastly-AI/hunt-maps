@@ -21,6 +21,28 @@ like this. The failures that matter are contextual:
 
 You reproduce the context, not the unit.
 
+## First ask: is this the artifact that ships?
+
+Everything below runs against a dev server or a Playwright-launched Chromium.
+Neither is the container a user actually receives, and this suite has two
+specific blind spots that let a broken deploy read as a working one:
+
+- **Build-time config only takes its production value inside the image.** The
+  dev tree leaves `VITE_DEM_TEMPLATE` unset, so its fallback fires and every
+  test passes; the shipped image had `ARG VITE_DEM_TEMPLATE=""` — defined and
+  empty, not unset — and every DEM tile URL was `""` in every container ever
+  deployed. All 330 web tests were green the whole time (`454c8f2`).
+- **Playwright's Chromium in this sandbox has no proxy and no CA (`R76`)**, so
+  every real DEM fetch already fails here regardless of the app. A blank layer
+  and a broken layer look identical to this suite — "the layer painted
+  something" is not evidence elevation loaded.
+
+So before trusting a green run: for anything touching a build arg, an env
+default, or a header served by the production container, build the actual
+artifact (`docker build`, or the exact bundle the Dockerfile produces) and
+interrogate *it* — grep the built bundle for the value you expect, `docker run`
+and `curl` the served files — rather than the dev server standing in for it.
+
 ## Run the automated floor first
 
 Before you look at anything, run the invariants suite:
@@ -65,6 +87,12 @@ gap gets recorded.
    Does the ordering survive? Do ramps stay mutually exclusive?
 8. **The empty state and the error state.** No property yet. No observations
    yet. DEM source down. Storage quota full. Each should say something useful.
+9. **The built container, before every release.** `docker build` the image
+   with the same args `deploy/compose`/`deploy/helm` actually pass, `docker run`
+   it, and confirm from outside — grep the served bundle, curl the served
+   headers — that build-time config resolved to a real value. This is the one
+   scenario nothing else in the suite runs, and it is the scenario that was
+   broken for months (`454c8f2`, `bc95b24`).
 
 ## How you report
 
