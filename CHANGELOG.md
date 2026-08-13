@@ -1,3 +1,30 @@
+## [1.4.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.3.0...v1.4.0) (2026-08-13)
+
+### Features
+
+* **api:** Property.targetSpecies, so the rut refusal reaches an elk property ([1e36d9a](https://github.com/Overcastly-AI/hunt-maps/commit/1e36d9ac4ae43bec6b9cd479e8572821123afb09)), closes [#2](https://github.com/Overcastly-AI/hunt-maps/issues/2)
+* **terrain:** read real USGS 3DEP elevation from Cloud-Optimized GeoTIFFs ([a27735c](https://github.com/Overcastly-AI/hunt-maps/commit/a27735c04afc8af96f5014574814d39ee014b278))
+* **terrain:** real 1 m USGS LiDAR, discoverable without the 1.9 GB index ([9e781ab](https://github.com/Overcastly-AI/hunt-maps/commit/9e781abda1052358403a78ffbda7879644096e35)), closes [#6](https://github.com/Overcastly-AI/hunt-maps/issues/6)
+* the elk chain, real 1 m LiDAR, and Direction C replaces the dock ([#19](https://github.com/Overcastly-AI/hunt-maps/issues/19)) ([89789a6](https://github.com/Overcastly-AI/hunt-maps/commit/89789a67b773bfaafe00ee8113a37b2a3283b45a))
+* **web:** an elevation source picker — 1 m LiDAR without a rebuild ([86a1b14](https://github.com/Overcastly-AI/hunt-maps/commit/86a1b140729fcf1cea921a08cb5100a23c37f891)), closes [#6](https://github.com/Overcastly-AI/hunt-maps/issues/6)
+* **web:** Direction C — a thin dense rail, so the map stops being covered ([a7ab16e](https://github.com/Overcastly-AI/hunt-maps/commit/a7ab16ebd9eba41d2f389f13286e36394b893a10))
+* **web:** render the rut refusal and grey bedding out for elk ([8bd1e8c](https://github.com/Overcastly-AI/hunt-maps/commit/8bd1e8c9253a9c44d721c380fcdcddf6b00d7045)), closes [#4](https://github.com/Overcastly-AI/hunt-maps/issues/4)
+
+### Fixes
+
+* **shared:** the rut model refuses for elk instead of answering, inverted ([93a29ca](https://github.com/Overcastly-AI/hunt-maps/commit/93a29cabf13ab9c959cbe5064b89a836375e62ff))
+* **terrain:** commit the 3DEP fixture the decoder tests read ([a512d38](https://github.com/Overcastly-AI/hunt-maps/commit/a512d38d6f93015363f03cd5f7b4ac8265897648))
+* **web:** a published release was invisible — index.html had no cache policy ([bc95b24](https://github.com/Overcastly-AI/hunt-maps/commit/bc95b249a343f9f0ebc720790e6244488f164209))
+* **web:** every deployed image had no DEM at all, so no layer could render ([454c8f2](https://github.com/Overcastly-AI/hunt-maps/commit/454c8f2d345a3280c1938f70dc43f15d9530aa75))
+* **web:** every rail label reads in full — wrap, not truncate ([38234e1](https://github.com/Overcastly-AI/hunt-maps/commit/38234e18a26c763cebacfd2dfb5501a3b420d3d2))
+* **web:** stop calling a ~10 m DEM "LiDAR relief" ([a02793d](https://github.com/Overcastly-AI/hunt-maps/commit/a02793d128a18b6ae734913c7b516b92273ae787))
+
+### Documentation
+
+* **evidence:** pass 7 — the elk verdict for Montana HD 320 ([5608b5e](https://github.com/Overcastly-AI/hunt-maps/commit/5608b5e34bddc5bbd92ea69803b6fbb41848035e))
+* onboard the org on the artifact-vs-source failure class ([0a472a4](https://github.com/Overcastly-AI/hunt-maps/commit/0a472a4e7a572d7550d2c35c0a327def3a00cd2e)), closes [#6](https://github.com/Overcastly-AI/hunt-maps/issues/6)
+* record R77's first half, and file R79 for what it does not do ([b16e912](https://github.com/Overcastly-AI/hunt-maps/commit/b16e912a87438d15cf5a1bf6d7bec6c3f6d77c69))
+
 ## [1.3.0](https://github.com/Overcastly-AI/hunt-maps/compare/v1.2.5...v1.3.0) (2026-08-13)
 
 ### Features
