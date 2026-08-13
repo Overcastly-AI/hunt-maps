@@ -46,6 +46,8 @@
   --glass-blur: blur(18px) saturate(140%);
   --glass-border: rgb(255 255 255 / 0.09);
   --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --glass-bg-rail: rgb(10 15 20 / 0.86);
+  --glass-blur-rail: blur(10px);
 
   /* plate */
   --plate-bg: rgb(15 19 20 / 0.94);
@@ -116,8 +118,7 @@
   --layout-conditions-bar-height: 56px;
   --layout-command-bar-height: 48px;
   --layout-tabbar-height: 45px;
-  --layout-dock-width: 300px;
-  --layout-dock-collapsed-width: 0;
+  --layout-rail-width: 240px;
 
   /* motion */
   --motion-fast: 120ms;

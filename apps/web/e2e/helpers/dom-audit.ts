@@ -267,6 +267,22 @@ export interface ChromeTextNode {
   colorCss: string;
   fontSizePx: number;
   fontWeight: number;
+  /**
+   * True when this text sits behind the currently-open `.rl-sheet`/
+   * `.rl-popover` overlay and is not part of it — the same concept
+   * `auditInteractiveElements`'s `coveredByOpenOverlay` names, applied to
+   * contrast rather than hit-testing. Needed on the desktop rail: the wind/
+   * time popover opens *inside* the rail (`DesktopRail.tsx`) and can cover a
+   * large share of the rail's own always-visible content while open — real
+   * chrome, correctly painted, just not the pixels a sampler would see if it
+   * naively read each text node's own on-screen position. Without this, a
+   * sampler compares a segmented-control label's ink colour against the
+   * *popover's* pixels sitting on top of it and reports a false violation —
+   * exactly the "confidently wrong contrast failure" this file's own
+   * `collectChromeTextNodes` doc comment already warns about for scrolling
+   * clips, reached by a sibling overlay instead.
+   */
+  coveredByOpenOverlay: boolean;
 }
 
 /**
@@ -281,6 +297,16 @@ export async function collectChromeTextNodes(
   roots: string[],
 ): Promise<ChromeTextNode[]> {
   return page.evaluate((roots: string[]) => {
+    // Same overlay derivation `auditInteractiveElements` uses — whichever of
+    // `.rl-sheet`/`.rl-popover` currently paints on top, by z-index.
+    const overlayCandidates = Array.from(document.querySelectorAll('.rl-sheet, .rl-popover'));
+    const overlay = overlayCandidates.sort(
+      (a, b) =>
+        parseInt(window.getComputedStyle(b).zIndex, 10) -
+        parseInt(window.getComputedStyle(a).zIndex, 10),
+    )[0];
+    const overlayRect = overlay ? overlay.getBoundingClientRect() : null;
+
     const seen = new Set<Element>();
     const out: ChromeTextNode[] = [];
 
@@ -354,6 +380,16 @@ export async function collectChromeTextNodes(
           // Nothing of it is on screen — there are no pixels to judge.
           if (box.right <= box.left || box.bottom <= box.top) continue;
 
+          let coveredByOpenOverlay = false;
+          if (overlay && overlayRect && !overlay.contains(el)) {
+            coveredByOpenOverlay = !(
+              box.right <= overlayRect.left ||
+              box.left >= overlayRect.right ||
+              box.bottom <= overlayRect.top ||
+              box.top >= overlayRect.bottom
+            );
+          }
+
           out.push({
             selectorHint: el.className
               ? `.${String(el.className).trim().split(/\s+/).join('.')}`
@@ -368,6 +404,7 @@ export async function collectChromeTextNodes(
             colorCss: style.color,
             fontSizePx: parseFloat(style.fontSize),
             fontWeight: parseInt(style.fontWeight, 10) || 400,
+            coveredByOpenOverlay,
           });
         }
       }
@@ -384,6 +421,7 @@ export async function collectChromeTextNodes(
       colorCss: string;
       fontSizePx: number;
       fontWeight: number;
+      coveredByOpenOverlay: boolean;
     }
   }, roots);
 }
@@ -407,14 +445,18 @@ export interface ChromeRects {
   sheet: { x: number; y: number; width: number; height: number } | null;
   popover: { x: number; y: number; width: number; height: number } | null;
   /**
-   * The persistent desktop dock (`BACKLOG R63`). `null` on every viewport
-   * below the desktop breakpoint and whenever it has not mounted yet —
-   * `App.tsx` renders it only at `≥861px`, the mobile drawer standing in for
-   * it below that width. Present (mounted) even while collapsed, since the
-   * collapse is a width transition rather than an unmount — see `Dock`'s own
-   * doc comment (`packages/design/src/components/dock.tsx`).
+   * The desktop rail (Direction C, `DesktopRail.tsx`) and its neighbours —
+   * `null` below 861px, where none of them mount at all. See
+   * `ui-invariants.spec.ts` group "4b" for the desktop-equivalent collision
+   * contract this feeds.
    */
-  dock: { x: number; y: number; width: number; height: number } | null;
+  rail: { x: number; y: number; width: number; height: number } | null;
+  /** The zoom/locate/offline cluster docked left of the rail. */
+  railControls: { x: number; y: number; width: number; height: number } | null;
+  /** The top-left coverage/species status badges. */
+  statusBadges: { x: number; y: number; width: number; height: number } | null;
+  /** The docked side panel (Stands/Sightings/Offline/filter editor), if any is open. */
+  panelDock: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** Bounding boxes for the named floating chrome groups, `null` when absent. */
@@ -433,7 +475,13 @@ export async function collectChromeRects(page: Page): Promise<ChromeRects> {
       bottomLeftGroup: rectOf('.chrome-bottomleft'),
       sheet: rectOf('.rl-sheet'),
       popover: rectOf('.rl-popover'),
-      dock: rectOf('.rl-dock'),
+      rail: rectOf('.rail'),
+      railControls: rectOf('.chrome-rail-controls'),
+      statusBadges: rectOf('.rail-status-badges'),
+      // The docked panel's own `<Sheet>` — `.rail-panel-dock` itself is a
+      // plain flow wrapper with no intrinsic box (see `chrome-shots.spec.ts`
+      // for the same gotcha), so the rect that matters is the sheet inside it.
+      panelDock: rectOf('.rail-panel-dock .rl-sheet'),
     };
   });
 }

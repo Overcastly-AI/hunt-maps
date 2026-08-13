@@ -21,8 +21,8 @@ every failure mode you tolerate will happen to somebody on opening day.
 
 Pre-baking rendered analysis tiles would require a variant per layer × per wind
 direction × per date — combinatorially impossible to download. Caching the DEM
-and computing derived layers on-device means one region download unlocks *every*
-layer, *any* wind, *any* date, with no signal. This is the difference between
+and computing derived layers on-device means one region download unlocks _every_
+layer, _any_ wind, _any_ date, with no signal. This is the difference between
 "the four layers I remembered to download" and "the whole analysis suite in the
 woods". It is the single most important design decision in the product.
 
@@ -53,14 +53,23 @@ and this paragraph is why.
    they deliberately saved. Map tiles are excluded from Workbox on purpose.
 4. **Estimate before downloading, and be honest.** Tile count grows 4× per zoom
    level, which nobody's intuition handles. Show the estimate, name the
-   expensive layer, and warn plainly: *"About 1.4 GB. Start this on wifi, not
-   the night before a hunt."*
+   expensive layer, and warn plainly: _"About 1.4 GB. Start this on wifi, not
+   the night before a hunt."_
 5. **Degrade loudly, not silently.** In-memory fallback means the region will
    not survive a reload — say so. Partial download means some tiles are
    missing — show which. A quota write failure must not fail the tile, but it
    must be visible.
 6. **Resume, do not restart.** A download interrupted at 80% on a flaky
    connection must resume, not begin again.
+7. **The PWA shell has two independent config surfaces, and both must agree.**
+   `index.html` shipped with no `Cache-Control`, so a correct release stayed
+   invisible behind heuristic browser caching (`bc95b24`) — fixed in
+   `apps/web/nginx.conf` alongside a `swUpdate.ts` reload-on-new-worker path.
+   That fix never reached Kubernetes: `deploy/helm/ridgeline/templates/web-configmap.yaml`
+   mounts its _own_ nginx config over the image's, and nobody had updated it
+   (`891c16f`). Any change to cache headers, service-worker update behaviour,
+   or what `registerType: 'autoUpdate'` needs to reach an open tab has to be
+   checked against both files, not just the one the dev server never exercises.
 
 ## How you work
 

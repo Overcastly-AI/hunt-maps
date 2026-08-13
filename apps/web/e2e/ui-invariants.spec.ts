@@ -1,4 +1,7 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+// `test`/`expect` come from ./fixtures, not @playwright/test: that import is what
+// attaches the DEM tile relay and runs the elevation preflight (BACKLOG R76).
+import { type Locator, type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import {
   auditInteractiveElements,
   collectChromeRects,
@@ -366,19 +369,10 @@ test.describe('2. Trigger stability', () => {
   // opening one no longer force-closes the other. These two tests now pass
   // honestly; keep them, they are what would catch a repeat.
 
-  // `390px — tapping the Layers cell must not move the Layers button itself`,
-  // below, used to run at DESKTOP too. `BACKLOG R63` retired that half: the
-  // desktop dock is persistent chrome, not a togglable sheet behind a
-  // `CommandBar` "Layers" button — there is no such button to test once the
-  // dock is expanded (`App.tsx`'s `chrome-command-bar-wrap--dock-open`
-  // hides the whole bar there). The claim this test made is still real on a
-  // phone, where `CommandBar` is the *only* way to reach the drawer, so it
-  // is rescoped rather than deleted; the desktop half of "does the trigger
-  // move" is the new dock test directly below it, which asks the equivalent
-  // question of the control that actually exists there now.
-  test('390px — tapping the Layers cell must not move the Layers button itself', async ({
-    page,
-  }) => {
+  // Mobile-specific: the desktop rail has no Layers open/close toggle at all
+  // (the layer chips are permanent chrome) — its own trigger-stability
+  // contract is asserted in group 4b instead.
+  test('opening the Layers sheet must not move the Layers button itself', async ({ page }) => {
     await gotoAndSettle(page, MOBILE);
     await closeLayersSheet(page); // start closed, so the click below is a clean *open*
 
@@ -390,64 +384,15 @@ test.describe('2. Trigger stability', () => {
 
     expect(
       boxDelta(before, after),
-      `Layers button moved ${boxDelta(before, after).toFixed(1)}px when the drawer it opens ` +
+      `Layers button moved ${boxDelta(before, after).toFixed(1)}px horizontally when the sheet it opens ` +
         `slid its own trigger sideways with it.`,
     ).toBeLessThanOrEqual(4);
   });
 
-  /**
-   * The desktop dock's own version of trigger stability (`BACKLOG R63`,
-   * `docs/design/PLAN-direction-a.md` §f: "collapsing/expanding the dock
-   * must not move the conditions cluster or the top-right rail").
-   *
-   * There is no single "trigger" to re-measure here the way the old Layers
-   * button had one — collapsing the dock removes the trigger that opened it
-   * from the DOM outright (`CommandBar`'s "Layers" cell only exists while
-   * the dock is *already* collapsed) and replaces it with a different
-   * control in a different place. So the claim this test actually makes is
-   * the one the plan states directly: the chrome that is *not* the dock —
-   * the conditions cluster and the top-right rail — must never move,
-   * through a full collapse-then-reopen cycle. `apps/web/src/index.css`
-   * makes this true by reserving `layout.dock-width` as a permanent left
-   * margin for `.chrome-bottomleft`, whether the dock is currently expanded
-   * or collapsed, rather than only while it is expanded — see that rule's
-   * own comment for the reasoning. This test is the direct proof.
-   */
-  test('1440px — collapsing then expanding the dock must not move the conditions cluster or the top-right rail', async ({
-    page,
-  }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await waitForRectStable(page.locator('.rl-dock'));
-
-    const conditions = page.locator('.rl-conditions');
-    const rail = page.locator('.chrome-topright .rl-rail');
-    const before = { conditions: await measureBox(conditions), rail: await measureBox(rail) };
-
-    await page.getByRole('button', { name: 'Collapse dock' }).click();
-    await waitForRectStable(page.locator('.rl-dock'));
-    const collapsed = { conditions: await measureBox(conditions), rail: await measureBox(rail) };
-    expect(
-      boxDelta(before.conditions, collapsed.conditions),
-      `conditions cluster moved ${boxDelta(before.conditions, collapsed.conditions).toFixed(1)}px when the dock collapsed`,
-    ).toBeLessThanOrEqual(1);
-    expect(
-      boxDelta(before.rail, collapsed.rail),
-      `top-right rail moved ${boxDelta(before.rail, collapsed.rail).toFixed(1)}px when the dock collapsed`,
-    ).toBeLessThanOrEqual(1);
-
-    await page.getByRole('button', { name: 'Layers, stands and sightings' }).click();
-    await waitForRectStable(page.locator('.rl-dock'));
-    const reopened = { conditions: await measureBox(conditions), rail: await measureBox(rail) };
-    expect(
-      boxDelta(before.conditions, reopened.conditions),
-      `conditions cluster moved ${boxDelta(before.conditions, reopened.conditions).toFixed(1)}px when the dock re-expanded`,
-    ).toBeLessThanOrEqual(1);
-    expect(
-      boxDelta(before.rail, reopened.rail),
-      `top-right rail moved ${boxDelta(before.rail, reopened.rail).toFixed(1)}px when the dock re-expanded`,
-    ).toBeLessThanOrEqual(1);
-  });
-
+  // Mobile-specific — see the desktop rail's own version of this contract in
+  // group 4b ("wind popover open — overlaps the rail it opens from, nothing
+  // else"), which proves the same "trigger does not move, and nothing that
+  // should stay open closes" property against the rail's real selectors.
   test('opening the wind popover while the Layers sheet is open must not move the Wind trigger', async ({
     page,
   }) => {
@@ -455,7 +400,7 @@ test.describe('2. Trigger stability', () => {
     // longer force-closes it (App.tsx tracks them independently), and both
     // should now end up open at once — the flagship "sweep the wind while
     // watching the layer list" move this app is built around.
-    await gotoAndSettle(page, DESKTOP);
+    await gotoAndSettle(page, MOBILE);
     await waitForRectStable(page.locator('.chrome-bottomleft'));
 
     const trigger = page.getByRole('button', { name: /Wind from/ });
@@ -538,49 +483,45 @@ test.describe('3. Touch targets (>= 44x44 CSS px, gloved)', () => {
 // two glass surfaces stacked on top of one another is unreadable and the
 // underneath one becomes an elementFromPoint trap for whatever is on top.
 //
-// Run at MOBILE, unchanged (`BACKLOG R37`) — the mobile chrome this group
-// checks (`CommandBar` toggling a floating sheet) is untouched by the desktop
-// dock (`BACKLOG R63`). Until `BACKLOG R42` this group was desktop only, on
-// the reasoning that the mobile Layers sheet was *designed* to cover the
-// bottom rail while open — an intentional overlap, not a collision to flag.
-// That reasoning is why nothing here ever measured the mobile arrangement,
-// and it is also why nobody noticed the mobile sheet covered the one control
-// (Wind) every wind-dependent layer needs, making the product's flagship
-// move unreachable on a phone. R42 removed the overlap instead of
+// Run at both DESKTOP and MOBILE. Until BACKLOG R42 this group was desktop
+// only, on the reasoning that the mobile Layers sheet was *designed* to cover
+// the bottom rail while open — an intentional overlap, not a collision to
+// flag. That reasoning is why nothing here ever measured the mobile
+// arrangement, and it is also why nobody noticed the mobile sheet covered the
+// one control (Wind) every wind-dependent layer needs, making the product's
+// flagship move unreachable on a phone. R42 removed the overlap instead of
 // re-justifying it, so there is nothing left to exempt: the mobile chrome
-// must hold the exact same "nothing collides" contract the desktop chrome
-// always has, at every state below. The last two cases cover the sheet and a
-// popover open together — see those tests for the one pair excluded from the
-// check and why, and note that pairing was *impossible* to reach on a phone
-// before R42 (the popover's trigger was covered by the sheet it now opens
-// over).
+// must now hold the exact same "nothing collides" contract the desktop
+// chrome always has. The last two cases below cover the sheet and a popover
+// open together — see those tests for the one pair excluded from the check
+// and why, and note that pairing was *impossible* to reach on a phone before
+// R42 (the popover's trigger was covered by the sheet it now opens over).
+// ---------------------------------------------------------------------------
+// 4. No chrome collisions (mobile — the drawer/command-bar/conditions-bar
+//    stack, unchanged) — see group 4b below for the desktop rail's own
+//    equivalent contract.
+// ---------------------------------------------------------------------------
 //
-// DESKTOP used to share this exact loop and was retired to its own block
-// below ("4b") rather than re-run as-is — re-running it unmodified against
-// the dock would have passed for the wrong reason. `PERSISTENT` below
-// requires `command bar` to be *present* (`rectOf` returning a non-null
-// rect), but `CommandBar` is now `display: none` on desktop whenever the
-// dock is expanded (`chrome-command-bar-wrap--dock-open`,
-// `apps/web/src/index.css`) — its element is still in the DOM, so
-// `getBoundingClientRect()` returns a real, non-null, all-zero rect rather
-// than `null`. `expectPresent`'s check is `.not.toBeNull()`, so that
-// zero-area rect would have silently satisfied it, and a zero-area rect
-// never overlaps anything by construction (`rectsOverlap`'s own math) — the
-// exact "a rect the selector failed to find... would make this invariant
-// pass for the wrong reason" trap this very file's own comment on
-// `assertNoCollisions` already names, reached from a new direction. "4b"
-// asserts the dock's states honestly instead, including a positive check
-// that a hidden command bar is genuinely zero-area rather than merely
-// omitted from the list.
-// The four persistent chrome groups that exist in every state this group and
-// "4b" below check — passing their names to `assertNoCollisions`'s
-// `expectPresent` means a rect that comes back `null` (its selector matched
-// nothing) is a loud failure, not a silent "nothing to overlap". Hoisted
-// above both describe blocks so "4b" does not need its own, possibly
-// drifting, copy.
-const PERSISTENT = ['rail (top-right)', 'command bar', 'conditions bar', 'chrome-bottomleft group'];
+// This group used to run at both DESKTOP and MOBILE, against one shared set
+// of selectors — safe while both chassis shared the same component tree.
+// Above 860px `App.tsx` now mounts `DesktopRail.tsx` instead: an entirely
+// different tree with no `.chrome-topright`/`.chrome-bottomleft`/
+// `.rl-conditions`/mobile-drawer `.rl-sheet`-by-default at all, so asserting
+// this file's mobile-shaped expectations against it would not be testing a
+// regression, it would be testing a redesign. Restricted to MOBILE, which is
+// genuinely untouched; group 4b is the direct, non-vacuous replacement for
+// desktop, built against the rail's real selectors.
+test.describe('4. No chrome collisions (mobile)', () => {
+  // The four persistent groups exist in every one of these states — passing
+  // their names here means a rect that comes back `null` (its selector
+  // matched nothing) is a loud failure, not a silent "nothing to overlap".
+  const PERSISTENT = [
+    'rail (top-right)',
+    'command bar',
+    'conditions bar',
+    'chrome-bottomleft group',
+  ];
 
-test.describe('4. No chrome collisions', () => {
   for (const viewport of [MOBILE]) {
     test(`${viewport.width}px — nothing open`, async ({ page }) => {
       await gotoAndSettle(page, viewport);
@@ -735,150 +676,118 @@ test.describe('4. No chrome collisions', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4b. No chrome collisions — the desktop dock (BACKLOG R63)
+// 4b. No chrome collisions (desktop rail, Direction C)
 // ---------------------------------------------------------------------------
 //
-// The desktop half of group 4, rewritten rather than re-run — see that
-// group's own comment for exactly why re-running it unmodified would have
-// passed for the wrong reason once `CommandBar` can be present-but-invisible.
-test.describe('4b. No chrome collisions — desktop dock', () => {
-  test('1440px — dock expanded (default): nothing collides, and the command bar is genuinely inert, not just excluded from this check', async ({
-    page,
-  }) => {
-    await gotoAndSettle(page, DESKTOP); // dock expanded, Layers tab, by default
-    await waitForRectStable(page.locator('.rl-dock'));
+// The direct desktop-shaped replacement for group 4 above. Four groups can be
+// on screen at once: the rail itself, the zoom/locate/offline cluster docked
+// left of it, the top-left status badges, and — while one is open — a docked
+// side panel (Stands/Sightings/the offline picker/the filter editor) also
+// docked left of the rail. A wind/time popover is transient and anchored
+// *inside* the rail, so (matching group 4's own reasoning for the mobile
+// sheet+popover pair) it is allowed to overlap the rail it opens from and the
+// docked panel beside it — proven separately, by hit-testing, that it always
+// wins that overlap rather than being assumed to.
+test.describe('4b. No chrome collisions (desktop rail)', () => {
+  const PERSISTENT = ['rail', 'rail controls', 'status badges'];
 
-    const rects = await collectChromeRects(page);
-
-    // The positive half of "genuinely inert". `CommandBar`'s wrapper is
-    // `visibility: hidden`, not `display: none` — the first version of this
-    // rule used `display: none` and this very test caught the regression it
-    // caused: removing the wrapper from `.chrome-bottomleft`'s flex row
-    // reflowed `ConditionsBar` 208px left the instant the dock expanded,
-    // failing the trigger-stability test directly above this one.
-    // `visibility: hidden` keeps the box in flow (so nothing reflows) while
-    // removing it from hit-testing and the accessibility tree — asserted
-    // here as "a tap at its centre lands on the map, not the button", the
-    // same rendered-state proof this whole file insists on rather than
-    // trusting the CSS property name alone.
-    expect(
-      rects.commandBar,
-      'CommandBar should still be in the DOM, occupying its normal box',
-    ).not.toBeNull();
-    const commandBarHit = await page.evaluate((rect) => {
-      const el = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-      return el ? `${el.tagName}.${el.className}` : 'null';
-    }, rects.commandBar!);
-    expect(
-      commandBarHit,
-      `expected a tap where the command bar sits to miss it while the dock is expanded, landed on ${commandBarHit}`,
-    ).not.toMatch(/rl-command/);
-
-    expect(rects.dock, 'expected the dock to be present').not.toBeNull();
-    expect(
-      rects.dock!.width,
-      'dock should hold close to its declared 300px width while expanded',
-    ).toBeGreaterThan(250);
-
-    // The generic matrix, minus `command bar` (genuinely absent right now,
-    // proven above) and plus the nested Layers `.rl-sheet`, which is real
-    // here (default tab).
-    await assertNoCollisions(page, {
-      expectPresent: [
-        'rail (top-right)',
-        'conditions bar',
-        'chrome-bottomleft group',
-        'layers sheet',
-      ],
-    });
-
-    // The dock's own pairings — not in the generic matrix at all (a nested
-    // or overlaying `.rl-sheet` is *expected* to sit inside/above the dock's
-    // own bounds, so folding `dock` into that matrix would fail for a
-    // non-defect reason; see `collectChromeRects`' own doc comment on
-    // `dock`). What must never happen is the dock landing on top of the
-    // *persistent* chrome its own reserved margin exists to keep clear of.
-    for (const [name, rect] of [
-      ['top-right rail', rects.railTopRight],
-      ['conditions bar', rects.conditions],
-      ['chrome-bottomleft group', rects.bottomLeftGroup],
-    ] as const) {
-      expect(rect, `expected to find "${name}"`).not.toBeNull();
-      expect(
-        rectsOverlap(rects.dock, rect),
-        `dock and ${name} overlap: ${JSON.stringify(rects.dock)} vs ${JSON.stringify(rect)}`,
-      ).toBe(false);
-    }
+  test('nothing docked', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await assertNoRailCollisions(page, { expectPresent: PERSISTENT, expectAbsent: ['panel dock'] });
   });
 
-  test('1440px — dock collapsed: the command bar re-appears in exactly the reserved spot, and nothing collides', async ({
-    page,
-  }) => {
+  test('Stands panel docked', async ({ page }) => {
     await gotoAndSettle(page, DESKTOP);
-    await page.getByRole('button', { name: 'Collapse dock' }).click();
-    await waitForRectStable(page.locator('.rl-dock'));
+    await page.getByRole('radio', { name: 'Stands' }).click();
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await assertNoRailCollisions(page, { expectPresent: [...PERSISTENT, 'panel dock'] });
+  });
 
-    const rects = await collectChromeRects(page);
-    expect(
-      rects.dock,
-      'the dock stays mounted while collapsed — it animates width, it does not unmount (see its own doc comment on why)',
-    ).not.toBeNull();
-    expect(rects.dock!.width, 'collapsed dock should hold ~0 width').toBeLessThanOrEqual(1);
-
-    expect(rects.commandBar, 'command bar should be visible again once collapsed').not.toBeNull();
-    expect(
-      (rects.commandBar?.width ?? 0) > 0 && (rects.commandBar?.height ?? 0) > 0,
-      `command bar should have real, positive area once the dock is collapsed, was ${JSON.stringify(rects.commandBar)}`,
-    ).toBe(true);
-
-    await assertNoCollisions(page, { expectPresent: PERSISTENT });
+  test('the offline picker docked', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await openRegionPicker(page);
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await assertNoRailCollisions(page, { expectPresent: [...PERSISTENT, 'panel dock'] });
   });
 
   /**
-   * §c gap 1's own resolution, proven end to end: the offline picker opens
-   * as an overlay *above* the dock (the dock stays mounted underneath it,
-   * not collapsed), and a click on the picker's own controls lands on the
-   * picker — never falls through to the dock it is covering.
+   * Only one docked panel at a time — the desktop-shaped restatement of group
+   * 4's "the drawer slot never holds two panels at once". Stands/Sightings
+   * and the offline picker share `.rail-panel-dock`; two of them open would
+   * overlap exactly, and the one underneath becomes an `elementFromPoint`
+   * trap for the one on top.
    */
-  test('1440px — the offline picker opens as a real overlay above the dock, and its controls are what a click lands on', async ({
+  test('opening the offline picker closes the Stands dock, and vice versa', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await page.getByRole('radio', { name: 'Stands' }).click();
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await expect(page.locator('.rail-panel-dock .rl-sheet')).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Stands & markers' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save this area for offline use' }).click();
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await expect(page.locator('.rail-panel-dock .rl-sheet')).toHaveCount(1);
+    await expect(page.getByTestId('region-elevation-story')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Stands & markers' })).toHaveCount(0);
+
+    await page.getByRole('radio', { name: 'Layers' }).click();
+    await waitForRectStable(page.locator('.rail')); // dock unmounts, nothing left to settle on
+    await expect(page.locator('.rail-panel-dock')).toHaveCount(0);
+  });
+
+  test('opening the wind popover does not move its own trigger, or anything else in the rail', async ({
     page,
   }) => {
-    await gotoAndSettle(page, DESKTOP); // Layers tab open, one .rl-sheet (nested)
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
+    await gotoAndSettle(page, DESKTOP);
+    const trigger = page.getByRole('button', { name: /Wind from/ });
+    const before = await measureBox(trigger);
+    const railBefore = await measureBox(page.locator('.rail'));
+    await trigger.click();
+    await waitForRectStable(trigger);
+    const after = await measureBox(trigger);
+    const railAfter = await measureBox(page.locator('.rail'));
 
-    await page.getByRole('button', { name: 'Download this area' }).click();
-    await waitForRectStable(page.locator('.rl-sheet'));
-
-    // Still exactly one `.rl-sheet` — the nested drawer's own unmounted the
-    // instant `drawerSlotShowsTabs` (`App.tsx`) turned false, so there is
-    // never a second one for the picker's to stack on top of.
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
-    await expect(page.getByTestId('region-elevation-story')).toBeVisible();
-
-    const rects = await collectChromeRects(page);
-    expect(rects.dock, 'the dock stays mounted and expanded underneath the picker').not.toBeNull();
     expect(
-      rects.dock!.width,
-      'the dock must not have collapsed just because the picker opened',
-    ).toBeGreaterThan(250);
-    // The overlap this arrangement predicts, and exactly why `dock` is
-    // deliberately absent from the generic pairwise matrix above: the
-    // picker is *meant* to paint over the dock's own space, not stand
-    // beside it.
+      boxDelta(before, after),
+      `Wind trigger moved ${boxDelta(before, after).toFixed(1)}px when its popover opened.`,
+    ).toBeLessThanOrEqual(4);
     expect(
-      rectsOverlap(rects.sheet, rects.dock),
-      'expected the offline picker to overlap the dock it is covering',
-    ).toBe(true);
+      boxDelta(railBefore, railAfter),
+      `the rail itself moved ${boxDelta(railBefore, railAfter).toFixed(1)}px when the wind popover opened.`,
+    ).toBeLessThanOrEqual(4);
+    await expect(page.locator('.rl-popover'), 'the wind popover should have opened').toBeVisible();
+  });
 
-    // And the overlap is real, not just geometric — the same hit-test proof
-    // group 4's "every control in the popover is clickable" already runs
-    // for the wind popover, applied here to the picker sitting over the
-    // dock instead.
+  test('wind popover open — overlaps the rail it opens from, nothing else', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
+    await assertNoRailCollisions(page, {
+      expectPresent: [...PERSISTENT, 'wind/time popover'],
+      allow: [['rail', 'wind/time popover']],
+    });
+  });
+
+  /**
+   * The invariant the `allow` above needs to be safe — same lesson group 4
+   * pins for the mobile sheet: whitelisting an overlap says two things are
+   * *meant* to share space, and says nothing about which one a click lands
+   * on. Proven by hit-testing every control in the popover, and by an actual
+   * click landing where it should — the flagship "sweep the wind, watch
+   * bedding repaint" move, performed from the rail.
+   */
+  test('every control in the wind popover is clickable while the rail sits underneath', async ({
+    page,
+  }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
+
     const dead = await page.evaluate(() => {
-      const sheet = document.querySelector('.rl-sheet');
-      if (!sheet) throw new Error('sheet not open');
+      const popover = document.querySelector('.rl-popover');
+      if (!popover) throw new Error('popover not open');
       const out: Array<{ label: string; hit: string }> = [];
-      for (const el of sheet.querySelectorAll('button, input, select, a[href]')) {
+      for (const el of popover.querySelectorAll('button, input, select, a[href]')) {
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
@@ -894,39 +803,79 @@ test.describe('4b. No chrome collisions — desktop dock', () => {
     expect(
       dead,
       dead
-        .map((d) => `picker control "${d.label}" is painted but a click there lands on ${d.hit}`)
+        .map((d) => `popover control "${d.label}" is painted but a click there lands on ${d.hit}`)
         .join('\n'),
     ).toEqual([]);
+
+    await page.getByRole('button', { name: 'NW', exact: true }).click({ timeout: 5000 });
+    await expect(page.getByRole('checkbox', { name: /Bedding likelihood/ })).toBeEnabled();
   });
 
   /**
-   * The dock's own version of "only one panel may occupy the drawer slot"
-   * (group 4's mobile/original test, above) — restated for a model where
-   * closing the picker does not need to remember which tab to reopen,
-   * because `drawerTab` was never touched while it was open
-   * (`openOfflinePicker`'s own doc comment in `App.tsx`).
+   * The docked panel and the wind popover both open at once — the desktop
+   * rail's own version of the flagship "sweep the wind while watching the
+   * panel" move, proven with Stands docked rather than Layers (which is
+   * permanent chrome here and does not need proving separately).
    */
-  test('1440px — closing the offline picker restores whichever tab was showing, with no extra `.rl-sheet` ever mounted', async ({
+  test('Stands docked and the wind popover both open — no collision with the persistent groups', async ({
     page,
   }) => {
     await gotoAndSettle(page, DESKTOP);
-    await page.getByRole('tab', { name: 'Stands' }).click();
-    await waitForRectStable(page.locator('.rl-drawer'));
-    await expect(page.getByRole('tab', { name: 'Stands', selected: true })).toBeVisible();
+    await page.getByRole('radio', { name: 'Stands' }).click();
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
 
-    await page.getByRole('button', { name: 'Download this area' }).click();
-    await waitForRectStable(page.locator('.rl-sheet'));
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
-    // The tab strip is part of the nested drawer, which unmounted along with
-    // its Sheet.
-    await expect(page.getByRole('tablist')).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'Close panel' }).click(); // RegionPicker's own close
-    await waitForRectStable(page.locator('.rl-drawer'));
-    await expect(page.locator('.rl-sheet')).toHaveCount(1);
-    await expect(page.getByRole('tab', { name: 'Stands', selected: true })).toBeVisible();
+    await assertNoRailCollisions(page, {
+      expectPresent: [...PERSISTENT, 'panel dock', 'wind/time popover'],
+      allow: [
+        ['rail', 'wind/time popover'],
+        ['panel dock', 'wind/time popover'],
+      ],
+    });
   });
 });
+
+async function assertNoRailCollisions(
+  page: Page,
+  opts: { allow?: Array<[string, string]>; expectPresent?: string[]; expectAbsent?: string[] } = {},
+): Promise<void> {
+  const allow = new Set((opts.allow ?? []).map(([a, b]) => [a, b].sort().join('|')));
+  const rects = await collectChromeRects(page);
+  const named: Array<[string, typeof rects.rail]> = [
+    ['rail', rects.rail],
+    ['rail controls', rects.railControls],
+    ['status badges', rects.statusBadges],
+    ['panel dock', rects.panelDock],
+    ['wind/time popover', rects.popover],
+  ];
+
+  for (const requiredName of opts.expectPresent ?? []) {
+    const entry = named.find(([name]) => name === requiredName);
+    if (!entry)
+      throw new Error(`assertNoRailCollisions: no rect named "${requiredName}" — check spelling.`);
+    expect(
+      entry[1],
+      `expected to find "${requiredName}" in this state, but its selector matched nothing.`,
+    ).not.toBeNull();
+  }
+  for (const shouldBeAbsent of opts.expectAbsent ?? []) {
+    const entry = named.find(([name]) => name === shouldBeAbsent);
+    expect(entry?.[1], `expected "${shouldBeAbsent}" to be absent in this state.`).toBeNull();
+  }
+
+  for (let i = 0; i < named.length; i++) {
+    for (let j = i + 1; j < named.length; j++) {
+      const [nameA, rectA] = named[i];
+      const [nameB, rectB] = named[j];
+      if (allow.has([nameA, nameB].sort().join('|'))) continue;
+      expect(
+        rectsOverlap(rectA, rectB),
+        `${nameA} and ${nameB} overlap: ${JSON.stringify(rectA)} vs ${JSON.stringify(rectB)}`,
+      ).toBe(false);
+    }
+  }
+}
 
 async function assertNoCollisions(
   page: Page,
@@ -1018,17 +967,10 @@ async function assertNoCollisions(
 // `.rl-popover`: MapLibre's own attribution control is outside this app's
 // design-system contract (see `dom-audit.ts`).
 test.describe('5. Focus visibility', () => {
-  test('layers sheet — every tab stop has a visible focus indicator', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
+  test('mobile — layers sheet — every tab stop has a visible focus indicator', async ({ page }) => {
+    await gotoAndSettle(page, MOBILE);
     await waitForRectStable(page.locator('.rl-sheet'));
-    // The starting point used to be `CommandBar`'s "Layers" button — on
-    // desktop that control is `visibility: hidden` whenever the dock is
-    // expanded (`BACKLOG R63`; the layers sheet is open by default, which is
-    // exactly this test's own setup), so focusing it is no longer a
-    // meaningful starting point there. The `TabBar` tab of the same name is
-    // always real and focusable whenever the layers sheet itself is showing,
-    // on both the desktop dock and the mobile drawer.
-    await page.getByRole('tab', { name: 'Layers' }).focus();
+    await page.getByRole('button', { name: 'Layers' }).focus();
 
     const stops = await tabThroughChrome(page);
     expect(stops.length, 'expected to walk more than a couple of tab stops').toBeGreaterThan(3);
@@ -1041,9 +983,43 @@ test.describe('5. Focus visibility', () => {
     ).toEqual([]);
   });
 
-  test('wind popover — every tab stop has a visible focus indicator', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
+  test('mobile — wind popover — every tab stop has a visible focus indicator', async ({ page }) => {
+    await gotoAndSettle(page, MOBILE);
     await closeLayersSheet(page);
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
+    await page.getByRole('button', { name: /Wind from/ }).focus();
+
+    const stops = await tabThroughChrome(page);
+    expect(stops.length).toBeGreaterThan(3);
+    const unmarked = stops.filter((s) => !s.ok);
+    expect(
+      unmarked,
+      unmarked
+        .map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`)
+        .join('\n'),
+    ).toEqual([]);
+  });
+
+  test('desktop rail — every tab stop has a visible focus indicator', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await page.getByRole('radio', { name: 'Satellite' }).focus();
+
+    const stops = await tabThroughChrome(page);
+    expect(stops.length, 'expected to walk more than a couple of tab stops').toBeGreaterThan(3);
+    const unmarked = stops.filter((s) => !s.ok);
+    expect(
+      unmarked,
+      unmarked
+        .map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`)
+        .join('\n'),
+    ).toEqual([]);
+  });
+
+  test('desktop rail — wind popover — every tab stop has a visible focus indicator', async ({
+    page,
+  }) => {
+    await gotoAndSettle(page, DESKTOP);
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
     await page.getByRole('button', { name: /Wind from/ }).focus();
@@ -1073,15 +1049,19 @@ interface FocusStop {
  * it neither stops early on a long panel nor spins forever on a focus trap
  * bug.
  *
- * `.rl-drawer` joined the scoped roots alongside `.map-chrome`/`.rl-sheet`/
- * `.rl-popover` when the desktop dock landed (`BACKLOG R63`) — `TabBar`
- * (Layers/Stands/Sightings) is a sibling of the nested `.rl-sheet`, not a
- * descendant of it, so a starting anchor inside the tab strip (which the
- * dock now requires — see the "layers sheet" focus test's own comment for
- * why `CommandBar`'s "Layers" button is no longer a usable one) could never
- * record a single stop without this: the very next tab press lands on
- * another tab, still outside every previously-scoped root, and the loop
- * would exit immediately having recorded nothing.
+ * `.rl-drawer`/`.rail-panel-dock` are in this scope alongside `.map-chrome`/
+ * `.rl-sheet`/`.rl-popover` for a real reason, found by this exact test
+ * failing against the codebase this pass started from (`8bd1e8c`, verified
+ * in an isolated worktree — not a regression this pass introduced): the
+ * tabbed drawer's `TabBar` (`d7d861c`) sits inside `.rl-drawer` but *outside*
+ * the nested `.rl-sheet` it wraps, so tabbing from the Layers cell used to
+ * leave "chrome" — by this function's own definition — the instant it
+ * reached the Stands/Sightings tabs, auditing only the three cells before
+ * them and never the drawer's actual content. Same shape on the desktop
+ * rail: `.rail-panel-dock`'s docked `<Sheet>` is a plain flow wrapper, not
+ * itself `.rl-sheet`'s ancestor selector target once nested — belt-and-
+ * braces here rather than assuming the rail's own `.map-chrome--rail`
+ * wrapper is enough.
  */
 async function tabThroughChrome(page: Page, maxStops = 60): Promise<FocusStop[]> {
   const stops: FocusStop[] = [];
@@ -1091,7 +1071,9 @@ async function tabThroughChrome(page: Page, maxStops = 60): Promise<FocusStop[]>
     await page.keyboard.press('Tab');
     const info = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
-      const inChrome = el?.closest('.map-chrome, .rl-sheet, .rl-popover, .rl-drawer');
+      const inChrome = el?.closest(
+        '.map-chrome, .rl-sheet, .rl-popover, .rl-drawer, .rail-panel-dock',
+      );
       if (!el || el === document.body || !inChrome) return null;
 
       const style = window.getComputedStyle(el);
@@ -1153,21 +1135,45 @@ test.describe('6. No horizontal page scroll', () => {
 // as biased toward *passing*, never toward a false failure — so a failure
 // this test reports is trustworthy.
 test.describe('7. Chrome text contrast (WCAG AA)', () => {
-  test('layers sheet', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
+  test('mobile — layers sheet', async ({ page }) => {
+    await gotoAndSettle(page, MOBILE);
     await waitForRectStable(page.locator('.rl-sheet'));
     await assertChromeContrast(page, ['.map-chrome', '.rl-sheet']);
   });
 
-  test('conditions bar and wind popover', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
+  test('mobile — conditions bar and wind popover', async ({ page }) => {
+    await gotoAndSettle(page, MOBILE);
     await closeLayersSheet(page);
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
     await assertChromeContrast(page, ['.map-chrome']);
   });
 
-  test('region picker', async ({ page }) => {
+  test('mobile — region picker', async ({ page }) => {
+    // The picker carries the app's longest body copy — the elevation-only
+    // sentence and the server's download warnings — over glass on a live map.
+    // Both are sentences a hunter has to actually read at 22:00 to make a
+    // decision, and both sit on the one surface in the app with a `sticky`
+    // element and a second background colour behind it.
+    await gotoAndSettle(page, MOBILE);
+    await openRegionPicker(page);
+    await assertChromeContrast(page, ['.map-chrome', '.rl-sheet']);
+  });
+
+  test('desktop rail', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await waitForRectStable(page.locator('.rail'));
+    await assertChromeContrast(page, ['.map-chrome']);
+  });
+
+  test('desktop rail — wind popover open over it', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await page.getByRole('button', { name: /Wind from/ }).click();
+    await waitForRectStable(page.locator('.rl-popover'));
+    await assertChromeContrast(page, ['.map-chrome']);
+  });
+
+  test('desktop rail — offline picker docked beside it', async ({ page }) => {
     // The picker carries the app's longest body copy — the elevation-only
     // sentence and the server's download warnings — over glass on a live map.
     // Both are sentences a hunter has to actually read at 22:00 to make a
@@ -1175,13 +1181,22 @@ test.describe('7. Chrome text contrast (WCAG AA)', () => {
     // element and a second background colour behind it.
     await gotoAndSettle(page, DESKTOP);
     await openRegionPicker(page);
-    await assertChromeContrast(page, ['.map-chrome', '.rl-sheet']);
+    await assertChromeContrast(page, ['.map-chrome']);
   });
 });
 
 async function assertChromeContrast(page: Page, roots: string[]): Promise<void> {
-  const nodes = await collectChromeTextNodes(page, roots);
-  expect(nodes.length, 'expected some visible chrome text to audit').toBeGreaterThan(0);
+  const allNodes = await collectChromeTextNodes(page, roots);
+  expect(allNodes.length, 'expected some visible chrome text to audit').toBeGreaterThan(0);
+
+  // A node genuinely painted over by an open popover/sheet is not showing
+  // its own pixels right now — sampling it compares this text's ink colour
+  // against the *overlay's* background, which is a different, unrelated
+  // claim to check (and is itself covered, on its own turn, whenever that
+  // overlay's own contrast is asserted). See `coveredByOpenOverlay`'s doc
+  // comment in `dom-audit.ts`.
+  const nodes = allNodes.filter((n) => !n.coveredByOpenOverlay);
+  expect(nodes.length, 'expected some visible, uncovered chrome text to audit').toBeGreaterThan(0);
 
   const pointsPerNode = nodes.map((n) => gridPoints(n, 5, 4));
   const flatSamples = await samplePixels(page, pointsPerNode.flat());
@@ -1222,9 +1237,16 @@ async function assertChromeContrast(page: Page, roots: string[]): Promise<void> 
 // in `packages/design/src/components/primitives.tsx`). Density = content
 // height / the panel's own allocated height, capped at 100% once content
 // needs to scroll (a scrolling long list is dense by definition, not sparse).
+// Mobile-only: `.rl-sheet`/`.rl-popover` (the "chassis vs. content" shape
+// this metric is built for) only apply to the mobile drawer and the wind/
+// time popover on either chassis. The desktop rail has no analogous
+// "container sized for a longer list than it holds" failure mode to begin
+// with — it has no separate chassis allocation at all, and its own "does
+// everything fit" contract is group 14's job, which asserts the opposite
+// direction (no *overflow*, not sparseness).
 test.describe('8. Panel density (>= 40% of chassis)', () => {
   test('layers sheet — a genuinely long, scrolling list', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
+    await gotoAndSettle(page, MOBILE);
     await waitForRectStable(page.locator('.rl-sheet'));
     const density = await measureDensity(page, '.rl-sheet', '.rl-sheet__body');
     expect(
@@ -1234,7 +1256,7 @@ test.describe('8. Panel density (>= 40% of chassis)', () => {
   });
 
   test('wind popover — sized to its own content, not an oversized chassis', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
+    await gotoAndSettle(page, MOBILE);
     await closeLayersSheet(page);
     await page.getByRole('button', { name: /Wind from/ }).click();
     await waitForRectStable(page.locator('.rl-popover'));
@@ -1243,44 +1265,6 @@ test.describe('8. Panel density (>= 40% of chassis)', () => {
       density,
       `Wind popover content fills only ${(density * 100).toFixed(0)}% of its chassis`,
     ).toBeGreaterThanOrEqual(0.4);
-  });
-
-  /**
-   * The dock's own density claim (`BACKLOG R63`,
-   * `docs/design/PLAN-direction-a.md` §f: "a dock that shrinks to nothing
-   * over time as other chrome grows is exactly the F7-class defect
-   * (`docs/AUDIT-PRODUCT.md`) the old rail died of"). A fixed 300px panel is
-   * a different shape of claim from the two tests above — "content fills
-   * ≥40% of whatever height it was given" says nothing about whether the
-   * *width* itself is still what was promised. This reads the same token
-   * the component itself is built from (`layout.dock-width`,
-   * `packages/design/src/tokens.ts`) rather than hard-coding `300`, so a
-   * deliberate token change never has to touch this file, and only a
-   * regression that makes the *rendered* dock disagree with its own
-   * declared width fails it.
-   */
-  test('1440px — the dock holds its declared width, expanded, rather than a percentage of something else', async ({
-    page,
-  }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await waitForRectStable(page.locator('.rl-dock'));
-
-    const declaredWidth = await page.evaluate(() => {
-      const px = getComputedStyle(document.documentElement).getPropertyValue('--layout-dock-width');
-      return parseFloat(px);
-    });
-    expect(
-      declaredWidth,
-      'expected --layout-dock-width to resolve to a real px figure',
-    ).toBeGreaterThan(0);
-
-    const dockWidth = await page
-      .locator('.rl-dock')
-      .evaluate((el) => el.getBoundingClientRect().width);
-    expect(
-      dockWidth,
-      `dock rendered at ${dockWidth.toFixed(1)}px, expected within 1px of the declared ${declaredWidth}px`,
-    ).toBeGreaterThanOrEqual(declaredWidth - 1);
   });
 });
 
@@ -1345,7 +1329,10 @@ test.describe('9. Offline coverage describes the view on screen', () => {
       context,
     }) => {
       await gotoAndSettle(page, viewport);
-      await waitForRectStable(page.locator('.rl-sheet'));
+      // `.rl-sheet` is the mobile drawer's default-open panel; the desktop
+      // rail has no equivalent "sheet" open by default at all — its own
+      // permanent chrome is `.rail`.
+      await waitForRectStable(page.locator(viewport.width > 860 ? '.rail' : '.rl-sheet'));
 
       // 1. A genuinely cold device, then a genuinely downloaded region.
       await clearTiles(page);
@@ -1394,7 +1381,7 @@ test.describe('9. Offline coverage describes the view on screen', () => {
     // which reports what the GL renderer actually drew — a source whose data
     // was set but whose layer never made it into the style comes back empty.
     await gotoAndSettle(page, DESKTOP);
-    await waitForRectStable(page.locator('.rl-sheet'));
+    await waitForRectStable(page.locator('.rail'));
 
     await clearTiles(page);
     await seedTilesForView(page, 0.5);
@@ -1425,7 +1412,7 @@ test.describe('9. Offline coverage describes the view on screen', () => {
     // the hatch off the map while the badge still said "Partial". Visible,
     // correct text, and the thing that told you *where* silently gone.
     await gotoAndSettle(page, DESKTOP);
-    await waitForRectStable(page.locator('.rl-sheet'));
+    await waitForRectStable(page.locator('.rail'));
 
     await clearTiles(page);
     await seedTilesForView(page, 0.5);
@@ -1485,17 +1472,22 @@ test.describe('10. Layer paint coverage — a layer that paints nothing must fai
       await waitForTiles(page);
       await page.keyboard.press('Escape');
 
-      await page.getByRole('button', { name: 'Layers' }).click();
+      // The desktop rail's layer chips are permanent chrome — nothing to
+      // open. Only the mobile drawer needs the Layers cell pressed first.
+      const layersButton = page.getByRole('button', { name: 'Layers' });
+      if (await layersButton.isVisible().catch(() => false)) await layersButton.click();
       const bedding = page.getByRole('checkbox', { name: /Bedding likelihood/ });
       await expect(bedding).toBeEnabled();
       await bedding.click();
       await waitForTiles(page);
 
       // Close the layers sheet / any open popover so what gets measured is the
-      // map, not chrome sitting on top of it.
+      // map, not chrome sitting on top of it. The desktop rail has no
+      // `.chrome-bottomleft` at all — its own persistent chrome is `.rail`,
+      // which never closes.
       await closeLayersSheet(page);
       await page.keyboard.press('Escape');
-      await waitForRectStable(page.locator('.chrome-bottomleft'));
+      await waitForRectStable(page.locator(viewport.width > 860 ? '.rail' : '.chrome-bottomleft'));
 
       const mapBox = await measureBox(page.getByTestId('map-canvas'));
       const coveragePct = await waitForCoverageStable(page, mapBox);
@@ -1683,14 +1675,18 @@ test.describe('11. Offline region picker (R4)', () => {
     // R8's badge must now agree. If `invalidateCoverageCache()` were not
     // called on completion, this would sit on the pre-download verdict for up
     // to twenty seconds and a hunter would be told the download did nothing.
-    await page.getByRole('button', { name: 'Layers' }).click();
+    // No panel to open first — the coverage chip is permanent chrome on both
+    // chassis (`.chrome-bottomleft` on mobile, `DesktopStatusBadges` on the
+    // desktop rail), never gated behind a Layers toggle.
     await expect.poll(() => chipText(page), { timeout: 60_000 }).toBe('COVERED');
     expect(await chipColor(page)).toBe(await tokenColor(page, '--color-ok'));
 
     // --- the cold start ---------------------------------------------------
     await context.setOffline(true);
     await page.reload();
-    await page.waitForSelector('.rl-sheet', { timeout: 120_000 });
+    // `.rl-sheet`/`.rail` differ by chassis; the map canvas is the one
+    // landmark both share.
+    await page.getByTestId('map-canvas').waitFor({ state: 'visible', timeout: 120_000 });
 
     await expect.poll(() => chipText(page), { timeout: 120_000 }).toBe('COVERED');
     await expect(page.getByTestId('coverage-detail')).toContainText('no signal');
@@ -1768,8 +1764,18 @@ test.describe('11. Offline region picker (R4)', () => {
     // strand a hunter with neither the region nor the map.
     const layers = await hitTestInPlace(page, 'map-canvas');
     expect(layers.found).toBe(true);
-    await page.getByRole('button', { name: 'Layers' }).click();
-    await expect(page.locator('.rl-sheet')).toBeVisible();
+    // Reach a layer control and prove it still responds. On the desktop rail
+    // the layer chips are permanent chrome, visible the whole time the
+    // region picker was open (they are docked side by side, never one
+    // covering the other) — nothing to open first. On mobile the Layers
+    // cell still opens the drawer exactly as before.
+    const layersButton = page.getByRole('button', { name: 'Layers' });
+    if (await layersButton.isVisible().catch(() => false)) {
+      await layersButton.click();
+      await expect(page.locator('.rl-sheet')).toBeVisible();
+    } else {
+      await expect(page.getByRole('checkbox', { name: 'Shaded relief' })).toBeVisible();
+    }
   });
 
   /**
@@ -1834,18 +1840,57 @@ test.describe('12. Glass container painted surface matches its interactive child
   // surplus the regression this pins actually produced.
   const TOLERANCE_PX = 12;
 
-  const containers: Array<{ name: string; container: string; children: string }> = [
-    {
-      name: 'command bar',
-      container: '.chrome-bottomleft .rl-command',
-      children: '.rl-command__cell',
-    },
-    { name: 'top-right rail', container: '.chrome-topright .rl-rail', children: '.rl-rail__btn' },
-    { name: 'conditions bar', container: '.rl-conditions', children: '.rl-conditions__cell' },
-  ];
+  // The mobile chassis is unchanged, so it keeps the three containers the
+  // original regression actually touched. The desktop rail is a different
+  // component tree with no `.chrome-bottomleft`/`.rl-command`/`.rl-
+  // conditions` at all — its own shared-background, multiple-flex-child
+  // containers are the rail-controls rail (the direct R43 twin, `.rl-rail`
+  // under a new corner class) and the three `SegmentedControl`s
+  // (`DesktopRail.tsx`), which use the identical `flex: 1 1 0` recipe and
+  // are checked directly rather than trusted by construction, matching this
+  // group's own stated philosophy for `CommandBar` above.
+  const containersFor = (viewport: {
+    width: number;
+  }): Array<{ name: string; container: string; children: string }> =>
+    viewport.width > 860
+      ? [
+          {
+            name: 'rail controls',
+            container: '.chrome-rail-controls .rl-rail',
+            children: '.rl-rail__btn',
+          },
+          {
+            name: 'base map picker',
+            container: '.rail [aria-label="Base map"]',
+            children: '.rl-segmented__opt',
+          },
+          {
+            name: 'elevation source picker',
+            container: '.rail [aria-label="Elevation source"]',
+            children: '.rl-segmented__opt',
+          },
+          {
+            name: 'panel picker',
+            container: '.rail [aria-label="Panel"]',
+            children: '.rl-segmented__opt',
+          },
+        ]
+      : [
+          {
+            name: 'command bar',
+            container: '.chrome-bottomleft .rl-command',
+            children: '.rl-command__cell',
+          },
+          {
+            name: 'top-right rail',
+            container: '.chrome-topright .rl-rail',
+            children: '.rl-rail__btn',
+          },
+          { name: 'conditions bar', container: '.rl-conditions', children: '.rl-conditions__cell' },
+        ];
 
   for (const viewport of [DESKTOP, MOBILE]) {
-    for (const c of containers) {
+    for (const c of containersFor(viewport)) {
       test(`${viewport.width}px — ${c.name}`, async ({ page }) => {
         await gotoAndSettle(page, viewport);
         await closeLayersSheet(page);
@@ -1877,86 +1922,6 @@ test.describe('12. Glass container painted surface matches its interactive child
       });
     }
   }
-
-  /**
-   * `TabBar` (`docs/design/PLAN-direction-a.md` §f: "extend this group's
-   * coverage to the new `Dock` primitive explicitly, at both viewports") —
-   * the exact same hairline-cells-of-equal-flex-share shape as `CommandBar`
-   * and the top-right rail above, and genuinely untested by this group
-   * until now even though it shipped before the dock did (the tabbed
-   * drawer, `d7d861c`). It lives inside `Dock` on desktop and inside the
-   * standalone `.rl-drawer` on mobile — the loop above cannot reach it
-   * because every one of its cases calls `closeLayersSheet` first, which is
-   * exactly what makes `TabBar` disappear (there is nothing to switch tabs
-   * *within* once the drawer/dock is closed).
-   */
-  test.describe('tab bar', () => {
-    for (const viewport of [DESKTOP, MOBILE]) {
-      test(`${viewport.width}px`, async ({ page }) => {
-        await gotoAndSettle(page, viewport); // drawer/dock open, TabBar visible, by default
-        await waitForRectStable(page.locator('.rl-tabbar'));
-
-        const { container, childUnion } = await measureGlassSurplus(
-          page,
-          '.rl-tabbar',
-          '.rl-tabbar__tab',
-        );
-        expect(
-          container,
-          'tab bar: container selector ".rl-tabbar" matched nothing',
-        ).not.toBeNull();
-        expect(
-          childUnion,
-          'tab bar: no visible children matched ".rl-tabbar__tab" to compare against',
-        ).not.toBeNull();
-
-        const widthSurplus = container!.width - childUnion!.width;
-        const heightSurplus = container!.height - childUnion!.height;
-        expect(
-          widthSurplus,
-          `tab bar is ${widthSurplus.toFixed(1)}px wider than the union of its own tabs (container ` +
-            `${container!.width.toFixed(1)}px vs tabs ${childUnion!.width.toFixed(1)}px).`,
-        ).toBeLessThanOrEqual(TOLERANCE_PX);
-        expect(
-          heightSurplus,
-          `tab bar is ${heightSurplus.toFixed(1)}px taller than the union of its own tabs.`,
-        ).toBeLessThanOrEqual(TOLERANCE_PX);
-      });
-    }
-  });
-
-  /**
-   * The dock's own collapse control (desktop only — there is no dock at
-   * MOBILE to check). A single-cell row rather than a multi-cell one, which
-   * makes it a narrower claim than the others above: there is no *sibling*
-   * cell for a stretch bug to leave stranded, only the question of whether
-   * the row's own painted background matches the button's real hit area —
-   * still the same failure class (a container bigger than what it paints
-   * buttons for), just with one child instead of several.
-   */
-  test('1440px — dock collapse-control row', async ({ page }) => {
-    await gotoAndSettle(page, DESKTOP);
-    await waitForRectStable(page.locator('.rl-dock'));
-
-    const { container, childUnion } = await measureGlassSurplus(
-      page,
-      '.rl-dock__collapse-row',
-      '.rl-dock__collapse',
-    );
-    expect(container, 'dock collapse row: container selector matched nothing').not.toBeNull();
-    expect(childUnion, 'dock collapse row: no visible "Collapse dock" button found').not.toBeNull();
-
-    const widthSurplus = container!.width - childUnion!.width;
-    const heightSurplus = container!.height - childUnion!.height;
-    expect(
-      widthSurplus,
-      `dock collapse row is ${widthSurplus.toFixed(1)}px wider than the "Collapse dock" button itself.`,
-    ).toBeLessThanOrEqual(TOLERANCE_PX);
-    expect(
-      heightSurplus,
-      `dock collapse row is ${heightSurplus.toFixed(1)}px taller than the "Collapse dock" button itself.`,
-    ).toBeLessThanOrEqual(TOLERANCE_PX);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1984,10 +1949,18 @@ test.describe('12. Glass container painted surface matches its interactive child
 // settle helper: it waits for the chrome to mount and quiet down, never for
 // map pixels, which is honest for what every assertion here actually reads
 // (DOM geometry and hit-testing, not the basemap).
-test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
+// Mobile-only — the tabbed drawer (`TabBar` inside `.rl-drawer`) this group
+// was written against is unchanged there. Above 860px `App.tsx` no longer
+// mounts a `TabBar`/`.rl-drawer` at all (`role="tab"` does not exist in that
+// tree, so `gotoDrawer` below would simply time out) — the desktop rail's own
+// equivalent contract (permanent layer chips, a docked side panel for Stands/
+// Sightings, wind/date reachable regardless of which panel is docked, one
+// panel at a time) is group 16, built against its real selectors rather than
+// forcing mobile-shaped assertions onto a different tree.
+test.describe('13. Tabbed drawer (Layers / Stands / Sightings) — mobile', () => {
   async function gotoDrawer(
     page: Page,
-    viewport: { width: number; height: number } = DESKTOP,
+    viewport: { width: number; height: number } = MOBILE,
   ): Promise<void> {
     await page.setViewportSize(viewport);
     await page.goto(`/${VIEW}`);
@@ -1998,7 +1971,7 @@ test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
 
   const TAB_NAMES = ['Layers', 'Stands', 'Sightings'] as const;
 
-  for (const viewport of [DESKTOP, MOBILE]) {
+  for (const viewport of [MOBILE]) {
     test(`${viewport.width}px — all three tabs are reachable, and switching fully unmounts the previous panel`, async ({
       page,
     }) => {
@@ -2158,7 +2131,7 @@ test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
     });
   }
 
-  test('desktop — the Stands and Sightings tabs state a property is required rather than guessing one, while signed out', async ({
+  test('mobile — the Stands and Sightings tabs state a property is required rather than guessing one, while signed out', async ({
     page,
   }) => {
     // This sandbox has no backend at all, so "signed out" is the only
@@ -2167,7 +2140,7 @@ test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
     // belongs to. `useCurrentProperty` (`apps/web/src/lib/currentProperty.ts`)
     // never fabricates a property id, and these two tabs must say so rather
     // than silently rendering against one.
-    await gotoDrawer(page, DESKTOP);
+    await gotoDrawer(page, MOBILE);
 
     await page.getByRole('tab', { name: 'Stands' }).click();
     await waitForRectStable(page.locator('.rl-drawer'));
@@ -2194,10 +2167,10 @@ test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
   // prevent, applied to auth instead of terrain. What *is* verifiable here is
   // that the gate itself renders — the control is replaced by a stated reason
   // rather than left clickable-but-doomed.
-  test('desktop — "New filter" is replaced by a stated reason while signed out, not a doomed control', async ({
+  test('mobile — "New filter" is replaced by a stated reason while signed out, not a doomed control', async ({
     page,
   }) => {
-    await gotoDrawer(page, DESKTOP);
+    await gotoDrawer(page, MOBILE);
 
     await expect(page.getByRole('button', { name: 'New filter' })).toHaveCount(0);
     await expect(page.getByText('Sign in to build and save your own filters')).toBeVisible();
@@ -2206,47 +2179,386 @@ test.describe('13. Tabbed drawer (Layers / Stands / Sightings)', () => {
     await expect(page.getByText('Bedding benches')).toBeVisible();
   });
 
-  test('desktop — the drawer slot itself never holds two panels at once, across every reachable transition', async ({
+  test('mobile — the drawer slot itself never holds two panels at once, across every reachable transition', async ({
     page,
   }) => {
     // The mechanism `FilterLibrary`/`FilterEditor` rely on when they do take
-    // over the slot (`App.tsx`: `{drawerSlotShowsTabs && …}`, `{filterEditorTarget
-    // && …}`, mutually exclusive by construction) is the same one already
-    // proven by every tab switch above: exactly one `.rl-sheet` on screen,
-    // ever. Restated here against the Offline picker, which *is* reachable
-    // with no backend, as the end-to-end proof for that mechanism rather
-    // than trusting the JSX condition by inspection alone.
-    //
-    // The entry point is the dock's own "Download this area" button, not
-    // `CommandBar`'s "Offline" cell — `BACKLOG R63`. That cell is
-    // `visibility: hidden` on desktop whenever the dock is expanded (the
-    // state `gotoDrawer` leaves this test in), and a real click there would
-    // never become actionable — the first version of this test hung on
-    // exactly that click for the full suite timeout, which is the strongest
-    // possible proof the old assertion was testing chrome that no longer
-    // exists rather than a real regression.
-    await gotoDrawer(page, DESKTOP);
+    // over the slot (`App.tsx`: `{drawerTab && !filterEditorTarget && …}`,
+    // `{filterEditorTarget && …}`, mutually exclusive by construction) is the
+    // same one already proven by every tab switch above: exactly one
+    // `.rl-sheet` on screen, ever. Restated here against the Offline picker,
+    // which *is* reachable with no backend, as the end-to-end proof for that
+    // mechanism rather than trusting the JSX condition by inspection alone.
+    await gotoDrawer(page, MOBILE);
     await expect(page.locator('.rl-sheet')).toHaveCount(1);
 
-    await page.getByRole('button', { name: 'Download this area' }).click();
+    await page.getByRole('button', { name: 'Save this area for offline use' }).click();
     await waitForRectStable(page.locator('.rl-sheet'));
     await expect(page.locator('.rl-sheet')).toHaveCount(1);
-    // Opening Offline unmounts the nested drawer's own `.rl-sheet` (the
-    // guard is `drawerSlotShowsTabs`, `App.tsx`) — TabBar goes with it, since
-    // there is nothing to switch tabs *within* while a sibling panel owns
-    // the slot. The dock chassis itself (header, this same Offline Coverage
-    // section, footer) stays mounted and expanded underneath, unlike the
-    // old drawer-only model this test used to check.
+    // Opening Offline closes the drawer outright (`App.tsx`), which
+    // unmounts `TabBar` along with it — there is nothing to switch tabs
+    // *within* while a sibling panel owns the slot.
     await expect(page.getByRole('tablist')).toHaveCount(0);
-    await expect(page.locator('.rl-dock')).toBeVisible();
 
-    // Closed via the picker's own close control — `drawerTab` was never
-    // touched while it was open (`openOfflinePicker`'s doc comment), so the
-    // tab strip reappears the instant the picker's `.rl-sheet` does not,
-    // with nothing to "re-open".
-    await page.getByRole('button', { name: 'Close panel' }).click();
+    // Re-opened via the command-bar cell, not a tab — the tab strip does not
+    // exist again until the drawer itself is back.
+    await page.getByRole('button', { name: 'Layers, stands and sightings' }).click();
     await waitForRectStable(page.locator('.rl-drawer'));
     await expect(page.locator('.rl-sheet')).toHaveCount(1);
     await expect(page.getByRole('tablist')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. Desktop docked panel (Direction C) — the rail's equivalent of the
+//     mobile tabbed drawer (group 13)
+// ---------------------------------------------------------------------------
+//
+// The desktop rail has no tabbed drawer: Layers is permanent chrome, and
+// Stands/Sightings dock beside the rail instead of replacing it (`App.tsx`,
+// `.rail-panel-dock`). The three properties group 13 exists to guard —
+// "never guess a property", "a doomed control is replaced by a stated
+// reason", "wind/date/thermals stay reachable no matter what else is open" —
+// apply just as hard here, restated against the real selectors rather than
+// forced onto a tree that no longer has a `TabBar`.
+test.describe('16. Desktop docked panel (Direction C)', () => {
+  test('the property gate states a property is required rather than guessing one, while signed out', async ({
+    page,
+  }) => {
+    await gotoAndSettle(page, DESKTOP);
+
+    await page.getByRole('radio', { name: 'Stands' }).click();
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await expect(page.getByRole('heading', { name: 'Stands & markers' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+
+    await page.getByRole('radio', { name: 'Sightings' }).click();
+    await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+    await expect(page.getByRole('heading', { name: 'Sightings & sits' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+
+    // And the rest of the chrome — layer chips, wind/time — must still work
+    // from here; being signed out must never strand the map itself.
+    await page.getByRole('radio', { name: 'Layers' }).click();
+    await expect(page.locator('.rail-panel-dock')).toHaveCount(0);
+    await expect(page.getByText('Saved filters')).toBeVisible();
+  });
+
+  // This sandbox has no backend, so every case here runs signed out — there
+  // is no reachable path to actually authenticate and open `FilterLibrary`,
+  // which is exactly why `canCreateFilters` matters: "New filter" calling an
+  // endpoint that will just 401 is the control CLAUDE.md's "say when an
+  // input is missing" rule exists to prevent. What is verifiable here is
+  // that the gate itself renders on the rail.
+  test('"New filter" is replaced by a stated reason while signed out, not a doomed control', async ({
+    page,
+  }) => {
+    await gotoAndSettle(page, DESKTOP);
+    await expect(page.getByRole('button', { name: 'New filter' })).toHaveCount(0);
+    await expect(page.getByText('Sign in to build and save your own filters')).toBeVisible();
+    // The built-in presets are the point of the degrade — still usable with
+    // no account at all.
+    await expect(page.getByText('Bedding benches', { exact: true })).toBeVisible();
+  });
+
+  test('wind, date and thermals stay reachable with every docked panel open', async ({ page }) => {
+    await gotoAndSettle(page, DESKTOP);
+
+    for (const name of ['Stands', 'Sightings'] as const) {
+      await page.getByRole('radio', { name }).click();
+      await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+
+      const elements = await auditInteractiveElements(page, ['.rail']);
+      expect(elements.length, `expected the rail's own controls to be auditable`).toBeGreaterThan(
+        5,
+      );
+      const broken = elements.filter((el) => !el.reachable || !el.hitOk);
+      expect(
+        broken,
+        broken
+          .map((f) => `"${f.name}" is not cleanly hit-testable while "${name}" is docked`)
+          .join('\n'),
+      ).toEqual([]);
+
+      // The flagship move itself: opening the wind popover with this panel
+      // docked must actually work, not just look present.
+      await page.getByRole('button', { name: /Wind from/ }).click();
+      await waitForRectStable(page.locator('.rl-popover'));
+      await expect(page.locator('.rl-popover')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.rl-popover')).toHaveCount(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. Desktop rail — everything fits with no scrolling, every control
+//     reachable (the founder's brief, made into a gate)
+// ---------------------------------------------------------------------------
+//
+// The founder's complaint, measured: the old drawer was `width: 360px`,
+// pinned top-left, running to the command bar — 24.6% of a 1440×900 window
+// permanently hidden while open, and the only route to Layers/Stands/
+// Sightings. Their requirement, verbatim in intent: "more minimal and
+// compact, with all the options visible within the screen on desktop. No
+// scrolling to reach a control." This group is that requirement as an
+// assertion, at both viewports the brief names (1440×900 and 1280×800),
+// rather than a screenshot somebody eyeballed once.
+test.describe('14. Desktop rail — everything fits, no scroll, every control reachable', () => {
+  const VIEWPORTS = [DESKTOP, { width: 1280, height: 800 }] as const;
+
+  for (const viewport of VIEWPORTS) {
+    test(`${viewport.width}x${viewport.height} — the rail's own scroll container never needs to scroll`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport);
+
+      const overflow = await page.evaluate(() => {
+        const el = document.querySelector('.rail__scroll');
+        if (!el) return null;
+        return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+      });
+      expect(overflow, '.rail__scroll not found — is the rail actually mounted?').not.toBeNull();
+      expect(
+        overflow!.scrollHeight,
+        `the rail's control list needs ${overflow!.scrollHeight}px of height but only has ` +
+          `${overflow!.clientHeight}px at ${viewport.width}x${viewport.height} — it would scroll, ` +
+          `exactly the drawer failure mode this rail exists to fix.`,
+      ).toBeLessThanOrEqual(overflow!.clientHeight);
+    });
+
+    test(`${viewport.width}x${viewport.height} — every control the rail renders by default is reachable and hit-testable`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport);
+
+      const elements = await auditInteractiveElements(page, ['.rail']);
+      expect(
+        elements.length,
+        'expected a real population of controls in the rail (base map, layer chips, elevation ' +
+          'source, saved filters, wind/time, the panel picker)',
+      ).toBeGreaterThan(10);
+
+      const unreachable = elements.filter((el) => !el.reachable);
+      expect(
+        unreachable,
+        unreachable
+          .map(
+            (f) =>
+              `"${f.name}" is unreachable at ${viewport.width}x${viewport.height} — no scrollable ` +
+              `ancestor can bring it into view, which means it is permanently below the fold on this ` +
+              `screen.`,
+          )
+          .join('\n'),
+      ).toEqual([]);
+
+      const clipped = elements.filter((el) => el.reachable && !el.hitOk);
+      expect(
+        clipped,
+        clipped
+          .map(
+            (f) =>
+              `"${f.name}" paints at (${Math.round(f.rect.x)}, ${Math.round(f.rect.y)}) but ` +
+              `elementFromPoint at its centre resolves to something else — visible and unclickable.`,
+          )
+          .join('\n'),
+      ).toEqual([]);
+    });
+  }
+
+  /**
+   * Prove non-vacuity, per this pass's own brief: a rail that *did* need to
+   * scroll must fail the check above. Rather than reconstruct a version of
+   * `DesktopRail.tsx` that overflows its chassis (there is no such build in
+   * this tree to point at), this pins the check itself against a synthetic
+   * fixture the same way group 0 already pins `dom-audit.ts`'s clipping
+   * logic — an app-independent proof that the assertion is not vacuously
+   * true.
+   */
+  test('non-vacuity — the scroll-height check actually fails for a container that overflows', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setContent(
+      '<div class="rail__scroll" style="height:200px;overflow-y:auto;">' +
+        '<div style="height:1000px">tall content</div></div>',
+    );
+    const overflow = await page.evaluate(() => {
+      const el = document.querySelector('.rail__scroll');
+      return el ? { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight } : null;
+    });
+    expect(overflow).not.toBeNull();
+    expect(
+      overflow!.scrollHeight,
+      'fixture setup failed — expected this synthetic container to genuinely overflow',
+    ).toBeGreaterThan(overflow!.clientHeight);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14b. Desktop rail — no chip label is visually truncated
+// ---------------------------------------------------------------------------
+//
+// The founder's actual complaint, screenshotted (`01-desktop-relief.png`,
+// 2026-08-11): "Saddles & dr...", "Bedding likeli...", and seven of seven
+// saved-filter names ("Bedding ...", "Sidehill ...", ...) unreadable in the
+// two-up `.rail-chip-grid`. CLAUDE.md non-negotiable #4 exists exactly for
+// this shape of defect — every one of those labels was present in the DOM,
+// `getByRole('checkbox', { name: /Bedding/ })` would still have found it, and
+// every existing unit test was green throughout. Only rendered geometry
+// exposes it: an element whose content needs more horizontal room than its
+// own box is `scrollWidth > clientWidth`, the same signal `dom-audit.ts`
+// already uses for hit-testing rather than trusting DOM presence.
+//
+// `.rl-chip-row__text` no longer truncates (`packages/design/src/styles.css`
+// — it wraps onto up to two lines inside the same 44px-floor row instead), so
+// this should read zero violations against the *current* tree. It is here,
+// not folded into group 14, because it is proving a different property: group
+// 14 is "the rail fits its box", this is "nothing inside the rail is cut off"
+// — a layout can satisfy either one without the other (the two-up grid this
+// replaced satisfied group 14 while failing this one outright).
+test.describe('14b. Desktop rail — no chip label is visually truncated', () => {
+  for (const viewport of [DESKTOP, { width: 1280, height: 800 }] as const) {
+    test(`${viewport.width}x${viewport.height} — every layer chip and saved-filter label is fully visible`, async ({
+      page,
+    }) => {
+      await gotoAndSettle(page, viewport);
+
+      const measured = await page.evaluate(() => {
+        const out: Array<{ label: string; scrollWidth: number; clientWidth: number }> = [];
+        for (const el of document.querySelectorAll<HTMLElement>('.rail .rl-chip-row__text')) {
+          if (el.offsetParent === null) continue; // not currently rendered/visible
+          out.push({
+            label: (el.textContent ?? '').trim(),
+            scrollWidth: el.scrollWidth,
+            clientWidth: el.clientWidth,
+          });
+        }
+        return out;
+      });
+
+      expect(
+        measured.length,
+        'expected a real population of layer-chip and saved-filter labels to check',
+      ).toBeGreaterThan(10);
+
+      // +1px tolerance: sub-pixel layout rounding, not a real overflow.
+      const truncated = measured.filter((v) => v.scrollWidth > v.clientWidth + 1);
+      expect(
+        truncated,
+        truncated
+          .map(
+            (v) =>
+              `"${v.label}" needs ${v.scrollWidth}px but its row only gives it ${v.clientWidth}px — ` +
+              `truncated. A hunter cannot tell two saved filters apart if neither name is fully ` +
+              `readable.`,
+          )
+          .join('\n'),
+      ).toEqual([]);
+    });
+  }
+
+  /**
+   * Non-vacuity, matching this file's own pattern for every geometry-based
+   * check (groups 0, 14, 15): pin the assertion itself against a synthetic
+   * fixture that must fail it, so a future refactor cannot silently turn this
+   * into a tautology (e.g. by measuring the wrong element, or one that never
+   * actually clips). A real `.rl-chip-row__text` forced back to single-line
+   * `nowrap` inside a narrow fixed box is exactly the shape of the original
+   * defect, reproduced outside the app.
+   */
+  test('non-vacuity — this check actually fails for a label wider than its box', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setContent(
+      '<div class="rail"><span class="rl-chip-row__text" style="display:inline-block;width:60px;' +
+        'white-space:nowrap;overflow:hidden;font-size:11px;">Bedding likelihood</span></div>',
+    );
+    const violation = await page.evaluate(() => {
+      const el = document.querySelector('.rl-chip-row__text') as HTMLElement;
+      return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+    });
+    expect(
+      violation.scrollWidth,
+      'fixture setup failed — expected this synthetic label to genuinely overflow its box',
+    ).toBeGreaterThan(violation.clientWidth);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. No chrome surface may cover more than its stated share of the map
+// ---------------------------------------------------------------------------
+//
+// The direct, CI-enforced form of "the left panel hides everything" — the
+// founder's own words for the 360px drawer this rail replaces. 360/1440 =
+// 25%; the rail measures ≈240/1440 ≈ 16.7% at 1440px and ≈240/1280 ≈ 18.75%
+// at 1280px. The ceiling below is deliberately not tuned to the rail's exact
+// current width — it is picked with headroom so a *future* change has to
+// clear a real bar rather than this test being adjusted every time the rail
+// grows a pixel, while still catching a regression back toward the old
+// drawer's footprint.
+test.describe('15. No chrome surface may cover more than its stated share of the map viewport', () => {
+  const MAX_WIDTH_FRACTION = 0.2;
+
+  for (const viewport of [DESKTOP, { width: 1280, height: 800 }] as const) {
+    test(`${viewport.width}x${viewport.height} — the rail`, async ({ page }) => {
+      await gotoAndSettle(page, viewport);
+      const rail = await measureBox(page.locator('.rail'));
+      const fraction = rail.width / viewport.width;
+      expect(
+        fraction,
+        `the rail covers ${(fraction * 100).toFixed(1)}% of the viewport width at ` +
+          `${viewport.width}x${viewport.height} — the drawer it replaced covered 25% while open, ` +
+          `and "the left panel hides everything" was the founder's own complaint about it.`,
+      ).toBeLessThanOrEqual(MAX_WIDTH_FRACTION);
+    });
+
+    test(`${viewport.width}x${viewport.height} — the rail plus a docked side panel, together`, async ({
+      page,
+    }) => {
+      // The worst case: Stands or Sightings docked *beside* the permanent
+      // rail. Both chrome surfaces on screen at once must still leave most
+      // of the map visible — this is exactly the state a hunter reaches
+      // most often (checking a stand while the layer list stays up).
+      await gotoAndSettle(page, viewport);
+      await page.getByRole('radio', { name: 'Stands' }).click();
+      await waitForRectStable(page.locator('.rail-panel-dock .rl-sheet'));
+
+      const rail = await measureBox(page.locator('.rail'));
+      const dock = await measureBox(page.locator('.rail-panel-dock .rl-sheet'));
+      // They are laid out side by side with a gap, never overlapping
+      // (group 4b proves that structurally) — the combined width a hunter
+      // loses to chrome is the two spans summed.
+      const combinedFraction = (rail.width + dock.width) / viewport.width;
+      expect(
+        combinedFraction,
+        `the rail and a docked panel together cover ${(combinedFraction * 100).toFixed(1)}% of ` +
+          `the viewport width at ${viewport.width}x${viewport.height}.`,
+      ).toBeLessThanOrEqual(0.55);
+    });
+  }
+
+  /**
+   * Prove non-vacuity: this exact check, run against a surface sized like
+   * the drawer this rail replaces, must fail. `--layout-sheet-width`
+   * (`packages/design/src/tokens.ts`) is still 360px — the mobile drawer
+   * uses it unchanged — so this is the real, current token value, not a
+   * remembered number.
+   */
+  test('non-vacuity — this check fails against a surface the size of the drawer it replaced', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setContent(
+      '<div style="position:absolute;top:12px;left:12px;bottom:12px;width:360px;background:#111"></div>',
+    );
+    const box = await page.locator('div').boundingBox();
+    expect(box).not.toBeNull();
+    const fraction = box!.width / 1440;
+    expect(
+      fraction,
+      'fixture setup failed — expected the synthetic 360px drawer to genuinely exceed the ceiling',
+    ).toBeGreaterThan(MAX_WIDTH_FRACTION);
   });
 });

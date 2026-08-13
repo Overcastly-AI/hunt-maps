@@ -147,6 +147,140 @@ The analytics engine, validated against analytically-known surfaces.
 
 The gap between "the engine is right" and "a hunter can use it on Saturday".
 
+- [x] **`R90` — the desktop rail (Direction C), replacing the drawer the
+      founder called "really hard to work with".** Measured: the old drawer
+      was `width: 360px`, pinned top-left, running to the command bar — 24.6%
+      of a 1440×900 window permanently hidden while open, and the only route
+      to Layers/Stands/Sightings, so in practice it stayed open. The founder
+      reviewed three chrome directions and picked C: a 240px translucent rail
+      (`rgb(10 15 20 / 0.86)`, `blur(10px)` — new `glass['bg-rail']`/
+      `['blur-rail']` tokens) docked to the right edge, full height, with
+      everything reachable **with no scrolling** — base map as a Sat/Topo
+      segmented control, layers as a two-column grid of compact `LayerChip`s
+      (label + state dot, blurb moved to hover/focus rather than deleted —
+      `demSourceHonesty.test.ts`/`layers.test.ts` still exercise the same real
+      strings), elevation source as a registry-driven segmented control, then
+      Wind/Thermals/Time rows and a Layers/Stands/Sightings segmented control
+      pinned to the bottom. Zoom/locate/offline and MapLibre's scale +
+      attribution move to a cluster left of the rail — attribution used to
+      default to `'bottom-right'` unconditionally, which the rail would have
+      painted straight over (`MapView.tsx`'s new `scaleAnchor` prop pins both
+      controls to the same corner, mobile unchanged). Mobile (`≤860px`) is
+      untouched byte-for-byte — `useIsDesktopChrome` mounts a genuinely
+      different component tree (`DesktopRail.tsx`) above 860px rather than
+      reflowing the same one, so `LayersSheet`'s full sentences, opacity
+      sliders and legends stay exactly as they were for the drawer/bottom-sheet
+      chassis. New invariants (`ui-invariants.spec.ts` groups 4b, 14, 15, 16)
+      assert the rail's control population never needs to scroll at 1440×900
+      **and** 1280×800, that no chrome surface may cover more than 20% of the
+      viewport width (proven non-vacuous against a synthetic 360px drawer,
+      which measures 25%), and that wind/date/thermals and the docked Stands/
+      Sightings panel behave exactly like the old tabbed drawer did. Caught a
+      real bug along the way: the rail's own `overflow: hidden` clipped the
+      wind popover's hit-testing (`N`/`S` on the compass hit-tested to the map
+      canvas underneath) — the exact class of defect this suite exists for,
+      fixed the same way `.rl-conditions` already documents (no
+      `overflow: hidden` on a container something anchors a popover inside).
+      `species-invariants.spec.ts`'s R84 blocked-chip test now also covers the
+      desktop chip (hover-reveal reason, disabled checkbox, forced click
+      provably does nothing) alongside the unchanged mobile `ToggleRow` case.
+
+- [x] **`R92` — the rail's two-up chip grid was truncating most labels it
+      showed** (founder review of `01-desktop-relief.png`, same day: "Saddles
+      & dr...", "Bedding likeli...", all seven saved-filter names). Collapsing
+      to one column, the founder's own proposed fix, was measured and does not
+      fit either budget viewport — the two grids need ~910px of content
+      height against a ~589–689px box, a shortfall nothing else in the rail
+      can close. Fixed by letting `.rl-chip-row__text` wrap onto a second line
+      inside the same 44px-floor row instead of truncating (a single line of
+      `--text-xs` never used that floor's full headroom), plus three small
+      measured trims elsewhere in the rail's own spacing to buy back the room
+      the wrap needs at 1280×800. New invariant (`ui-invariants.spec.ts` group
+      14b) asserts no rail label's `scrollWidth` exceeds its `clientWidth`,
+      proven non-vacuous against both the pre-fix layout and a synthetic
+      fixture; groups 14 and 15 (fit, no-scroll, coverage ceiling) still pass
+      unchanged and un-tuned.
+
+- [x] **`R83`'s web half, plus `R84` — the rut refusal actually renders, a
+      hunter can state a target species, and the elk-invalid bedding layer
+      greys out.** Closes the gap the previous entry left open. `PropertyRutReading`
+      (`lib/api/types.ts`) is now the real `RutResult` union from
+      `@hunt-maps/shared` — `RutReading | RutUnsupported` — so a caller that
+      reaches for `.phase` on the refusal branch fails to compile rather than
+      rendering `undefined` or a stale whitetail phase; `propertyFormat.ts#formatRut`
+      returns a matching discriminated `FormattedRut`, and `PropertyDetailScreen`/
+      `PropertiesListScreen` render an explicit "No rut model for elk" (with the
+      real reason) instead of silently showing nothing, which is what an elk
+      property got before this pass. `targetSpecies` — added server-side in the
+      previous entry but unreachable from the UI — now has a control: a select
+      on `PropertyCreateScreen` and an inline one on `PropertyDetailScreen`,
+      both offering **"Not stated" as a first-class, un-nagged choice**, and
+      neither offering a path back to it once a species is set (matching
+      `PropertiesService.update`'s own contract — there is no `targetSpecies:
+null` on the wire). **`R84`** (`docs/EVIDENCE.md` Pass 7 §2 — Millspaugh
+      et al. 1998 found slope did not discriminate elk bed sites from random
+      ground at all): the bedding likelihood layer now greys out via the exact
+      `ToggleRow.blockedReason` mechanism a missing wind direction already
+      uses (`lib/layers.ts`'s new `speciesCaveat`/`speciesBlockedReason`),
+      naming the actual finding rather than a shrug, and deliberately **not**
+      dressed as a `Confidence` "assumed" chip — an absent model is a different
+      claim than a graded guess. "Not stated" is verified to leave whitetail
+      behaviour byte-identical (a regression this pass pins explicitly). New
+      Playwright suite `species-invariants.spec.ts` proves this against
+      rendered state (a real `toBeDisabled()`, a forced click that provably
+      does nothing, painted text) at 390px and desktop, not just the unit
+      tests. **`R85` (corridor greying) is not shippable yet**: there is no
+      corridor UI in `apps/web` to grey out — "Corridor UI: pick two areas,
+      solve, see band + pinch points" below is still unbuilt — so the
+      species-blocking mechanism is ready (`speciesBlockedReason` is generic
+      over any `LayerDefinition`) but has nothing to attach to until that lands.
+
+- [x] **`Property.targetSpecies` — the second half of `R83`'s P0.** `93a29ca`
+      made `readRut` refuse for species it has no evidentiary basis for, but
+      `Property` had no species field, so `PropertiesService.list`/`get`
+      still always resolved to the whitetail overload — an elk property, the
+      founder's own Montana HD 320, kept rendering a whitetail-calendar rut
+      phase as fact. Added `Property.targetSpecies Species?` (migration
+      `20260811000000_property_target_species`), threaded through
+      `PropertiesService` via `propertyRut()`. **The default is nullable, not
+      `WHITETAIL`, and deliberately so** — see the migration's own comment:
+      defaulting existing rows to whitetail would have re-asserted the exact
+      assumption that caused the bug. `centerLat === null` or
+      `targetSpecies === null` both withhold the reading (`rut: null`) rather
+      than falling back to `readRut`'s species-omitted default, per
+      CLAUDE.md's "say when you do not know". A stated species — elk, above
+      all — now reaches `readRut`'s refusal (`RutUnsupported`) and it
+      actually reaches the API response. `CreatePropertyDto`/`UpdatePropertyDto`
+      gained an optional `targetSpecies` so an owner can state one.
+      Verified against both an empty database and one seeded with pre-existing
+      property rows. **Web is not yet wired**: `apps/web/src/lib/api/types.ts`'s
+      `PropertyRutReading` needs to become the `RutResult` union,
+      `propertyFormat.ts`'s `formatRut` needs a `supported: false` branch, and
+      `PropertyDetailScreen.tsx`/`PropertiesListScreen.tsx` need to render it —
+      tracked as the remainder of `R83` for `frontend-builder`/`map-builder`.
+
+- [x] **1 m LiDAR is tap-reachable — an elevation source picker, not a rebuild.**
+      `R79`'s second half. `LayersSheet` gains an Elevation source section with
+      three rows sourced from the `DEM_SOURCES` registry, so the copy cannot
+      drift from the honesty guards. Coverage is **answered, not assumed** — a
+      hook calls `GET /terrain/dem/coverage` for the map centre with the same
+      staleness discipline as `useViewportCoverage`, and the 1 m row reads
+      "No 1 m data here" **only on a definite negative**; "checking" and "server
+      unreachable" never masquerade as absence. Switching persists a runtime
+      override and reloads, so all ~10 files reading `DEM_SOURCE` as a plain
+      constant agree by construction rather than by discipline, and the picker
+      warns _before_ the switch that offline regions do not carry over.
+      **A real overclaim was caught on the way in:** `VITE_DEM_TEMPLATE` won over
+      `DEM_SOURCE` unconditionally, so a hunter tapping "1 m LiDAR" on a
+      self-hosted deployment with a Terrarium mirror configured would have kept
+      fetching Terrarium under a LiDAR label — `a02793d`'s overclaim through a
+      second door. The template override now applies only while `terrarium` is
+      active, pinned by a regression test verified failing against the old
+      logic. The `multiHillshade` blurb no longer denies LiDAR service once a
+      LiDAR source is active; its guard was previously green only by vacuity.
+      Web tests 343 → 362, and the picker was verified **in the built Docker
+      image**, not the source tree.
+
 - [x] **The layers actually render — every deployed image had no DEM at all.**
       The founder's report was "none of the layers are working", and it was
       exactly true. `ARG VITE_DEM_TEMPLATE=""` left the variable defined and
@@ -237,10 +371,14 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       all rather than show a number it cannot stand behind.
 
       Property routes are wired; the stands, observations and filter panels are
-                      built and tested but **not yet reachable** — the `CommandBar` documents
-                      that a fourth and fifth cell is the wrong answer and they belong as tabs
-                      in the single drawer slot, which is a design decision rather than
-                      plumbing. Tracked, not forgotten.
+                                              built and tested but **not yet reachable** — the `CommandBar` documents
+                                              that a fourth and fifth cell is the wrong answer and they belong as tabs
+                                              in the single drawer slot, which is a design decision rather than
+                                              plumbing. Tracked, not forgotten.
+                              built and tested but **not yet reachable** — the `CommandBar` documents
+                              that a fourth and fifth cell is the wrong answer and they belong as tabs
+                              in the single drawer slot, which is a design decision rather than
+                              plumbing. Tracked, not forgotten.
 
 - [x] **The app can finally call its own backend — and a terrain readout that
       says when it does not know.** `apps/web` had **no API client, no auth and
@@ -261,12 +399,18 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       120 → 163 unit tests, plus a new 20-assertion `auth-invariants` suite.
 
       Three defects found by rendered-state harnesses that every DOM query
-                      passed: a voided cell rendering **`-107507 ft`** because
-                      `Number.isFinite(-32768)` is `true` — the same finite-sentinel
-                      misconception as `R49`, now confirmed in all three packages; a
-                      drag/click race where the browser's synthetic `click` after `pointerup`
-                      made a dismiss-drag also fire a tap-toggle; and a register-screen link
-                      measuring 35×44 px against the 44 px gloved-use floor.
+                                              passed: a voided cell rendering **`-107507 ft`** because
+                                              `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                                              misconception as `R49`, now confirmed in all three packages; a
+                                              drag/click race where the browser's synthetic `click` after `pointerup`
+                                              made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                                              measuring 35×44 px against the 44 px gloved-use floor.
+                              passed: a voided cell rendering **`-107507 ft`** because
+                              `Number.isFinite(-32768)` is `true` — the same finite-sentinel
+                              misconception as `R49`, now confirmed in all three packages; a
+                              drag/click race where the browser's synthetic `click` after `pointerup`
+                              made a dismiss-drag also fire a tap-toggle; and a register-screen link
+                              measuring 35×44 px against the 44 px gloved-use floor.
 
 - [ ] **Front-end direction chosen: A, "The Field Instrument" — `BACKLOG R63`.**
       The brief was that the UI "looks generic" and "doesn't feel considered" —
@@ -287,35 +431,35 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       anyone attempting a day mode later inherits that.
 
       **Slices 1–2 shipped** (`f56241a`): the `plate` token group — a new group
-                      rather than a `glass` variant, or `Popover` inherits a blur change
-                      nobody asked for — and the first `Confidence` chip, on the bedding
-                      row, closing `R61`'s "used in exactly zero places" for one surface
-                      with a regression test so it cannot drift back.
+                              rather than a `glass` variant, or `Popover` inherits a blur change
+                              nobody asked for — and the first `Confidence` chip, on the bedding
+                              row, closing `R61`'s "used in exactly zero places" for one surface
+                              with a regression test so it cannot drift back.
 
-          **Slice 3, the `Dock`, is committed at `0947a43` and not accepted.**
-                      `code-reviewer` returned "do not merge as-is" on four blocking
-                      items, and the plan's §c content model — the always-visible Base /
-                      Relief / Terrain-analysis sections that are the *reason* a dock
-                      earns 300px — was not built. What shipped is the existing tabbed
-                      drawer nested inside a new chassis, which shrank the desktop Layers
-                      panel from ~780px to a 320px nested scroller: the first real
-                      desktop screenshot shows **one** layer row before the fold, out of
-                      ten. The chassis itself is sound work (`overflow-y: auto` from day
-                      one, `inert` on collapse, a labelled collapse control per F4) and
-                      the reconciliation reasoning — that the tabbed drawer post-dates
-                      §c — is correct and worth keeping. The open decision is whether to
-                      build §c's content model or restore the drawer to full height;
-                      it is the founder's, and it is open. Blockers tracked as `R80`.
+                  **Slice 3, the `Dock`, is committed at `0947a43` and not accepted.**
+                              `code-reviewer` returned "do not merge as-is" on four blocking
+                              items, and the plan's §c content model — the always-visible Base /
+                              Relief / Terrain-analysis sections that are the *reason* a dock
+                              earns 300px — was not built. What shipped is the existing tabbed
+                              drawer nested inside a new chassis, which shrank the desktop Layers
+                              panel from ~780px to a 320px nested scroller: the first real
+                              desktop screenshot shows **one** layer row before the fold, out of
+                              ten. The chassis itself is sound work (`overflow-y: auto` from day
+                              one, `inert` on collapse, a labelled collapse control per F4) and
+                              the reconciliation reasoning — that the tabbed drawer post-dates
+                              §c — is correct and worth keeping. The open decision is whether to
+                              build §c's content model or restore the drawer to full height;
+                              it is the founder's, and it is open. Blockers tracked as `R80`.
 
-          Recorded because it cost this pass real time: the commit claimed
-                      screenshots it could not have taken. `chrome-shots.spec.ts` drove
-                      the chrome by `role=button` "Layers", which the dock makes
-                      `visibility: hidden` — correctly out of the accessibility tree, so
-                      the locator matched zero elements and all four desktop captures hung
-                      the full 180s timeout. **A UI commit that cannot photograph itself
-                      has no visual gate at all**, and the stale shots left on disk showed
-                      the chrome the commit had just deleted. Fixed here; the four real
-                      shots are in `apps/web/screenshots/chrome/`.
+                  Recorded because it cost this pass real time: the commit claimed
+                              screenshots it could not have taken. `chrome-shots.spec.ts` drove
+                              the chrome by `role=button` "Layers", which the dock makes
+                              `visibility: hidden` — correctly out of the accessibility tree, so
+                              the locator matched zero elements and all four desktop captures hung
+                              the full 180s timeout. **A UI commit that cannot photograph itself
+                              has no visual gate at all**, and the stale shots left on disk showed
+                              the chrome the commit had just deleted. Fixed here; the four real
+                              shots are in `apps/web/screenshots/chrome/`.
 
 - [x] **P0 SHIPPED — `offlineReady` replaced with per-viewport coverage truth**
       (`BACKLOG R8`). The boolean was sampled once at mount and rendered behind
@@ -411,19 +555,32 @@ The gap between "the engine is right" and "a hunter can use it on Saturday".
       together without colliding.
 
       The suite's own helper was fixed twice. First (`67f0098`) for deciding
-                                  hit-testability against the viewport alone, so a row scrolled just past
-                                  the *sheet's* clipped edge was hit-tested at its unpainted position and
-                                  reported as visible-but-unclickable — a false failure indistinguishable
-                                  from the real clipping bug the suite is named after; it now intersects
-                                  against every clipping ancestor and hit-tests the centre of the visible
-                                  region. Ground truth was measured before accepting the greener result:
-                                  `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
-                                  and no painted control fails a hit test. Then (`7ff42cee`) two more
-                                  guards on the helper itself: a synthetic fixture pinning both branches
-                                  of the clipped-ancestor fix so neither can regress silently, and a check
-                                  that the collision matrix's "no collision" result means a selector
-                                  matched and did not overlap, not that a renamed selector stopped
-                                  matching anything.
+                                                          hit-testability against the viewport alone, so a row scrolled just past
+                                                          the *sheet's* clipped edge was hit-tested at its unpainted position and
+                                                          reported as visible-but-unclickable — a false failure indistinguishable
+                                                          from the real clipping bug the suite is named after; it now intersects
+                                                          against every clipping ancestor and hit-tests the centre of the visible
+                                                          region. Ground truth was measured before accepting the greener result:
+                                                          `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                                                          and no painted control fails a hit test. Then (`7ff42cee`) two more
+                                                          guards on the helper itself: a synthetic fixture pinning both branches
+                                                          of the clipped-ancestor fix so neither can regress silently, and a check
+                                                          that the collision matrix's "no collision" result means a selector
+                                                          matched and did not overlap, not that a renamed selector stopped
+                                                          matching anything.
+                                          hit-testability against the viewport alone, so a row scrolled just past
+                                          the *sheet's* clipped edge was hit-tested at its unpainted position and
+                                          reported as visible-but-unclickable — a false failure indistinguishable
+                                          from the real clipping bug the suite is named after; it now intersects
+                                          against every clipping ancestor and hit-tests the centre of the visible
+                                          region. Ground truth was measured before accepting the greener result:
+                                          `.rl-sheet__body` clips at y=719, `.rl-rail` sits top-right at y 12–148,
+                                          and no painted control fails a hit test. Then (`7ff42cee`) two more
+                                          guards on the helper itself: a synthetic fixture pinning both branches
+                                          of the clipped-ancestor fix so neither can regress silently, and a check
+                                          that the collision matrix's "no collision" result means a selector
+                                          matched and did not overlap, not that a renamed selector stopped
+                                          matching anything.
 
 - [x] Deploy the `Confidence` primitive into the app (`BACKLOG R10`) — now used
       in **15** places across `apps/web`, including `TerrainReadout.tsx` and

@@ -1,4 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+// `test`/`expect` come from ./fixtures, not @playwright/test: that import is what
+// attaches the DEM tile relay and runs the elevation preflight (BACKLOG R76).
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type maplibregl from 'maplibre-gl';
 
 /**
@@ -9,6 +12,13 @@ import type maplibregl from 'maplibre-gl';
  * renders. A screenshot run that passes proves the DEM fetch → worker →
  * OffscreenCanvas → MapLibre pipeline works end to end in a real browser, which
  * no unit test in this repo covers.
+ *
+ * Desktop shots exercise `DesktopRail.tsx` (Direction C, the founder's pick
+ * off three chrome directions, 2026-08-11) — a permanent rail with no open/
+ * close toggle, so there is no `setLayers`-style helper here for desktop;
+ * every layer chip is just clicked directly by its accessible name, which is
+ * unchanged from the mobile sheet (`LayerChip`/`ToggleRow` both render a real
+ * `<input type="checkbox">` under that name).
  */
 
 const OUT = 'screenshots';
@@ -43,20 +53,16 @@ async function toggle(page: Page, label: string): Promise<void> {
   await page.getByRole('checkbox', { name: label, exact: false }).first().click();
 }
 
-async function openLayers(page: Page): Promise<void> {
-  const btn = page.getByRole('button', { name: 'Layers' });
-  if ((await btn.getAttribute('aria-pressed')) !== 'true') await btn.click();
-}
-
-test.describe('Ridgeline screenshots', () => {
+test.describe('Ridgeline screenshots — desktop (thin dense rail, Direction C)', () => {
   test('desktop — relief, slope, hunting layers', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${VIEW}`);
     await expect(page.getByTestId('map-canvas')).toBeVisible();
     await waitForTiles(page);
+    // The wide desktop view, chrome and all — the rail is permanent, so this
+    // *is* the resting state, not a "panels dismissed" variant of it.
     await page.screenshot({ path: `${OUT}/01-desktop-relief.png` });
 
-    await openLayers(page);
     await toggle(page, 'Slope angle');
     await waitForTiles(page);
     await page.screenshot({ path: `${OUT}/02-desktop-slope.png` });
@@ -68,40 +74,20 @@ test.describe('Ridgeline screenshots', () => {
     await page.screenshot({ path: `${OUT}/03-desktop-saddles-benches.png` });
   });
 
-  test('desktop — map with panels dismissed', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/${VIEW}`);
-    await expect(page.getByTestId('map-canvas')).toBeVisible();
-    await openLayers(page);
-    await toggle(page, 'Saddles & draws');
-    await waitForTiles(page);
-
-    // Close the sheet: the map is the product, and this is the resting state.
-    await page.getByRole('button', { name: 'Close panel' }).click();
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: `${OUT}/02b-desktop-map-only.png` });
-  });
-
   test('desktop — wind popover and bedding likelihood', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${VIEW}`);
     await expect(page.getByTestId('map-canvas')).toBeVisible();
 
     // Bedding is disabled until a wind direction exists.
-    await openLayers(page);
     const bedding = page.getByRole('checkbox', { name: /Bedding likelihood/ });
     await expect(bedding).toBeDisabled();
     await page.screenshot({ path: `${OUT}/04-desktop-blocked-layer.png` });
 
-    // The wind editor is a popover anchored to the conditions bar, so the bar
-    // stays exactly where it was — no need to dismiss the drawer first, and
-    // nothing moves out from under the pointer.
+    // The wind editor is a popover anchored to the rail's own Wind row, opening
+    // leftward (`align="end"`) so it never runs off the right edge of the
+    // screen. Nothing else in the rail moves when it opens.
     await page.getByRole('button', { name: /Wind from/ }).click();
-    // The layers drawer deliberately stays open — sweeping the wind while
-    // watching the layer list repaint is the interaction this app exists for,
-    // and the two panels were decoupled precisely so it is possible. Nothing
-    // moves when the popover opens, so this only waits out the popover's own
-    // entrance animation.
     await page.waitForTimeout(400);
     await page.getByRole('button', { name: 'NW', exact: true }).click();
     await waitForTiles(page);
@@ -111,15 +97,14 @@ test.describe('Ridgeline screenshots', () => {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
 
-    await openLayers(page);
     await expect(bedding).toBeEnabled();
     await bedding.click();
     await waitForTiles(page);
-    await page.getByRole('button', { name: 'Close panel' }).click();
-    await page.waitForTimeout(700);
     await page.screenshot({ path: `${OUT}/05-desktop-bedding-nw-wind.png` });
   });
+});
 
+test.describe('Ridgeline screenshots — mobile (bottom sheet, unchanged)', () => {
   test('mobile — 390x844, bottom sheet', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/${VIEW}`);

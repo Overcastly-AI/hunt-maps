@@ -19,5 +19,4 @@
 export * from './tokens';
 export * from './components/primitives';
 export * from './components/icons';
-export * from './components/dock';
 export * from './rampDomains';

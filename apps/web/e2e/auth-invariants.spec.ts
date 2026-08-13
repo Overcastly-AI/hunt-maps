@@ -1,6 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
+// `test`/`expect` come from ./fixtures, not @playwright/test: that import is what
+// attaches the DEM tile relay and runs the elevation preflight (BACKLOG R76).
+import { type Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { auditInteractiveElements, collectChromeTextNodes } from './helpers/dom-audit';
-import { contrastRatio, estimateBackground, parseCssColor, requiredContrastRatio } from './helpers/contrast';
+import {
+  contrastRatio,
+  estimateBackground,
+  parseCssColor,
+  requiredContrastRatio,
+} from './helpers/contrast';
 import { gridPoints, samplePixels } from './helpers/pixels';
 import { DESKTOP, MOBILE } from './helpers/settle';
 
@@ -19,7 +27,11 @@ import { DESKTOP, MOBILE } from './helpers/settle';
  * rendered state, not DOM state" as this repo's rule.
  */
 
-async function gotoAuth(page: Page, path: '/login' | '/register', viewport = DESKTOP): Promise<void> {
+async function gotoAuth(
+  page: Page,
+  path: '/login' | '/register',
+  viewport = DESKTOP,
+): Promise<void> {
   await page.setViewportSize(viewport);
   await page.goto(path);
   await page.locator('.auth-card').waitFor({ state: 'visible' });
@@ -33,22 +45,37 @@ for (const path of ['/login', '/register'] as const) {
       }) => {
         await gotoAuth(page, path, viewport);
         const elements = await auditInteractiveElements(page, ['.auth-shell']);
-        expect(elements.length, 'expected at least the form fields, submit button and switch link').toBeGreaterThan(2);
+        expect(
+          elements.length,
+          'expected at least the form fields, submit button and switch link',
+        ).toBeGreaterThan(2);
 
         const dead = elements.filter((el) => el.reachable && !el.hitOk);
         expect(
           dead,
-          dead.map((d) => `"${d.name}" (${d.tag}) painted but a tap at its centre lands on something else.`).join('\n'),
+          dead
+            .map(
+              (d) =>
+                `"${d.name}" (${d.tag}) painted but a tap at its centre lands on something else.`,
+            )
+            .join('\n'),
         ).toEqual([]);
 
         const unreachable = elements.filter((el) => !el.reachable);
         expect(
           unreachable,
-          unreachable.map((d) => `"${d.name}" (${d.tag}) is in the DOM but no scrollable ancestor can bring it into view.`).join('\n'),
+          unreachable
+            .map(
+              (d) =>
+                `"${d.name}" (${d.tag}) is in the DOM but no scrollable ancestor can bring it into view.`,
+            )
+            .join('\n'),
         ).toEqual([]);
       });
 
-      test(`${viewport.width}px — every control meets the 44px gloved touch-target floor`, async ({ page }) => {
+      test(`${viewport.width}px — every control meets the 44px gloved touch-target floor`, async ({
+        page,
+      }) => {
         await gotoAuth(page, path, viewport);
         const elements = await auditInteractiveElements(page, ['.auth-shell']);
 
@@ -68,7 +95,9 @@ for (const path of ['/login', '/register'] as const) {
         ).toEqual([]);
       });
 
-      test(`${viewport.width}px — text is legible against its rendered background (WCAG AA)`, async ({ page }) => {
+      test(`${viewport.width}px — text is legible against its rendered background (WCAG AA)`, async ({
+        page,
+      }) => {
         await gotoAuth(page, path, viewport);
         const nodes = await collectChromeTextNodes(page, ['.auth-shell']);
         expect(nodes.length, 'expected some visible text on the card').toBeGreaterThan(0);
@@ -101,8 +130,12 @@ for (const path of ['/login', '/register'] as const) {
 
       test(`${viewport.width}px — no horizontal page scroll`, async ({ page }) => {
         await gotoAuth(page, path, viewport);
-        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-        expect(overflow, `page is ${overflow}px wider than its own viewport`).toBeLessThanOrEqual(1);
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow, `page is ${overflow}px wider than its own viewport`).toBeLessThanOrEqual(
+          1,
+        );
       });
     }
 
@@ -124,7 +157,8 @@ for (const path of ['/login', '/register'] as const) {
           return {
             key: `${el.tagName}@${Math.round(rect.x)},${Math.round(rect.y)}`,
             tag: el.tagName,
-            name: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 30) ?? el.id,
+            name:
+              el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 30) ?? el.id,
             ok: hasOutline || hasBoxShadow,
           };
         });
@@ -134,15 +168,24 @@ for (const path of ['/login', '/register'] as const) {
         stops.push({ tag: info.tag, name: info.name, ok: info.ok });
       }
 
-      expect(stops.length, 'expected to tab through the email/password fields, the submit button and the switch link').toBeGreaterThanOrEqual(3);
+      expect(
+        stops.length,
+        'expected to tab through the email/password fields, the submit button and the switch link',
+      ).toBeGreaterThanOrEqual(3);
       const unmarked = stops.filter((s) => !s.ok);
       expect(
         unmarked,
-        unmarked.map((s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`).join('\n'),
+        unmarked
+          .map(
+            (s) => `"${s.name}" (${s.tag}) received focus with no visible outline or box-shadow.`,
+          )
+          .join('\n'),
       ).toEqual([]);
     });
 
-    test('a wrong-password / invalid-request error and a network error read differently', async ({ page }) => {
+    test('a wrong-password / invalid-request error and a network error read differently', async ({
+      page,
+    }) => {
       // Regression pin for CLAUDE.md's "auth failure must not look like
       // offline": the callout's tone must differ, not just its copy, because
       // tone is what a glanceable field read actually uses.

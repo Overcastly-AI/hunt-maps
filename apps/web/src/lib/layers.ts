@@ -20,6 +20,7 @@
 import type { AnalysisLayer } from '@hunt-maps/terrain';
 import { mapColor, type EvidenceGrade } from '@hunt-maps/design';
 import { DEM_SOURCE } from './map/demSource';
+import type { WireSpecies } from './api/types';
 
 export type LayerGroup = 'base' | 'relief' | 'analysis' | 'hunting' | 'saved';
 
@@ -53,6 +54,43 @@ export interface LayerDefinition {
    * CI if a future layer's `Confidence` chip drifts from what is set here.
    */
   grade?: EvidenceGrade;
+  /**
+   * Set when this layer's underlying *model* — not its terrain inputs, the
+   * model itself — has no evidentiary basis for anything but whitetail
+   * (`docs/EVIDENCE.md` Pass 7, R84/R85). Once the active property states a
+   * `targetSpecies` other than whitetail, the layer is disabled with this
+   * exact text via `ToggleRow`'s `blockedReason` — the same mechanism, and
+   * the same product rule, `requiresWind` already uses: CLAUDE.md's "grey
+   * out layers whose inputs are unset rather than rendering a default"
+   * applies just as much when what is missing is a valid *model* for the
+   * declared species as when it is a wind direction. This is deliberately
+   * **not** a `Confidence`/`grade` chip — `assumed` means "a defensible
+   * estimate exists and here is how weak it is", and for elk the honest
+   * state is that no estimate exists at all. Dressing an absence as a graded
+   * assumption would itself be the overclaim `docs/EVIDENCE.md` exists to
+   * catch.
+   */
+  speciesCaveat?: string;
+}
+
+/**
+ * Whether `species` (a property's stated `Property.targetSpecies`, wire
+ * casing) is a value this layer's model actually transfers to.
+ *
+ * `null`/`undefined` ("not stated") is treated as **not** blocked — a
+ * property that has never been asked what it targets keeps exactly today's
+ * behaviour (implicitly whitetail-shaped, the only model that has ever
+ * existed here), per CLAUDE.md's "whitetail behaviour must be unchanged".
+ * Only an explicit, stated non-whitetail species trips the caveat — R84/R85
+ * are about a *declared* elk hunt, not an unanswered question.
+ */
+export function speciesBlockedReason(
+  layer: LayerDefinition,
+  targetSpecies: WireSpecies | null | undefined,
+): string | undefined {
+  if (!layer.speciesCaveat) return undefined;
+  if (!targetSpecies || targetSpecies === 'WHITETAIL') return undefined;
+  return layer.speciesCaveat;
 }
 
 export const LAYERS: LayerDefinition[] = [
@@ -76,9 +114,20 @@ export const LAYERS: LayerDefinition[] = [
     group: 'relief',
     blurb:
       `Multi-directional shading over ${DEM_SOURCE.label} (${DEM_SOURCE.resolutionNote}). Lit ` +
-      'from several directions at once so a ridge never reads as a draw. Shows broad shape — ' +
-      'drainages, benches wide enough to matter, ridge lines — not old logging grades or skid ' +
-      'roads, which need finer LiDAR data this map does not yet serve.',
+      'from several directions at once so a ridge never reads as a draw. ' +
+      // Whether this map can show old logging grades and skid roads is a fact
+      // about the *active* elevation source, not a fixed claim — the source
+      // is now something a hunter can switch in the Layers sheet
+      // (`lib/map/demSource.ts`'s `DEM_SOURCE`), and `demSourceHonesty.test.ts`
+      // fails CI the moment this stops matching `DEM_SOURCE.isLidar`. Keep the
+      // two branches negated/affirmed rather than editing the prose in place —
+      // that guard checks for a negation word precisely because a rewrite
+      // that drops one is how the original mislabel shipped.
+      (DEM_SOURCE.isLidar
+        ? 'Fine enough at this source to also pick out old logging grades and skid roads — the ' +
+          'kind of micro-terrain a 10 m blend cannot resolve.'
+        : 'Shows broad shape — drainages, benches wide enough to matter, ridge lines — not old ' +
+          'logging grades or skid roads, which need finer LiDAR data this map does not yet serve.'),
     defaultOpacity: 0.55,
   },
   {
@@ -173,6 +222,16 @@ export const LAYERS: LayerDefinition[] = [
     // `Confidence` applies everywhere else: a claim is only as strong as its
     // weakest input.
     grade: 'assumed',
+    // R84, `docs/EVIDENCE.md` Pass 7 §2. The score is carried almost entirely
+    // by two slope terms (`padTerm` × `ringTerm`) plus a VRM term standing in
+    // for cover — and the one peer-reviewed measurement of elk bed sites
+    // found slope did not discriminate beds from random ground at all.
+    speciesCaveat:
+      'Not modelled for this species. The one peer-reviewed study of elk bed sites (Millspaugh ' +
+      'et al. 1998, Custer State Park) found slope did not separate beds from random ground — ' +
+      'overstory canopy closure and microsite temperature did, and neither is visible in ' +
+      'elevation data. Re-tuning this layer’s slope terms for elk would not fix that; it ' +
+      'would just be confident about the wrong thing again.',
   },
 ];
 
@@ -213,12 +272,30 @@ export function layerById(id: string): LayerDefinition | undefined {
   return LAYERS.find((l) => l.id === id);
 }
 
-/** Anything the current selection needs but the user has not supplied yet. */
-export function missingInputs(active: Set<string>, windFromDeg: number | null): string[] {
+/**
+ * Anything the current selection needs but the user has not supplied yet —
+ * a missing wind direction, or (R84/R85) a layer whose model does not
+ * transfer to the active property's stated target species.
+ *
+ * `targetSpecies` is optional so every existing caller (and every existing
+ * test) keeps working unchanged: omitting it is "not stated", which never
+ * blocks anything — see `speciesBlockedReason`.
+ */
+export function missingInputs(
+  active: Set<string>,
+  windFromDeg: number | null,
+  targetSpecies?: WireSpecies | null,
+): string[] {
   const missing: string[] = [];
   for (const id of active) {
     const def = layerById(id);
-    if (def?.requiresWind && windFromDeg === null) {
+    if (!def) continue;
+    const speciesReason = speciesBlockedReason(def, targetSpecies);
+    if (speciesReason) {
+      missing.push(`"${def.label}" — ${speciesReason}`);
+      continue;
+    }
+    if (def.requiresWind && windFromDeg === null) {
       missing.push(`"${def.label}" needs a wind direction to mean anything.`);
     }
   }

@@ -28,6 +28,7 @@ import {
 import { Type } from 'class-transformer';
 import { validatePredicate, type AnalysisLayer, type TerrainPredicate } from '@hunt-maps/terrain';
 import { DEM_SOURCES, DemService } from './dem.service';
+import { Dem3depService } from './dem3dep.service';
 import { TerrainService } from './terrain.service';
 import { CorridorService } from './corridor.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -80,7 +81,9 @@ class FilterStackEntryDto {
 }
 
 class FilterStackDto {
-  @IsArray() @ValidateNested({ each: true }) @Type(() => FilterStackEntryDto)
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FilterStackEntryDto)
   filters!: FilterStackEntryDto[];
   @IsOptional() @IsString() demSource?: string;
   @IsOptional() @IsNumber() windFromDeg?: number;
@@ -92,22 +95,129 @@ class FilterStackDto {
 export class TerrainController {
   constructor(
     private readonly dem: DemService,
+    private readonly threeDep: Dem3depService,
     private readonly terrain: TerrainService,
     private readonly corridors: CorridorService,
   ) {}
 
   @Get('sources')
   sources() {
-    return Object.values(DEM_SOURCES)
-      .filter((s) => s.urlTemplate)
-      .map(({ id, label, encoding, tileSize, maxZoom, attribution }) => ({
-        id,
-        label,
-        encoding,
-        tileSize,
-        maxZoom,
-        attribution,
-      }));
+    return (
+      Object.values(DEM_SOURCES)
+        // A `tiles` source with no template cannot serve anything; a `3dep`
+        // source needs no template because this server renders it.
+        .filter((s) => s.kind === '3dep' || s.urlTemplate)
+        .map(({ id, label, encoding, tileSize, maxZoom, attribution, resolutionNote }) => ({
+          id,
+          label,
+          encoding,
+          tileSize,
+          maxZoom,
+          attribution,
+          // Shipped to the client deliberately. The client must be able to say
+          // what it is showing, and the difference between "~10 m bare earth"
+          // and "1 m LiDAR" is the difference between a useful layer and an
+          // overclaim.
+          resolutionNote,
+        }))
+    );
+  }
+
+  /**
+   * Raw elevation tiles, including real USGS 3DEP.
+   *
+   * Unauthenticated for the same reason the analysis tiles are: this is
+   * public-domain elevation and contains nothing about any user, and requiring
+   * a token would break offline pre-caching.
+   *
+   * `X-Dem-*` response headers report what actually answered — product,
+   * resolution, coverage and the contributing 1 m acquisition projects. The
+   * client is expected to surface that rather than assume, which is what keeps
+   * a fallback *visible*.
+   */
+  @Get('dem/:source/:z/:x/:y.png')
+  @Header('Content-Type', 'image/png')
+  @Header('Cache-Control', 'public, max-age=604800, immutable')
+  async demTile(
+    @Param('source') sourceId: string,
+    @Param('z', ParseIntPipe) z: number,
+    @Param('x', ParseIntPipe) x: number,
+    @Param('y', ParseIntPipe) y: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    const source = this.dem.resolveSource(sourceId);
+    const n = 2 ** z;
+    if (z < 0 || z > 22 || x < 0 || x >= n || y < 0 || y >= n) {
+      throw new BadRequestException(`Tile ${z}/${x}/${y} is outside the Web Mercator grid.`);
+    }
+    const buffer = await this.dem.fetchTile({ z, x, y }, source);
+    res.setHeader('X-Dem-Source', source.id);
+    res.setHeader('X-Dem-Encoding', source.encoding);
+    res.send(buffer);
+  }
+
+  /**
+   * What elevation data actually exists at a point.
+   *
+   * The endpoint that makes an honest fallback possible: it answers "is there
+   * 1 m LiDAR here", by name of the acquisition project and with a sampled
+   * height, rather than leaving the client to infer coverage from a blank tile.
+   */
+  @Get('dem/coverage')
+  async demCoverage(@Query('lng') lng?: string, @Query('lat') lat?: string) {
+    const lngNum = Number(lng);
+    const latNum = Number(lat);
+    if (!Number.isFinite(lngNum) || !Number.isFinite(latNum)) {
+      throw new BadRequestException('lng and lat are required and must be numbers.');
+    }
+    if (lngNum < -180 || lngNum > 180 || latNum < -85 || latNum > 85) {
+      throw new BadRequestException('lng/lat out of range.');
+    }
+    const oneMeter = await this.threeDep.resolveOneMeter(lngNum, latNum);
+    return {
+      lng: lngNum,
+      lat: latNum,
+      oneMeter,
+      // The source a client should pick, and the words it should show. Chosen
+      // here rather than in the client so the API and the map can never
+      // describe the same tiles two different ways.
+      recommendedSource: oneMeter.available ? 'usgs3dep-1m' : 'usgs3dep-13',
+      resolutionNote: oneMeter.available
+        ? DEM_SOURCES['usgs3dep-1m'].resolutionNote
+        : DEM_SOURCES['usgs3dep-13'].resolutionNote,
+    };
+  }
+
+  /**
+   * The 1 m coverage index clipped to a bounding box.
+   *
+   * A property's slice is a few hundred bytes (measured: 766 B for a Red River
+   * Gorge property), against 230 KB gzipped for the nation. Handing that to a
+   * device is what lets a downloaded region resolve its own 1 m project with no
+   * signal — otherwise 1 m works at camp and fails where the hunter is.
+   */
+  @Get('dem/1m-index')
+  async oneMeterIndex(
+    @Query('west') west?: string,
+    @Query('south') south?: string,
+    @Query('east') east?: string,
+    @Query('north') north?: string,
+  ) {
+    const bbox = {
+      west: Number(west),
+      south: Number(south),
+      east: Number(east),
+      north: Number(north),
+    };
+    if (!Object.values(bbox).every((v) => Number.isFinite(v))) {
+      throw new BadRequestException('west, south, east and north are all required.');
+    }
+    if (bbox.east - bbox.west > 5 || bbox.north - bbox.south > 5) {
+      // A whole-nation request would serve the 1.6 MB index uncompressed to a
+      // phone. Regions are properties, not states.
+      throw new BadRequestException('Bounding box too large; request at most 5 degrees a side.');
+    }
+    return this.threeDep.oneMeterIndexForBBox(bbox);
   }
 
   /**

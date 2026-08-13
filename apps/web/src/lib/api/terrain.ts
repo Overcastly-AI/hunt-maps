@@ -15,6 +15,7 @@ import { queryKeys } from './queryKeys';
 import type {
   CorridorSolveInput,
   CorridorSolveResult,
+  DemCoverageDto,
   DemSourceDto,
   EvaluateFilterInput,
   EvaluateFilterResult,
@@ -26,6 +27,16 @@ export const terrainApi = {
   sources(): Promise<DemSourceDto[]> {
     return apiFetch<DemSourceDto[]>('/terrain/sources', { auth: false });
   },
+  /**
+   * Unauthenticated like `sources` — this is a yes/no about public-domain
+   * elevation coverage, not anything about the caller, and gating it behind
+   * sign-in would make a signed-out hunter's DEM picker unable to tell them
+   * "no 1 m data here" before they tap it.
+   */
+  demCoverage(lng: number, lat: number): Promise<DemCoverageDto> {
+    const params = new URLSearchParams({ lng: String(lng), lat: String(lat) });
+    return apiFetch<DemCoverageDto>(`/terrain/dem/coverage?${params.toString()}`, { auth: false });
+  },
   point(query: TerrainPointQuery): Promise<TerrainSampleDto> {
     const params = new URLSearchParams({ lng: String(query.lng), lat: String(query.lat) });
     if (query.zoom !== undefined) params.set('zoom', String(query.zoom));
@@ -35,15 +46,25 @@ export const terrainApi = {
     return apiFetch<TerrainSampleDto>(`/terrain/point?${params.toString()}`);
   },
   evaluateFilter(input: EvaluateFilterInput): Promise<EvaluateFilterResult> {
-    return apiFetch<EvaluateFilterResult>('/terrain/filters/evaluate', { method: 'POST', json: input });
+    return apiFetch<EvaluateFilterResult>('/terrain/filters/evaluate', {
+      method: 'POST',
+      json: input,
+    });
   },
   solveCorridor(input: CorridorSolveInput): Promise<CorridorSolveResult> {
-    return apiFetch<CorridorSolveResult>('/terrain/corridors/solve', { method: 'POST', json: input });
+    return apiFetch<CorridorSolveResult>('/terrain/corridors/solve', {
+      method: 'POST',
+      json: input,
+    });
   },
 };
 
 export function useDemSources() {
-  return useQuery({ queryKey: queryKeys.terrain.sources, queryFn: terrainApi.sources, staleTime: Infinity });
+  return useQuery({
+    queryKey: queryKeys.terrain.sources,
+    queryFn: terrainApi.sources,
+    staleTime: Infinity,
+  });
 }
 
 export function useTerrainPoint(query: TerrainPointQuery | null) {

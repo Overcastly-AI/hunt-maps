@@ -20,7 +20,7 @@
  * user can calibrate from their own harvest and sighting history.
  */
 
-import { RutPhase } from './domain.js';
+import { GameSpecies, RutPhase } from './domain.js';
 
 export interface RutModelOptions {
   /** Property latitude. Southern herds shift later and flatter. */
@@ -32,6 +32,26 @@ export interface RutModelOptions {
   offsetDays?: number;
   /** Southern hemisphere properties shift by six months. */
   southernHemisphere?: boolean;
+  /**
+   * Which species this reading is for. Defaults to `Whitetail` when omitted —
+   * every existing caller that predates species-awareness (a property with no
+   * declared target species, an observation logged before this field existed)
+   * gets exactly today's behaviour, because today's behaviour *is* the
+   * whitetail model.
+   *
+   * The calendar windows below (`WINDOWS`, `peakBreedingDayOfYear`) are a
+   * photoperiod curve fitted to whitetail breeding data and nothing else —
+   * see `docs/EVIDENCE.md` Pass 7. R83: at 45.5°N this model returns
+   * `OffSeason` for the elk archery opener and peak bugling, and returns
+   * `Chasing`/`PeakBreeding` five to nine weeks *after* elk actually finish
+   * breeding — it is not merely uncalibrated for elk, it is inverted. Elk
+   * rut is roughly a month earlier and materially shorter than whitetail's;
+   * shifting this curve by a fixed offset and calling it "the elk model"
+   * would fabricate a citation `docs/EVIDENCE.md` does not support. So any
+   * species other than `Whitetail` gets a refusal (`RutUnsupported`), not a
+   * guess.
+   */
+  species?: GameSpecies;
 }
 
 interface PhaseWindow {
@@ -118,6 +138,8 @@ export function rutPhaseFor(date: Date, options: RutModelOptions): RutPhase {
 }
 
 export interface RutReading {
+  /** Discriminant — always `true` here. See `RutUnsupported` for the other branch. */
+  supported: true;
   phase: RutPhase;
   daysFromPeak: number;
   confidence: number;
@@ -125,10 +147,50 @@ export interface RutReading {
   note: string;
 }
 
-export function readRut(date: Date, options: RutModelOptions): RutReading {
+/**
+ * Returned instead of a `RutReading` for a species this model has no
+ * evidentiary basis for (R83, `docs/EVIDENCE.md` Pass 7). Callers must
+ * render this as "no rut model for {species}", never fall back to a phase.
+ */
+export interface RutUnsupported {
+  supported: false;
+  species: GameSpecies;
+  /** Short, honest explanation, safe to surface directly. */
+  reason: string;
+}
+
+export type RutResult = RutReading | RutUnsupported;
+
+/**
+ * Species this photoperiod curve is fitted to. See `RutModelOptions.species`
+ * for why every other species refuses rather than guesses.
+ */
+const MODELLED_SPECIES = GameSpecies.Whitetail;
+
+// Overload 1: no species, or the literal `GameSpecies.Whitetail`, resolves at
+// compile time to a concrete `RutReading` — this is the shape every caller
+// written before species-awareness existed already assumes, and it must stay
+// bit-identical (R83).
+export function readRut(
+  date: Date,
+  options: RutModelOptions & { species?: GameSpecies.Whitetail },
+): RutReading;
+// Overload 2: any other (or dynamically-typed) species must handle the
+// refusal branch — the type system forces the `.supported` check.
+export function readRut(date: Date, options: RutModelOptions): RutResult;
+export function readRut(date: Date, options: RutModelOptions): RutResult {
+  const species = options.species ?? GameSpecies.Whitetail;
+  if (species !== MODELLED_SPECIES) {
+    return {
+      supported: false,
+      species,
+      reason: `No rut model for ${species} — this photoperiod curve is fitted to whitetail breeding data only (docs/EVIDENCE.md Pass 7). Shifting it by an offset would fabricate a citation, not model a different species.`,
+    };
+  }
   const delta = daysFromPeak(date, options);
   const phase = rutPhaseFor(date, options);
   return {
+    supported: true,
     phase,
     daysFromPeak: delta,
     confidence: rutConfidence(options.latitude),
@@ -175,8 +237,7 @@ export function calibrateOffset(
     .map((d) => (d > 182 ? d - 365 : d < -182 ? d + 365 : d))
     .sort((a, b) => a - b);
   const mid = Math.floor(deltas.length / 2);
-  const median =
-    deltas.length % 2 === 0 ? (deltas[mid - 1] + deltas[mid]) / 2 : deltas[mid];
+  const median = deltas.length % 2 === 0 ? (deltas[mid - 1] + deltas[mid]) / 2 : deltas[mid];
   const offset = Math.round(median - CHASING_CENTER);
   // Refuse implausible calibrations — more likely mislabelled observations
   // than a herd that breeds three weeks off the regional norm.

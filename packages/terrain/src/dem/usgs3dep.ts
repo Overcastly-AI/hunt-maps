@@ -32,11 +32,16 @@
  *   package can carry or a phone can download.
  *
  * So 1 m is addressable *given a project* and not otherwise. {@link
- * oneMeterTileName} does the deterministic part; resolving the project is left
- * to the caller (configuration, or a server-side probe of the handful of
- * projects whose name carries the right state prefix). **Where no project is
- * known, the answer is "no 1 m data here", never a silent fall back to 10 m
- * dressed up as LiDAR** — see the callers in `apps/api`.
+ * oneMeterTileName} does the deterministic part; **`oneMeterIndex.ts` now does
+ * the project half**, and the 1.9 GB GeoPackage turned out to be unnecessary:
+ * the bucket permits anonymous `ListBucket`, so the 959 projects enumerate in
+ * one request and their per-project file manifests build a complete national
+ * coverage index in 4.4 s that gzips to 240 KB. See that module for the
+ * measurements and for why a candidate is verified against the opened file
+ * rather than trusted from the index.
+ *
+ * **Where no project resolves, the answer is "no 1 m data here", never a silent
+ * fall back to 10 m dressed up as LiDAR** — see the callers in `apps/api`.
  *
  * ## Vertical datum
  *
@@ -100,8 +105,28 @@ export interface OneMeterTile {
   x: number;
   /** 10 km cell northing index of the cell's **north** edge — `y405`. */
   y: number;
-  /** File-name stem without the project suffix, e.g. `USGS_1M_16_x27y405`. */
+  /**
+   * File-name stem without the project suffix, e.g. `USGS_1M_16_x27y405`.
+   *
+   * **This is one of three conventions in use, not the convention.** Prefer
+   * {@link OneMeterTile.stems}; this field is the zoned form only, kept because
+   * it is the form most projects published after ~2018 use.
+   */
   stem: string;
+  /**
+   * Every file-name stem this tile could be published under, in probe order.
+   *
+   * Measured across all 959 projects in the bucket: `USGS_one_meter_x#y#` is
+   * used by 515, `USGS_1M_{zone}_x#y#` by 345, `USGS_1m_x#y#` by 59. Emitting
+   * only the zoned form — which is what this function originally did — misses
+   * **62%** of projects, and the miss is invisible: it presents as "no 1 m data
+   * here" over ground that has 1 m data.
+   *
+   * Note the two legacy stems carry no zone, so the file name alone cannot say
+   * which UTM zone its x/y were computed in. Resolution therefore has to verify
+   * against the opened file's own georeferencing — see `oneMeterIndex.ts`.
+   */
+  stems: string[];
 }
 
 /**
@@ -122,7 +147,13 @@ export function oneMeterTileName(lng: number, lat: number, zone?: number): OneMe
   const utm = lngLatToUtm(lng, lat, z);
   const x = Math.floor(utm.easting / 10000);
   const y = Math.floor(utm.northing / 10000) + 1;
-  return { zone: z, x, y, stem: `USGS_1M_${z}_x${x}y${y}` };
+  return {
+    zone: z,
+    x,
+    y,
+    stem: `USGS_1M_${z}_x${x}y${y}`,
+    stems: [`USGS_one_meter_x${x}y${y}`, `USGS_1M_${z}_x${x}y${y}`, `USGS_1m_x${x}y${y}`],
+  };
 }
 
 /** Full URL of a 1 m tile, once the project name is known. */

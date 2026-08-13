@@ -43,6 +43,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GeometryService } from '../prisma/geometry.service';
 import { TerrainService } from '../terrain/terrain.service';
 import { DemService } from '../terrain/dem.service';
+import { SPECIES_TO_GAME_SPECIES } from '../common/species-mapping';
 
 class CreateObservationDto {
   @IsString() propertyId!: string;
@@ -182,11 +183,16 @@ export class ObservationsService {
       throw new BadRequestException('observedAt is in the future.');
     }
 
+    // dto.species is optional — an unspecified species (e.g. a generic sign
+    // log) keeps today's behaviour (the Whitetail default in readRut()); a
+    // species that is *positively known* and is not whitetail (elk, above
+    // all — R83) gets a refusal instead of an inverted phase.
     const rut =
       property.centerLat !== null
         ? readRut(observedAt, {
             latitude: property.centerLat,
             offsetDays: property.rutOffsetDays ?? undefined,
+            species: dto.species ? SPECIES_TO_GAME_SPECIES[dto.species] : undefined,
           })
         : null;
 
@@ -203,7 +209,11 @@ export class ObservationsService {
         signType: dto.signType,
         travelHeadingDeg: dto.travelHeadingDeg,
         observedAt,
-        rutPhase: rut ? RUT_PHASE_TO_PRISMA[rut.phase] : undefined,
+        // `rut` is `null` (no property latitude), a refusal (`supported: false`
+        // — species this model has no basis for, R83), or a real reading.
+        // Only the last one is worth a column value; the others leave
+        // `rutPhase` unset rather than storing a guess.
+        rutPhase: rut && rut.supported ? RUT_PHASE_TO_PRISMA[rut.phase] : undefined,
         temperatureC: dto.temperatureC,
         pressureHpa: dto.pressureHpa,
         pressureTrend3h: dto.pressureTrend3h,

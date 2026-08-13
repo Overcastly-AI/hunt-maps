@@ -12,15 +12,36 @@ import {
   type TileCoord,
 } from '@hunt-maps/terrain';
 import { PrismaService } from '../prisma/prisma.service';
+import { Dem3depService, type ThreeDepProduct } from './dem3dep.service';
 
 export interface DemSource {
   id: string;
   label: string;
+  /**
+   * Upstream tile template. Empty for `kind: '3dep'`, which this server renders
+   * itself from Cloud-Optimized GeoTIFFs rather than proxying from anywhere.
+   */
   urlTemplate: string;
   encoding: DemEncoding;
   tileSize: number;
   maxZoom: number;
   attribution: string;
+  /**
+   * How tiles are obtained. `'tiles'` proxies `urlTemplate`; `'3dep'` renders
+   * from USGS Cloud-Optimized GeoTIFFs via {@link Dem3depService}.
+   */
+  kind: 'tiles' | '3dep';
+  /** Which 3DEP product, for `kind: '3dep'`. */
+  product?: ThreeDepProduct;
+  /**
+   * A short, honest statement of what the data actually is, shown to the user.
+   *
+   * Required on every source, because the field it prevents being invented is
+   * the one that got this wrong before: the `13` product is ~10 m — the *same*
+   * nominal grid as Terrarium — and calling it LiDAR because it comes from
+   * 3DEP is the overclaim `a02793d` removed. Only the 1 m product is LiDAR.
+   */
+  resolutionNote: string;
 }
 
 /**
@@ -32,33 +53,66 @@ export interface DemSource {
  * "download the whole county for offline use" a financial decision rather than
  * a technical one.
  *
- * Where a user supplies an OpenTopography key, we prefer USGS 3DEP: 1/3
- * arc-second (~10 m) nationally and 1 m LiDAR-derived bare-earth over much of
- * the country. **Bare-earth is the point.** Terrarium is a surface model — it
- * includes the tree canopy — so under timber it describes the top of the woods,
- * not the ground the deer walk on. Benches and old logging grades that are
- * obvious in LiDAR are invisible in a canopy-height model, which is precisely
- * why LiDAR changed hunting cartography.
+ * The 3DEP sources are **bare earth, and that is the point.** Terrarium is a
+ * surface model — it includes the tree canopy — so under timber it describes
+ * the top of the woods, not the ground the deer walk on. Benches and old
+ * logging grades that are obvious in bare earth are invisible in a canopy-
+ * height model, which is precisely why LiDAR changed hunting cartography.
+ *
+ * They are also **served, not proxied**: this server reads USGS's Cloud-
+ * Optimized GeoTIFFs directly, so neither needs configuring and both work out
+ * of the box. `DEM_3DEP_TEMPLATE` is gone; it never had a value in any
+ * deployment, which is why the 3DEP reader shipped and rendered nothing.
+ *
+ * ## The two 3DEP products are not interchangeable, and the labels say so
+ *
+ * `usgs3dep-13` is 1/3 arc-second — **~10 m, the same nominal grid as
+ * Terrarium**. It is better data (authoritative bare earth rather than a blend
+ * that includes canopy) but it is *not* LiDAR resolution, and describing it as
+ * such is the exact overclaim removed in `a02793d`.
+ *
+ * `usgs3dep-1m` is the real thing, and it does not exist everywhere. Where it
+ * is missing the answer is "no 1 m data here" and a **visible, labelled**
+ * fallback — never a silent substitution of the 10 m product.
  */
 export const DEM_SOURCES: Record<string, DemSource> = {
   terrarium: {
     id: 'terrarium',
     label: 'AWS Terrain Tiles (global, surface model)',
-    urlTemplate:
-      'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+    urlTemplate: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
     encoding: 'terrarium',
     tileSize: 256,
     maxZoom: 15,
     attribution: 'Mapzen / AWS Terrain Tiles; USGS, SRTM, and others',
+    kind: 'tiles',
+    resolutionNote: '~10 m blended surface model, includes canopy — not LiDAR',
   },
-  usgs3dep: {
-    id: 'usgs3dep',
-    label: 'USGS 3DEP LiDAR (US, bare earth)',
-    urlTemplate: process.env.DEM_3DEP_TEMPLATE ?? '',
+  'usgs3dep-13': {
+    id: 'usgs3dep-13',
+    label: 'USGS 3DEP 1/3 arc-second (US, bare earth)',
+    urlTemplate: '',
     encoding: 'terrain-rgb',
-    tileSize: 512,
-    maxZoom: 16,
+    tileSize: 256,
+    maxZoom: 15,
     attribution: 'USGS 3D Elevation Program (public domain)',
+    kind: '3dep',
+    product: '13',
+    resolutionNote: '~10 m bare-earth DEM, nationwide — not LiDAR resolution',
+  },
+  'usgs3dep-1m': {
+    id: 'usgs3dep-1m',
+    label: 'USGS 3DEP 1 m (US, bare earth LiDAR)',
+    urlTemplate: '',
+    encoding: 'terrain-rgb',
+    // Nominal 1 m data supports roughly 1.2 m/px at z17 in mid-latitudes.
+    // Past that the map would be magnifying the sample spacing, which reads as
+    // detail that is not in the data.
+    tileSize: 256,
+    maxZoom: 17,
+    attribution: 'USGS 3D Elevation Program (public domain)',
+    kind: '3dep',
+    product: '1m',
+    resolutionNote: '1 m LiDAR-derived bare earth — partial US coverage',
   },
 };
 
@@ -71,20 +125,27 @@ export class DemService {
   /** Coalesces concurrent requests for the same tile into one upstream fetch. */
   private readonly inflight = new Map<string, Promise<Buffer>>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly threeDep: Dem3depService,
+  ) {}
 
   resolveSource(id?: string): DemSource {
     const source = DEM_SOURCES[id ?? 'terrarium'];
-    if (!source || !source.urlTemplate) {
+    if (!source) {
       // Falling back silently to a surface model when the user asked for
       // bare-earth LiDAR would quietly degrade every analysis. Say so instead.
       if (id && id !== 'terrarium') {
         throw new ServiceUnavailableException(
-          `DEM source "${id}" is not configured on this server. ` +
-            `Set DEM_3DEP_TEMPLATE to enable it, or request "terrarium".`,
+          `Unknown DEM source "${id}". Available: ${Object.keys(DEM_SOURCES).join(', ')}.`,
         );
       }
       return DEM_SOURCES.terrarium;
+    }
+    if (source.kind === 'tiles' && !source.urlTemplate) {
+      throw new ServiceUnavailableException(
+        `DEM source "${source.id}" has no tile template configured on this server.`,
+      );
     }
     return source;
   }
@@ -129,6 +190,26 @@ export class DemService {
   }
 
   private async fetchUpstream(tile: TileCoord, source: DemSource): Promise<Buffer> {
+    // 3DEP is rendered here from USGS COGs rather than fetched from a tile
+    // server, because no such tile server exists — that is why the reader
+    // shipped and the map still drew Terrarium.
+    if (source.kind === '3dep') {
+      const product = source.product ?? '13';
+      const { png, report } = await this.threeDep.renderPng(tile, product, source.tileSize);
+      // A tile with nothing measured in it is a real answer at the edge of 1 m
+      // coverage, but caching it would freeze a coverage hole in place for the
+      // 90-day TTL even after USGS publishes the project. Refuse it instead;
+      // the caller sees a transparent tile either way, and the next request
+      // re-checks.
+      if (report.coverage === 0) {
+        throw new ServiceUnavailableException(
+          `No ${product === '1m' ? '1 m' : '1/3 arc-second'} 3DEP data covers ` +
+            `${tile.z}/${tile.x}/${tile.y}.`,
+        );
+      }
+      return png;
+    }
+
     const url = source.urlTemplate
       .replace('{z}', String(tile.z))
       .replace('{x}', String(tile.x))

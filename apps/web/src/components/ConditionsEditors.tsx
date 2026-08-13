@@ -7,6 +7,13 @@ export interface ConditionsEditorProps {
   onWindChange: (deg: number | null) => void;
   onTimeChange: (at: Date) => void;
   onClose: () => void;
+  /**
+   * Forwarded to `Popover` — `'end'` for a trigger docked near the right
+   * edge of the viewport (the desktop rail's Wind/Time rows), so the popover
+   * opens leftward instead of running off-screen. Omitted (default `'start'`)
+   * for the mobile/legacy `ConditionsBar`, unchanged.
+   */
+  align?: 'start' | 'end';
 }
 
 /**
@@ -24,10 +31,11 @@ export function ConditionsEditor({
   onWindChange,
   onTimeChange,
   onClose,
+  align,
 }: ConditionsEditorProps) {
   if (mode === 'time') {
     return (
-      <Popover title="Date & time" onClose={onClose}>
+      <Popover title="Date & time" onClose={onClose} align={align}>
         <label className="rl-field__label" htmlFor="time-input">
           When
         </label>
@@ -54,7 +62,7 @@ export function ConditionsEditor({
   }
 
   return (
-    <Popover title="Wind" onClose={onClose}>
+    <Popover title="Wind" onClose={onClose} align={align}>
       <div className="rl-compass">
         <WindNeedle fromDeg={windFromDeg} width={92} height={92} />
       </div>

@@ -11,15 +11,9 @@ import {
 import {
   Button,
   Callout,
-  Chip,
   CommandBar,
   CommandBarCell,
   ConditionsBar,
-  Dock,
-  DockBody,
-  DockFooter,
-  DockHeader,
-  DockSection,
   DownloadIcon,
   LayersIcon,
   LocateIcon,
@@ -33,8 +27,11 @@ import {
 } from '@hunt-maps/design';
 import { MapView } from './components/MapView';
 import { LayersSheet, type SavedFilterSummary } from './components/LayersSheet';
+import { DesktopRail, type DesktopRailTab } from './components/DesktopRail';
+import { DesktopStatusBadges } from './components/DesktopStatusBadges';
 import { ConditionsEditor } from './components/ConditionsEditors';
 import { RegionPicker } from './components/RegionPicker';
+import { useIsDesktopChrome } from './lib/useIsDesktopChrome';
 import { WaypointsSheet } from './components/waypoints';
 import { ObservationsSheet } from './components/observations';
 import { FilterEditor, FilterLibrary, parseStoredPredicate } from './components/filters';
@@ -42,11 +39,11 @@ import { toggleLayer } from './lib/layers';
 import { TerrainProtocol } from './lib/map/terrainProtocol';
 import { openTileStore } from './lib/offline/tileStore';
 import { invalidateCoverageCache, type CoverageState } from './lib/offline/coverage';
-import { describeCoverage } from './lib/offline/coverageLabel';
 import { useViewportCoverage } from './lib/offline/useViewportCoverage';
 import { useOfflineRegions } from './lib/offline/useOfflineRegions';
 import { DEM_TEMPLATE } from './lib/map/demSource';
 import { demSourceZoom, demTileKey, demTilesForBounds } from './lib/map/demTiles';
+import { useDemSourceCoverage } from './lib/map/demSourceCoverage';
 import { exposeDevHook } from './lib/devHook';
 import { useAuth, useSavedFilters, type SavedFilterDto, type WaypointDto } from './lib/api';
 import { useCurrentProperty } from './lib/currentProperty';
@@ -133,53 +130,6 @@ interface ObservationHandoff {
   intent: 'sighting' | 'blank-sit';
 }
 
-function cx(...parts: Array<string | false | undefined>): string {
-  return parts.filter(Boolean).join(' ');
-}
-
-/**
- * The one figure that decides desktop-dock vs. mobile-sheet chrome — has to
- * match `apps/web/src/index.css`'s `@media (min-width: 861px)` breakpoint
- * exactly (`layout.breakpoint-compact`, 860px), or the app could render the
- * standalone mobile `.rl-drawer` at a width the CSS is simultaneously styling
- * as desktop, or vice versa. A CSS media query alone cannot decide this: the
- * dock and the mobile drawer are structurally different JSX (the dock wraps
- * the tabbed drawer in a persistent chassis with its own header/footer; the
- * mobile drawer stands alone), not two skins of the same markup, so which one
- * mounts has to be a real runtime decision.
- */
-const DOCK_BREAKPOINT_QUERY = '(min-width: 861px)';
-
-/**
- * Whether the desktop dock chrome applies right now.
- *
- * Read once at mount from `matchMedia` (never `false` awaiting a first
- * effect, which would flash the mobile drawer on desktop for a frame) and
- * kept live across a resize/rotate so a hunter propping a phone into a
- * landscape truck mount does not get stuck with the chrome their initial
- * width happened to pick.
- */
-function useIsDesktopChrome(): boolean {
-  const [isDesktop, setIsDesktop] = useState(
-    () => window.matchMedia(DOCK_BREAKPOINT_QUERY).matches,
-  );
-  useEffect(() => {
-    const mql = window.matchMedia(DOCK_BREAKPOINT_QUERY);
-    const onChange = () => setIsDesktop(mql.matches);
-    onChange();
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
-  }, []);
-  return isDesktop;
-}
-
-/** `39.4340° N  82.5400° W` — the dock header's own coordinate line. */
-function formatDockCoords(center: { lat: number; lng: number }): string {
-  const lat = `${Math.abs(center.lat).toFixed(4)}° ${center.lat >= 0 ? 'N' : 'S'}`;
-  const lng = `${Math.abs(center.lng).toFixed(4)}° ${center.lng >= 0 ? 'E' : 'W'}`;
-  return `${lat}  ${lng}`;
-}
-
 /**
  * The map dashboard — everything this app did before `lib/api`/auth existed.
  *
@@ -215,6 +165,15 @@ function MapWorkspace() {
   const [view, setView] = useState<{ bounds: BBox; zoom: number } | null>(null);
   const [regionBox, setRegionBox] = useState<BBox | null>(null);
 
+  /**
+   * Which chrome shell is mounted — the thin dense rail (Direction C, the
+   * founder's pick, 2026-08-11) above 860px, the existing drawer/command-bar
+   * stack at or below it. See `useIsDesktopChrome`'s own doc comment for why
+   * this is a JS breakpoint rather than a pure CSS one: the two shells are
+   * different component trees, not the same markup reflowed.
+   */
+  const isDesktopChrome = useIsDesktopChrome();
+
   // `'new'` opens `FilterLibrary` (the "start from a preset or blank" picker);
   // a `SavedFilterDto` opens `FilterEditor` directly on that filter. Either
   // way this takes over the whole drawer slot — see the render below for why
@@ -231,26 +190,6 @@ function MapWorkspace() {
   const currentProperty = useCurrentProperty();
   const propertyId = currentProperty.propertyId;
 
-  const isDesktop = useIsDesktopChrome();
-  /*
-   * Genuinely separate from `drawerTab`, on purpose — reusing "no tab
-   * showing" as "dock collapsed" was the first shape of this and it had a
-   * dead end: opening the Offline picker or the filter editor already had to
-   * clear the drawer's slot so a second `.rl-sheet` could not mount beside
-   * it, and if that also meant "the dock is collapsed" then closing the
-   * picker left an *expanded* dock with nothing in it and no `CommandBar`
-   * re-open cell either (that cell only shows once collapsed) — a hunter
-   * stuck looking at an empty panel with no way back to Layers. Collapsed is
-   * its own, narrower claim: the user explicitly asked the dock chassis
-   * itself to go away (`DockFooter`'s button, or the inline "Close panel" on
-   * any tab, desktop only — see `closeDrawer`). Opening the picker or the
-   * filter editor never sets this; the dock stays expanded and they paint
-   * above it (`docs/design/PLAN-direction-a.md` §c gap 1), and whichever tab
-   * was showing before reappears the instant either one closes, because
-   * `drawerTab` was never touched.
-   */
-  const [dockCollapsed, setDockCollapsed] = useState(false);
-
   /**
    * Offline coverage for the view on screen, recomputed as the map moves.
    *
@@ -261,6 +200,14 @@ function MapWorkspace() {
    * is the one a hunter believes at the trailhead at 04:30.
    */
   const { coverage, refresh: refreshCoverage } = useViewportCoverage(map);
+
+  /**
+   * Does 1 m LiDAR actually exist under the ground on screen right now? A
+   * different question from `coverage` above (device storage) — this is
+   * upstream USGS survey coverage, needed so the DEM source picker in
+   * `LayersSheet` can say "no 1 m data here" instead of assuming.
+   */
+  const demCoverage = useDemSourceCoverage(map);
 
   /**
    * Saved offline regions, and the download running right now.
@@ -418,7 +365,7 @@ function MapWorkspace() {
     }));
   }, []);
 
-  const editor = (mode: 'wind' | 'time') => (
+  const editor = (mode: 'wind' | 'time', align?: 'start' | 'end') => (
     <ConditionsEditor
       mode={mode}
       windFromDeg={windFromDeg}
@@ -426,6 +373,7 @@ function MapWorkspace() {
       onWindChange={setWindFromDeg}
       onTimeChange={setAtUtc}
       onClose={() => setPopover(null)}
+      align={align}
     />
   );
 
@@ -447,53 +395,14 @@ function MapWorkspace() {
    * `elementFromPoint` trap for the one on top (the failure class
    * `CommandBar`'s own doc comment names, and the one `docs/AUDIT-
    * PRODUCT.md`'s IA table exists to keep from recurring as tabs are added).
-   * Also the one place that re-expands the desktop dock — every caller is
-   * either a `TabBarButton` (already inside an expanded dock, so this is a
-   * no-op there) or `CommandBar`'s "Layers" cell, which is only reachable at
-   * all on desktop while the dock is collapsed, so this is exactly the
-   * re-open affordance `docs/design/PLAN-direction-a.md` §c calls for.
    */
   const switchTab = useCallback((tab: DrawerTab) => {
     setDrawerTab(tab);
     setPickerOpen(false);
     setFilterEditorTarget(null);
-    setDockCollapsed(false);
   }, []);
 
-  /**
-   * Closes whatever is in the drawer slot. On a phone this is the whole
-   * story — the drawer disappears, same as before this pass.
-   *
-   * On desktop it also collapses the dock chassis itself. The alternative —
-   * leaving the chassis expanded with an empty body — is a dead end: the
-   * `CommandBar` "Layers" re-open cell only appears once the dock is
-   * genuinely collapsed (`dockCollapsed`, above), so an expanded-but-empty
-   * dock would strand a hunter with no way back to Layers short of a reload.
-   * Collapsing is the one behaviour that keeps "there is always a way back
-   * to Layers" true on every path that empties the drawer slot.
-   */
-  const closeDrawer = useCallback(() => {
-    setDrawerTab(null);
-    if (isDesktop) setDockCollapsed(true);
-  }, [isDesktop]);
-
-  /**
-   * Opens the offline region picker.
-   *
-   * Deliberately does **not** touch `drawerTab` or `dockCollapsed` — unlike
-   * `closeDrawer`, this is not "close the drawer", it is "something else
-   * needs the slot for a moment". `RegionPicker` renders its own `.rl-sheet`
-   * and the render guard below (`drawerTab && !filterEditorTarget &&
-   * !pickerOpen`) is what stops a second one mounting alongside it; leaving
-   * `drawerTab` untouched means whichever tab was showing before reappears
-   * the instant the picker closes, with no extra state to keep in sync —
-   * the same pattern `filterEditorTarget` already used correctly, applied
-   * here too rather than reinvented.
-   */
-  const openOfflinePicker = useCallback(() => {
-    setPickerOpen(true);
-    setFilterEditorTarget(null);
-  }, []);
+  const closeDrawer = useCallback(() => setDrawerTab(null), []);
 
   const savedFilterRows: SavedFilterSummary[] = useMemo(
     () =>
@@ -573,147 +482,101 @@ function MapWorkspace() {
     </Sheet>
   );
 
-  /**
-   * The tab strip and its active panel — everything that used to be the
-   * whole `.rl-drawer` (`BACKLOG` tabbed-drawer pass, `d7d861c`). Extracted
-   * so the exact same markup can mount either standalone (mobile, unchanged)
-   * or nested inside the desktop `Dock`'s scrollable body — never duplicated
-   * into two copies that could drift, and never mounted twice at once, which
-   * would double up `LayersSheet`/`WaypointsSheet`/`ObservationsSheet` and
-   * put two `.rl-sheet`s on screen.
-   */
-  const drawerContent = (
-    <>
-      <TabBar>
-        <TabBarButton active={drawerTab === 'layers'} onClick={() => switchTab('layers')}>
-          Layers
-        </TabBarButton>
-        <TabBarButton active={drawerTab === 'stands'} onClick={() => switchTab('stands')}>
-          Stands
-        </TabBarButton>
-        <TabBarButton
-          active={drawerTab === 'observations'}
-          onClick={() => {
-            // A manual tab switch always starts clean — only the
-            // "Log a sighting/blank sit here" handoff below should ever
-            // seed `initialWaypoint`/`initialIntent`, never a stale one
-            // left over from an earlier visit.
-            setObsHandoff(null);
-            switchTab('observations');
-          }}
-        >
-          Sightings
-        </TabBarButton>
-      </TabBar>
-
-      <div className="rl-drawer__body">
-        {propertyId && drawerTab !== 'layers' && (
-          <div className="rl-property-banner">
-            <span className="rl-property-banner__name">
-              {/* `rememberedName` is the name cached when the hunter picked
-                  this property; offline the list cannot be fetched, so
-                  without it this reads "Property — unknown" over ground
-                  they chose by name themselves. */}
-              Property —{' '}
-              <strong>
-                {currentProperty.property?.name ?? currentProperty.rememberedName ?? 'unknown'}
-              </strong>
-            </span>
-            <Button variant="link" onClick={currentProperty.clear}>
-              Change
-            </Button>
-          </div>
-        )}
-
-        {drawerTab === 'layers' && (
-          <LayersSheet
-            active={active}
-            opacities={opacities}
-            windFromDeg={windFromDeg}
-            savedFilters={savedFilterRows}
-            coverage={coverage}
-            onToggle={handleToggle}
-            onOpacity={handleOpacity}
-            onToggleFilter={handleToggleFilter}
-            onClose={closeDrawer}
-            onNewFilter={() => setFilterEditorTarget('new')}
-            onEditFilter={(f) => setFilterEditorTarget(f)}
-            canCreateFilters={authStatus === 'authenticated'}
-          />
-        )}
-
-        {drawerTab === 'stands' &&
-          (propertyId ? (
-            <WaypointsSheet
-              propertyId={propertyId}
-              fallbackLocation={center}
-              windFromDeg={windFromDeg}
-              atUtc={atUtc}
-              onClose={closeDrawer}
-              onSetWind={() => setPopover('wind')}
-              onLogSighting={(w) => {
-                setObsHandoff({ waypoint: w, intent: 'sighting' });
-                setDrawerTab('observations');
-              }}
-              onLogBlankSit={(w) => {
-                setObsHandoff({ waypoint: w, intent: 'blank-sit' });
-                setDrawerTab('observations');
-              }}
-            />
-          ) : (
-            renderPropertyGate('Stands & markers', 'log stands, cameras and markers')
-          ))}
-
-        {drawerTab === 'observations' &&
-          (propertyId ? (
-            <ObservationsSheet
-              propertyId={propertyId}
-              fallbackLocation={center}
-              windFromDeg={windFromDeg}
-              onSetWind={() => setPopover('wind')}
-              onClose={closeDrawer}
-              initialWaypoint={obsHandoff?.waypoint ?? null}
-              initialIntent={obsHandoff?.intent ?? null}
-            />
-          ) : (
-            renderPropertyGate('Sightings & sits', 'log sightings and sits')
-          ))}
-      </div>
-    </>
+  const propertyBanner = propertyId && (
+    <div className="rl-property-banner">
+      <span className="rl-property-banner__name">
+        {/* `rememberedName` is the name cached when the hunter picked
+            this property; offline the list cannot be fetched, so
+            without it this reads "Property — unknown" over ground
+            they chose by name themselves. */}
+        Property —{' '}
+        <strong>
+          {currentProperty.property?.name ?? currentProperty.rememberedName ?? 'unknown'}
+        </strong>
+      </span>
+      <Button variant="link" onClick={currentProperty.clear}>
+        Change
+      </Button>
+    </div>
   );
 
-  // Sourced once here from the same `describeCoverage` every other coverage
-  // string in the app reads from (`LayersSheet`'s own header chip included)
-  // — never a second, independently-worded copy that could disagree with it
-  // (Group 9, `ui-invariants.spec.ts`: "offline coverage describes the view
-  // on screen", which only holds if there is exactly one sentence to get
-  // right).
-  const offline = describeCoverage(coverage);
+  const standsPanel = propertyId ? (
+    <WaypointsSheet
+      propertyId={propertyId}
+      fallbackLocation={center}
+      windFromDeg={windFromDeg}
+      atUtc={atUtc}
+      onClose={closeDrawer}
+      onSetWind={() => setPopover('wind')}
+      onLogSighting={(w) => {
+        setObsHandoff({ waypoint: w, intent: 'sighting' });
+        setDrawerTab('observations');
+      }}
+      onLogBlankSit={(w) => {
+        setObsHandoff({ waypoint: w, intent: 'blank-sit' });
+        setDrawerTab('observations');
+      }}
+    />
+  ) : (
+    renderPropertyGate('Stands & markers', 'log stands, cameras and markers')
+  );
 
-  /**
-   * Whether the Layers tab is genuinely what a hunter sees right now — the
-   * render guard below (`drawerTab && !filterEditorTarget && !pickerOpen`)
-   * restated as a value, so `CommandBar`'s "Layers" cell can tell a real
-   * close from a re-open. `drawerTab === 'layers'` alone is not enough once
-   * the offline picker or the filter editor can occupy the slot without
-   * clearing it (`openOfflinePicker`'s own doc comment) — clicking "Layers"
-   * while the picker is open must reopen Layers, never toggle it away.
-   */
-  const layersShowing =
-    drawerTab === 'layers' && !pickerOpen && !filterEditorTarget && !dockCollapsed;
+  const observationsPanel = propertyId ? (
+    <ObservationsSheet
+      propertyId={propertyId}
+      fallbackLocation={center}
+      windFromDeg={windFromDeg}
+      onSetWind={() => setPopover('wind')}
+      onClose={closeDrawer}
+      initialWaypoint={obsHandoff?.waypoint ?? null}
+      initialIntent={obsHandoff?.intent ?? null}
+    />
+  ) : (
+    renderPropertyGate('Sightings & sits', 'log sightings and sits')
+  );
 
-  /**
-   * Whether `drawerContent` (any tab, not just Layers) is what should be
-   * mounted right now. Two sibling panels — the offline picker and the
-   * filter editor — can each take over the slot without touching
-   * `drawerTab` (`openOfflinePicker`'s doc comment), so this, not `drawerTab`
-   * alone, is the real mutual-exclusivity guard: it is what stops a second
-   * `.rl-sheet` mounting alongside either one's.
-   */
-  const drawerSlotShowsTabs = Boolean(drawerTab) && !filterEditorTarget && !pickerOpen;
+  const regionPickerPanel = pickerOpen && (
+    <RegionPicker
+      viewBounds={view?.bounds ?? null}
+      viewTileZoom={demSourceZoom(view?.zoom ?? 13)}
+      regions={regions.regions}
+      active={regions.active}
+      persisted={regions.persisted}
+      backend={regions.backend}
+      onBoxChange={setRegionBox}
+      onStart={(input) => void regions.start(input)}
+      onResume={(id) => void regions.resume(id)}
+      onCancel={regions.cancel}
+      onRemove={(id) => void regions.remove(id)}
+      onClose={() => setPickerOpen(false)}
+    />
+  );
+
+  const filterEditorPanel =
+    filterEditorTarget === 'new' ? (
+      <FilterLibrary
+        propertyId={propertyId ?? undefined}
+        windFromDeg={windFromDeg}
+        atUtc={atUtc}
+        viewport={view ? { bounds: view.bounds, zoom: view.zoom } : null}
+        onClose={() => setFilterEditorTarget(null)}
+        onSaved={() => setFilterEditorTarget(null)}
+      />
+    ) : filterEditorTarget ? (
+      <FilterEditor
+        initial={filterEditorTarget}
+        propertyId={propertyId ?? undefined}
+        windFromDeg={windFromDeg}
+        atUtc={atUtc}
+        viewport={view ? { bounds: view.bounds, zoom: view.zoom } : null}
+        onClose={() => setFilterEditorTarget(null)}
+        onSaved={() => setFilterEditorTarget(null)}
+        onDeleted={() => setFilterEditorTarget(null)}
+      />
+    ) : null;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isDesktopChrome ? ' app-shell--rail' : ''}`}>
       <MapView
         protocol={protocol}
         activeLayers={active}
@@ -731,189 +594,247 @@ function MapWorkspace() {
         regionBox={pickerOpen ? regionBox : null}
         coverage={coverage}
         /*
-         * Shown whenever the Layers tab is open — that is the surface making
-         * the claim, so the map should be showing its evidence at the same
-         * time — and always while coverage is partial, which is the one state
-         * where the text alone is actively misleading about *where* the gap is.
+         * Shown whenever the Layers surface is on screen — that is the
+         * surface making the claim, so the map should be showing its
+         * evidence at the same time — and always while coverage is partial,
+         * which is the one state where the text alone is actively
+         * misleading about *where* the gap is. On the desktop rail the
+         * Layers surface (base map, layer chips, elevation source) is
+         * permanent chrome rather than a panel that opens and closes, so it
+         * counts as "on screen" unconditionally there.
          */
-        showCoverage={drawerTab === 'layers' || pickerOpen || isPartialCoverage(coverage)}
+        showCoverage={
+          isDesktopChrome || drawerTab === 'layers' || pickerOpen || isPartialCoverage(coverage)
+        }
+        scaleAnchor={isDesktopChrome ? 'bottom-left' : 'bottom-right'}
       />
 
-      <div className="map-chrome">
-        <div className="chrome-topright">
-          <Rail>
-            <RailButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>
-              <PlusIcon />
-            </RailButton>
-            <RailButton label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>
-              <MinusIcon />
-            </RailButton>
-            <RailButton label="Go to my location" onClick={locate}>
-              <LocateIcon />
-            </RailButton>
-          </Rail>
-        </div>
+      {isDesktopChrome ? (
+        // `.map-chrome` here purely for the shared test-selector/focus/
+        // pointer-events contract every other chrome root already carries
+        // (`ui-invariants.spec.ts` scopes hit-testing, touch-target, focus
+        // and contrast checks to `.map-chrome`/`.rl-sheet`/`.rl-popover`) —
+        // `.map-chrome--rail` neutralises the mobile grid's padding/
+        // grid-template properties, which would otherwise double-offset
+        // every absolutely-positioned child inside it (each already carries
+        // its own `top`/`right`/`bottom` against the viewport).
+        <div className="map-chrome map-chrome--rail">
+          <DesktopStatusBadges
+            coverage={coverage}
+            targetSpecies={currentProperty.property?.targetSpecies ?? null}
+          />
 
-        <div className="chrome-bottomleft">
           {/*
-           * `CommandBar` (BACKLOG R44) replaces the old `.rl-rail` stack.
-           * Layers is a panel toggle; Offline is a background task with its
-           * own picker UI — which is the whole reason this bar's height
-           * never has to change: Stands, Sightings and the filter editor
-           * (this pass) all became *tabs inside the drawer* the Layers cell
-           * opens (`TabBar`, below), not new cells here
-           * (`docs/AUDIT-PRODUCT.md` rec's IA table).
-           *
-           * On desktop the dock is persistent chrome, not a togglable
-           * overlay, so this whole bar is redundant *while the dock is
-           * expanded* — there is nothing left for "Layers" to open, and
-           * "Offline" has a home inside the dock's own Offline Coverage
-           * section (`docs/design/PLAN-direction-a.md` §c gap 1). The
-           * `chrome-command-bar-wrap--dock-open` class only has an effect at
-           * the desktop breakpoint (`apps/web/src/index.css`), so this stays
-           * mobile's unchanged, always-visible bar at every narrower width —
-           * the class exists, the CSS rule that acts on it does not fire
-           * there.
+           * Zoom, locate and the offline downloader — "left of the rail, not
+           * under it" per the founder's brief. MapLibre's own scale control
+           * (`MapView`'s `scaleAnchor` above) docks to the same corner.
            */}
-          <div
-            className={cx(
-              'chrome-command-bar-wrap',
-              !dockCollapsed && 'chrome-command-bar-wrap--dock-open',
-            )}
-          >
-            <CommandBar>
-              <CommandBarCell
-                label="Layers"
-                description="Layers, stands and sightings"
-                active={layersShowing}
+          <div className="chrome-rail-controls">
+            <Rail>
+              <RailButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>
+                <PlusIcon />
+              </RailButton>
+              <RailButton label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>
+                <MinusIcon />
+              </RailButton>
+              <RailButton label="Go to my location" onClick={locate}>
+                <LocateIcon />
+              </RailButton>
+              <RailButton
+                label="Save this area for offline use"
+                active={pickerOpen}
                 onClick={() => {
-                  // One panel at a time in the drawer slot. Two `.rl-sheet`s
-                  // stacked there would overlap exactly, and the one underneath
-                  // becomes an `elementFromPoint` trap for the one on top — the
-                  // failure class this repo keeps paying for. `layersShowing`
-                  // (above `return`) is the honest answer to "is the drawer
-                  // actually what's on screen right now" — `drawerTab ===
-                  // 'layers'` alone is not, once the offline picker or the
-                  // filter editor can occupy the slot without clearing it.
-                  if (layersShowing) closeDrawer();
-                  else switchTab('layers');
+                  setPickerOpen((open) => !open);
+                  setDrawerTab(null);
+                  setFilterEditorTarget(null);
                 }}
               >
-                <LayersIcon />
-              </CommandBarCell>
-              <CommandBarCell
-                label="Offline"
-                description="Save this area for offline use"
-                active={pickerOpen}
-                onClick={() => (pickerOpen ? setPickerOpen(false) : openOfflinePicker())}
-              >
                 <DownloadIcon />
-              </CommandBarCell>
-            </CommandBar>
+              </RailButton>
+            </Rail>
           </div>
 
-          <ConditionsBar
+          <DesktopRail
+            propertyName={currentProperty.property?.name ?? currentProperty.rememberedName ?? null}
+            active={active}
+            onToggleLayer={handleToggle}
             windFromDeg={windFromDeg}
-            windOctant={windFromDeg === null ? null : octant(windFromDeg)}
+            targetSpecies={currentProperty.property?.targetSpecies ?? null}
+            savedFilters={savedFilterRows}
+            onToggleFilter={handleToggleFilter}
+            onNewFilter={() => setFilterEditorTarget('new')}
+            onEditFilter={(f) => setFilterEditorTarget(f)}
+            canCreateFilters={authStatus === 'authenticated'}
+            demCoverage={demCoverage}
             atLabel={formatWhen(atUtc)}
+            windOctant={windFromDeg === null ? null : octant(windFromDeg)}
             thermal={thermal}
             onWindClick={() => setPopover(popover === 'wind' ? null : 'wind')}
             onTimeClick={() => setPopover(popover === 'time' ? null : 'time')}
-            windEditor={popover === 'wind' ? editor('wind') : null}
-            timeEditor={popover === 'time' ? editor('time') : null}
+            windEditor={popover === 'wind' ? editor('wind', 'end') : null}
+            timeEditor={popover === 'time' ? editor('time', 'end') : null}
+            tab={(drawerTab ?? 'layers') as DesktopRailTab}
+            onTabChange={(nextTab) => {
+              // A manual tab switch always starts clean — only the "Log a
+              // sighting/blank sit here" handoff below should ever seed
+              // `initialWaypoint`/`initialIntent`, never a stale one left
+              // over from an earlier visit.
+              if (nextTab === 'observations') setObsHandoff(null);
+              switchTab(nextTab);
+            }}
           />
+
+          {/*
+           * One docked panel at a time, anchored left of the rail
+           * (`.rail-panel-dock`, `apps/web/src/index.css`) instead of the
+           * mobile drawer's top-left position — same one-panel-at-a-time
+           * contract (`WaypointsSheet`/`ObservationsSheet`/`RegionPicker`/
+           * `FilterLibrary`/`FilterEditor` each render their own `<Sheet>`
+           * unchanged; only the CSS anchor differs).
+           */}
+          {(regionPickerPanel ||
+            filterEditorPanel ||
+            drawerTab === 'stands' ||
+            drawerTab === 'observations') && (
+            <div className="rail-panel-dock">
+              {regionPickerPanel}
+              {!pickerOpen && filterEditorPanel}
+              {!pickerOpen && !filterEditorPanel && drawerTab === 'stands' && (
+                <>
+                  {propertyBanner}
+                  {standsPanel}
+                </>
+              )}
+              {!pickerOpen && !filterEditorPanel && drawerTab === 'observations' && (
+                <>
+                  {propertyBanner}
+                  {observationsPanel}
+                </>
+              )}
+            </div>
+          )}
         </div>
-      </div>
-
-      {/*
-       * Desktop: the persistent dock (`docs/design/PLAN-direction-a.md` §c).
-       * Always mounted at this breakpoint, whether expanded or collapsed —
-       * `Dock`'s own width transition needs something to animate from, and
-       * `filterEditorTarget`'s "Sheet" overlay paints above it at the same
-       * coordinates exactly the way `RegionPicker` already does (below),
-       * satisfying §c gap 1 with no change to either of those components.
-       *
-       * Mobile: unchanged from before this pass — a togglable drawer,
-       * mounted only while a tab is chosen and no sibling panel owns the
-       * slot, using the exact same `drawerContent` markup.
-       */}
-      {isDesktop ? (
-        <Dock collapsed={dockCollapsed}>
-          <DockHeader
-            title="Ridgeline"
-            subtitle={
-              currentProperty.property?.name ??
-              currentProperty.rememberedName ??
-              (authStatus === 'authenticated' ? 'No property selected' : 'Signed out')
-            }
-            coords={formatDockCoords(center)}
-          />
-          <DockBody>
-            {drawerSlotShowsTabs && <div className="rl-drawer">{drawerContent}</div>}
-            <DockSection title="Offline coverage">
-              <p
-                className="rl-hint"
-                role="status"
-                aria-live="polite"
-                data-testid="dock-coverage-detail"
-              >
-                <span className="coverage-chip" data-testid="dock-coverage-chip">
-                  <Chip tone={offline.tone} glyph={offline.glyph} title={offline.detail}>
-                    {offline.chip}
-                  </Chip>
-                </span>{' '}
-                {offline.detail}
-              </p>
-              <Button variant="primary" block onClick={openOfflinePicker}>
-                Download this area
-              </Button>
-            </DockSection>
-          </DockBody>
-          <DockFooter onCollapse={closeDrawer} />
-        </Dock>
       ) : (
-        drawerSlotShowsTabs && <div className="rl-drawer">{drawerContent}</div>
-      )}
+        <>
+          <div className="map-chrome">
+            <div className="chrome-topright">
+              <Rail>
+                <RailButton label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>
+                  <PlusIcon />
+                </RailButton>
+                <RailButton label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>
+                  <MinusIcon />
+                </RailButton>
+                <RailButton label="Go to my location" onClick={locate}>
+                  <LocateIcon />
+                </RailButton>
+              </Rail>
+            </div>
 
-      {pickerOpen && (
-        <RegionPicker
-          viewBounds={view?.bounds ?? null}
-          viewTileZoom={demSourceZoom(view?.zoom ?? 13)}
-          regions={regions.regions}
-          active={regions.active}
-          persisted={regions.persisted}
-          backend={regions.backend}
-          onBoxChange={setRegionBox}
-          onStart={(input) => void regions.start(input)}
-          onResume={(id) => void regions.resume(id)}
-          onCancel={regions.cancel}
-          onRemove={(id) => void regions.remove(id)}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
+            <div className="chrome-bottomleft">
+              {/*
+               * `CommandBar` (BACKLOG R44) replaces the old `.rl-rail` stack.
+               * Layers is a panel toggle; Offline is a background task with its
+               * own picker UI — which is the whole reason this bar's height
+               * never has to change: Stands, Sightings and the filter editor
+               * (this pass) all became *tabs inside the drawer* the Layers cell
+               * opens (`TabBar`, below), not new cells here
+               * (`docs/AUDIT-PRODUCT.md` rec's IA table).
+               */}
+              <CommandBar>
+                <CommandBarCell
+                  label="Layers"
+                  description="Layers, stands and sightings"
+                  active={drawerTab === 'layers'}
+                  onClick={() => {
+                    // One panel at a time in the drawer slot. Two `.rl-sheet`s
+                    // stacked there would overlap exactly, and the one underneath
+                    // becomes an `elementFromPoint` trap for the one on top — the
+                    // failure class this repo keeps paying for.
+                    if (drawerTab === 'layers') closeDrawer();
+                    else switchTab('layers');
+                  }}
+                >
+                  <LayersIcon />
+                </CommandBarCell>
+                <CommandBarCell
+                  label="Offline"
+                  description="Save this area for offline use"
+                  active={pickerOpen}
+                  onClick={() => {
+                    setPickerOpen((open) => !open);
+                    setDrawerTab(null);
+                    setFilterEditorTarget(null);
+                  }}
+                >
+                  <DownloadIcon />
+                </CommandBarCell>
+              </CommandBar>
 
-      {filterEditorTarget === 'new' && (
-        <FilterLibrary
-          propertyId={propertyId ?? undefined}
-          windFromDeg={windFromDeg}
-          atUtc={atUtc}
-          viewport={view ? { bounds: view.bounds, zoom: view.zoom } : null}
-          onClose={() => setFilterEditorTarget(null)}
-          onSaved={() => setFilterEditorTarget(null)}
-        />
-      )}
+              <ConditionsBar
+                windFromDeg={windFromDeg}
+                windOctant={windFromDeg === null ? null : octant(windFromDeg)}
+                atLabel={formatWhen(atUtc)}
+                thermal={thermal}
+                onWindClick={() => setPopover(popover === 'wind' ? null : 'wind')}
+                onTimeClick={() => setPopover(popover === 'time' ? null : 'time')}
+                windEditor={popover === 'wind' ? editor('wind') : null}
+                timeEditor={popover === 'time' ? editor('time') : null}
+              />
+            </div>
+          </div>
 
-      {filterEditorTarget && filterEditorTarget !== 'new' && (
-        <FilterEditor
-          initial={filterEditorTarget}
-          propertyId={propertyId ?? undefined}
-          windFromDeg={windFromDeg}
-          atUtc={atUtc}
-          viewport={view ? { bounds: view.bounds, zoom: view.zoom } : null}
-          onClose={() => setFilterEditorTarget(null)}
-          onSaved={() => setFilterEditorTarget(null)}
-          onDeleted={() => setFilterEditorTarget(null)}
-        />
+          {drawerTab && !filterEditorTarget && (
+            <div className="rl-drawer">
+              <TabBar>
+                <TabBarButton active={drawerTab === 'layers'} onClick={() => switchTab('layers')}>
+                  Layers
+                </TabBarButton>
+                <TabBarButton active={drawerTab === 'stands'} onClick={() => switchTab('stands')}>
+                  Stands
+                </TabBarButton>
+                <TabBarButton
+                  active={drawerTab === 'observations'}
+                  onClick={() => {
+                    setObsHandoff(null);
+                    switchTab('observations');
+                  }}
+                >
+                  Sightings
+                </TabBarButton>
+              </TabBar>
+
+              <div className="rl-drawer__body">
+                {drawerTab !== 'layers' && propertyBanner}
+
+                {drawerTab === 'layers' && (
+                  <LayersSheet
+                    active={active}
+                    opacities={opacities}
+                    windFromDeg={windFromDeg}
+                    targetSpecies={currentProperty.property?.targetSpecies ?? null}
+                    savedFilters={savedFilterRows}
+                    coverage={coverage}
+                    demCoverage={demCoverage}
+                    onToggle={handleToggle}
+                    onOpacity={handleOpacity}
+                    onToggleFilter={handleToggleFilter}
+                    onClose={closeDrawer}
+                    onNewFilter={() => setFilterEditorTarget('new')}
+                    onEditFilter={(f) => setFilterEditorTarget(f)}
+                    canCreateFilters={authStatus === 'authenticated'}
+                  />
+                )}
+
+                {drawerTab === 'stands' && standsPanel}
+                {drawerTab === 'observations' && observationsPanel}
+              </div>
+            </div>
+          )}
+
+          {regionPickerPanel}
+          {filterEditorPanel}
+        </>
       )}
 
       {inspect && (

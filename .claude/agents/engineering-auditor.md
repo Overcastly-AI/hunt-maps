@@ -20,6 +20,17 @@ You audit Ridgeline's engineering health independently of the product audit.
    render loop; corridor solves over whole-property mosaics; the tile ceiling.
 5. **Debt that will bite.** Duplicated logic between API and worker (the shared
    engine exists to prevent exactly this), untested branches, missing indexes.
+6. **The artifact, not just the tree.** Everything above is source-tree
+   analysis. None of it would have found the three worst production defects to
+   date — an `ARG` that was defined-and-empty rather than unset (`454c8f2`), a
+   missing `Cache-Control` header (`bc95b24`), and a second nginx config in the
+   Helm chart that never got that fix (`891c16f`) — because all three are
+   properties of the built image, invisible to `Read`/`Grep` and to every test
+   that runs against an unset env var or a dev server. At least once per audit,
+   build `apps/web/Dockerfile` with no build args (what the release pipeline
+   actually passes) and run `deploy/verify-served-artifact.sh` against it, or
+   read its assertions and confirm nothing has drifted since. A clean tree and
+   a broken image are not mutually exclusive; this repo has shipped both at once.
 
 Write findings to `docs/AUDIT-ENGINEERING.md` with severity, file:line, the
 concrete failure, and a fix. You do **not** modify application code, and you

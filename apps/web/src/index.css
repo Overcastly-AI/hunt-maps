@@ -362,6 +362,332 @@
 }
 
 /* --------------------------------------------------------------------------
+ * Desktop rail (Direction C) — `DesktopRail.tsx`, `DesktopStatusBadges.tsx`
+ *
+ * The founder's complaint, measured: the old drawer (`.rl-drawer` below) was
+ * 360px, pinned top-left, running to the command bar — ~25% of a 1440×900
+ * window hidden *while open*, and it was the only route to Layers/Stands/
+ * Sightings, so in practice it stayed open. This is the fix: a translucent
+ * rail docked to the right edge, `--layout-rail-width` (220px) wide, with
+ * every control reachable with no scrolling (`ui-invariants.spec.ts` group
+ * 14 proves this rather than asserting it once by eye) and a hard ceiling on
+ * how much of the map any chrome may cover (group 15).
+ *
+ * Mounted only above 860px (`useIsDesktopChrome`, `App.tsx`) — a genuinely
+ * different component tree from the mobile drawer/command-bar stack below,
+ * not the same markup reflowed by a media query, so this block does not
+ * share selectors with `.rl-drawer`/`.chrome-bottomleft` at all.
+ * -------------------------------------------------------------------------- */
+
+/*
+ * Neutralises `.map-chrome`'s mobile-grid properties for the desktop rail's
+ * wrapper (`App.tsx`) — every child inside it is independently `position:
+ * absolute` against the viewport already (`.rail`, `.chrome-rail-controls`,
+ * `.rail-status-badges`, `.rail-panel-dock`'s sheet), so the grid template
+ * areas do nothing for them, and `.map-chrome`'s own padding would otherwise
+ * double-offset every child's own `top`/`right`/`bottom` — an absolutely
+ * positioned element's containing block is its ancestor's *padding* box, so
+ * a `top: 12px` child inside a `padding: 12px` ancestor lands 24px from the
+ * real viewport edge, not 12px.
+ */
+.map-chrome--rail {
+  padding: 0;
+  display: block;
+}
+
+.rail {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  width: var(--layout-rail-width);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg-rail);
+  backdrop-filter: var(--glass-blur-rail);
+  -webkit-backdrop-filter: var(--glass-blur-rail);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sheet);
+  /*
+   * Deliberately NOT `overflow: hidden`. The wind/time `Popover` opens
+   * *inside* `.rail__pinned`, anchored to its own trigger so its caret points
+   * at the right row — clipping this container would clip the popover out of
+   * existence. It would still paint (a bounding box ignores an ancestor's
+   * clip) but `elementFromPoint` would resolve to the map canvas underneath:
+   * visible and unclickable, caught by `ui-invariants.spec.ts` group 4b ("N"
+   * and "S" on the compass hit the map canvas the first time this was built
+   * with `overflow: hidden` here) — the exact bug this suite exists to catch,
+   * reproduced by a new container. `.rl-conditions` states the identical rule
+   * for the same reason on the mobile chassis.
+   */
+}
+
+.rail__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  /*
+   * This must never actually need to scroll — `ui-invariants.spec.ts`
+   * group 14 asserts `scrollHeight <= clientHeight` at both 1440×900 and
+   * 1280×800. `overflow-y: auto` is a safety net for a future layer added
+   * without re-checking the budget, not a licence to rely on it: a rail
+   * that scrolls is the mobile drawer's failure mode reintroduced one level
+   * down.
+   */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  /*
+   * 6px, not `var(--space-2)`'s 8px — one of three small, deliberate trims
+   * (with `.rail__section`'s `padding-top` below and `.rail-chip-grid`'s own
+   * row gap) that together buy back the room `.rl-chip-row__text` wrapping
+   * onto two lines needs at the tighter 1280×800 budget viewport. Measured,
+   * not guessed: without these three the wrapped layout is 8px short of
+   * fitting at 1280×800; with them it clears with ~16px to spare (group 14
+   * still asserts the real number, so a future label that needs a third line
+   * fails loudly here rather than silently scrolling).
+   */
+  gap: 6px;
+}
+
+.rail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.rail__property {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-condensed);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.rail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* 2px, not `var(--space-1)`'s 4px — see `.rail__scroll`'s `gap` comment. */
+  padding-top: 2px;
+  border-top: 1px solid var(--color-line);
+}
+
+.rail__section:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.rail__micro-label {
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-faint);
+}
+
+.rail__empty-hint {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--color-text-faint);
+  margin: 0;
+}
+
+/* Two-up grid of `LayerChip`s — the density move: the same 44px gloved-tap
+   row `ToggleRow` already uses, at half the vertical cost per layer, rather
+   than a shorter row that would fail the touch-target floor. A literal
+   single column was measured and rejected here — see `.rail__scroll`'s `gap`
+   comment — in favour of `.rl-chip-row__text` wrapping onto a second line
+   inside the same row instead of truncating. 1px row gap, not 2px: one of
+   the three small trims that comment documents. */
+.rail-chip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 4px;
+}
+
+/* --------------------------------------------------------------------------
+ * Bottom-pinned instrument rows — Wind / Thermals / Time, then the Layers /
+ * Stands / Sightings segmented control. Never scrolls with the section list
+ * above it: these are the controls a hunter re-checks constantly.
+ * -------------------------------------------------------------------------- */
+
+.rail__pinned {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--glass-border);
+  padding: var(--space-1) var(--space-2);
+  gap: 2px;
+}
+
+.rail-stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  /*
+   * The gloved-tap floor applies to the two real controls here (Wind, Time —
+   * both `<button>`s that open a popover); Thermals is a read-only display
+   * row with nothing to press, so it is exempt the same way a plain text
+   * row would be — `div.rail-stat-row` below overrides it back down.
+   */
+  min-height: var(--space-touch);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+div.rail-stat-row {
+  min-height: 32px;
+  cursor: default;
+}
+
+button.rail-stat-row:hover {
+  background: color-mix(in srgb, var(--color-raised) 70%, transparent);
+}
+
+.rail-stat-row__label {
+  font-family: var(--font-condensed);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--color-text-faint);
+}
+
+.rail-stat-row__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  text-align: right;
+}
+
+.rail-stat-row__value--unset {
+  color: var(--color-warn);
+}
+
+.rail__pinned .rl-segmented {
+  margin-top: var(--space-1);
+}
+
+/* --------------------------------------------------------------------------
+ * Left-of-rail map controls (zoom, locate, offline) and status badges
+ * -------------------------------------------------------------------------- */
+
+.chrome-rail-controls {
+  position: absolute;
+  left: var(--space-3);
+  /*
+   * Clears MapLibre's own scale + (compact) attribution controls, which this
+   * app pins to the same corner (`MapView.tsx`'s `scaleAnchor` — attribution
+   * is a legal requirement and must never be painted underneath this rail's
+   * own glass, see that file's comment). Measured, not guessed: the compact
+   * attribution toggle and the imperial scale bar stack to ~72px including
+   * MapLibre's own control margins.
+   */
+  bottom: calc(var(--space-3) + 72px);
+  z-index: 20;
+}
+
+.rail-status-badges {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.rail-status-badge {
+  position: relative;
+  display: inline-block;
+  /*
+   * A glass backing, not just the chip's own translucent tone fill. This
+   * badge floats directly over the *map*, not over a sheet's opaque header —
+   * `ui-invariants.spec.ts` group 7 caught a chip reading 2.36:1 here against
+   * a bright hillshade patch with nothing behind it. `.rl-glass` is what
+   * every other floating-over-the-map element in this app already uses for
+   * exactly this reason.
+   */
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+
+/* Reachable-not-vanished — see `LayerChip`'s `.rl-chip-row__desc` for the
+   identical contract and why `visibility` (not `display`/`opacity`) is what
+   lets an e2e assertion tell "reachable via hover" apart from "deleted". */
+.rail-status-badge__detail {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  width: max-content;
+  max-width: min(320px, calc(100vw - var(--layout-rail-width) - var(--space-6) * 2));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-rail);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text);
+  visibility: hidden;
+}
+
+.rail-status-badge:hover .rail-status-badge__detail,
+.rail-status-badge:focus-within .rail-status-badge__detail {
+  visibility: visible;
+}
+
+/*
+ * A docked side panel (Stands / Sightings / the offline picker / the filter
+ * editor) — anchored left of the rail rather than the mobile drawer's
+ * top-left position. `WaypointsSheet`/`ObservationsSheet`/`RegionPicker`/
+ * `FilterLibrary`/`FilterEditor` all render their own `<Sheet>`
+ * (`packages/design`) unmodified; this only overrides where that sheet's
+ * `.rl-sheet--drawer` positioning class places it, matching the same
+ * technique `.rl-drawer__body > .rl-sheet.rl-sheet--drawer` below uses for
+ * the mobile tabbed drawer.
+ */
+.rail-panel-dock > .rl-sheet.rl-sheet--drawer {
+  top: var(--space-3);
+  left: auto;
+  right: calc(var(--layout-rail-width) + var(--space-6));
+  bottom: var(--space-3);
+  width: var(--layout-sheet-width);
+  max-height: none;
+}
+
+/*
+ * The `inspect-card`'s own default position (below) assumes nothing else
+ * occupies the bottom-left corner; on the desktop rail that corner now holds
+ * a four-button rail (zoom in/out, locate, offline) plus MapLibre's scale
+ * control. Lifted clear of both.
+ */
+.app-shell--rail .inspect-card {
+  bottom: calc(var(--space-3) + 72px + var(--space-touch) * 4 + 3px + var(--space-3));
+}
+
+/* --------------------------------------------------------------------------
  * Tabbed drawer — Layers / Stands / Sightings share the one drawer slot
  * (`docs/AUDIT-PRODUCT.md` rec 20; `CommandBar`'s own doc comment already
  * reserved this: "adding Filters or Property later means adding a tab
@@ -613,6 +939,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* Confirm/cancel row under the "switch elevation source?" callout in the
+   Layers sheet — same shape as `.wp-detail__confirm-row`. */
+.rl-source-confirm {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 /*

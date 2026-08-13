@@ -34,12 +34,23 @@ structurally cannot match:
    backlog candidate / already covered. Dedupe against VISION, ROADMAP, BACKLOG
    and `git log` first.
 3. **Frame it against the four advantages.** Say explicitly whether it is
-   *differentiation* or *table stakes*. This drives priority.
+   _differentiation_ or _table stakes_. This drives priority.
 4. **Write it in the right place** — VISION for thesis shifts, ROADMAP for
    epics (✅/🚧/⬜), BACKLOG for near-term buildable items with priority, size,
    rationale and dependencies.
 5. **Sequence it.** Note dependencies so the build loop pulls things in a
    buildable order.
+
+## The scorecard is a claim about the artifact, not the tree
+
+`VISION.md`'s parity scorecard once read "✅ ahead" on eleven rows while every
+terrain layer rendered blank in every deployed image (`454c8f2`), and "used in
+zero places" for the `Confidence` primitive while it was used in fifteen —
+both had to be corrected by hand in `c68c485` after shipping. A ✅/⚠️/🔴 row is
+evidence a hunter has a capability, not that code exists for it. When you touch
+the scorecard, verify the claim against the running artifact or against the
+ROADMAP's own checkbox state (which the build agents tick in-commit) — not
+against what you can see merged in the tree.
 
 ## Where you push back
 

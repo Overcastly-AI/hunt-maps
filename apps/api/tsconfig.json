@@ -19,6 +19,7 @@
     // dependency order.
     "paths": {
       "@hunt-maps/terrain": ["../../packages/terrain/src/index.ts"],
+      "@hunt-maps/terrain/testing": ["../../packages/terrain/src/testing/index.ts"],
       "@hunt-maps/shared": ["../../packages/shared/src/index.ts"]
     },
     "incremental": true,

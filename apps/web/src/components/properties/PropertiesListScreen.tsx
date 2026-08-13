@@ -56,8 +56,8 @@ export function PropertiesListScreen() {
             <h2>No ground yet</h2>
             <p className="rl-hint">
               A property is the piece of ground everything else in Ridgeline hangs off — stands,
-              sign, saved filters and the terrain analytics all key to its boundary. Draw one to
-              get started; it takes a couple of minutes with satellite imagery to trace against.
+              sign, saved filters and the terrain analytics all key to its boundary. Draw one to get
+              started; it takes a couple of minutes with satellite imagery to trace against.
             </p>
             <Link to="/properties/new" className="rl-btn rl-btn--primary">
               Draw your first property
@@ -96,11 +96,27 @@ function PropertyCard({ property }: { property: PropertySummaryDto }) {
           <span className="property-card__meta rl-hint">{formatArea(property.areaHectares)}</span>
           <span className="property-card__meta rl-hint">
             {property._count.waypoints} waypoint{property._count.waypoints === 1 ? '' : 's'} ·{' '}
-            {property._count.observations} observation{property._count.observations === 1 ? '' : 's'}
+            {property._count.observations} observation
+            {property._count.observations === 1 ? '' : 's'}
           </span>
+          {/*
+            The list card is a glance-only summary, so the refusal gets the
+            same one-line treatment as a real phase rather than the fuller
+            explanation `PropertyDetailScreen` has room for — but it is still
+            an explicit "no model" chip, never a phase silently carried over
+            from whitetail. `rut.supported` is a compile-time discriminant
+            (`PropertyRutReading` is `@hunt-maps/shared`'s `RutResult` union,
+            R83): there is no `.phase` to reach for on the `false` branch.
+          */}
           {rut && (
             <span className="property-card__chips">
-              <Chip tone="neutral">{rut.phase}</Chip>
+              {rut.supported ? (
+                <Chip tone="neutral">{rut.phase}</Chip>
+              ) : (
+                <Chip tone="warn" title={rut.reason}>
+                  {rut.headline}
+                </Chip>
+              )}
             </span>
           )}
         </div>

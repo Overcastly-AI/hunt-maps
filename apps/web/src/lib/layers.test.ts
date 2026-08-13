@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { LAYERS, layerById, missingInputs, toggleLayer } from './layers';
+import { LAYERS, layerById, missingInputs, speciesBlockedReason, toggleLayer } from './layers';
 import { DEM_SOURCE } from './map/demSource';
+import type { WireSpecies } from './api/types';
 
 describe('toggleLayer', () => {
   it('adds and removes a layer', () => {
@@ -72,6 +73,79 @@ describe('missingInputs', () => {
     // north wind, which is a very common hunting wind.
     expect(missingInputs(new Set(['bedding']), 0)).toHaveLength(0);
   });
+
+  // R84 — `docs/EVIDENCE.md` Pass 7 §2. A layer whose *model* has no basis
+  // for the stated species is exactly the "unset input" case CLAUDE.md's
+  // "grey out rather than render a default" rule already covers; this pins
+  // that `missingInputs` treats it that way rather than as a separate,
+  // easy-to-forget code path.
+  describe('species-invalid layers (R84)', () => {
+    it('flags bedding for a stated elk property, wind or no wind', () => {
+      const withWind = missingInputs(new Set(['bedding']), 270, 'ELK');
+      expect(withWind).toHaveLength(1);
+      expect(withWind[0]).toContain('Millspaugh');
+
+      const withoutWind = missingInputs(new Set(['bedding']), null, 'ELK');
+      expect(withoutWind).toHaveLength(1);
+      expect(withoutWind[0]).toContain('Millspaugh');
+      // Species is the reason, not a doubled-up wind complaint.
+      expect(withoutWind[0]).not.toContain('wind direction');
+    });
+
+    it('is quiet for an elk property once a species-neutral layer is active', () => {
+      expect(missingInputs(new Set(['slope', 'weiss']), 270, 'ELK')).toHaveLength(0);
+    });
+
+    it('is quiet for bedding when no species is stated ("not stated" is not "not whitetail")', () => {
+      expect(missingInputs(new Set(['bedding']), 270, null)).toHaveLength(0);
+      expect(missingInputs(new Set(['bedding']), 270, undefined)).toHaveLength(0);
+    });
+
+    it('is quiet for bedding on a stated whitetail property', () => {
+      expect(missingInputs(new Set(['bedding']), 270, 'WHITETAIL')).toHaveLength(0);
+    });
+
+    it('flags bedding for every non-whitetail species, not only elk', () => {
+      const nonWhitetail: WireSpecies[] = [
+        'MULE_DEER',
+        'BLACKTAIL',
+        'MOOSE',
+        'PRONGHORN',
+        'BEAR',
+        'TURKEY',
+        'HOG',
+        'OTHER',
+      ];
+      for (const species of nonWhitetail) {
+        expect(missingInputs(new Set(['bedding']), 270, species), species).toHaveLength(1);
+      }
+    });
+  });
+});
+
+describe('speciesBlockedReason', () => {
+  const bedding = layerById('bedding')!;
+  const weiss = layerById('weiss')!;
+
+  it('is undefined for a layer with no species caveat, regardless of species', () => {
+    expect(speciesBlockedReason(weiss, 'ELK')).toBeUndefined();
+  });
+
+  it('is undefined when the species is not stated', () => {
+    expect(speciesBlockedReason(bedding, null)).toBeUndefined();
+    expect(speciesBlockedReason(bedding, undefined)).toBeUndefined();
+  });
+
+  it('is undefined for a stated whitetail property', () => {
+    expect(speciesBlockedReason(bedding, 'WHITETAIL')).toBeUndefined();
+  });
+
+  it('names the actual finding for elk, not a generic "not supported"', () => {
+    const reason = speciesBlockedReason(bedding, 'ELK');
+    expect(reason).toBeDefined();
+    expect(reason).toContain('Millspaugh');
+    expect(reason).toContain('slope did not separate beds from random ground');
+  });
 });
 
 describe('layer catalogue', () => {
@@ -132,6 +206,22 @@ describe('layer catalogue', () => {
         }
       }
     });
+
+    // R84/R85 — the same rule as `grade`, applied to species transfer rather
+    // than evidence strength: only the layer(s) actually greyed out for a
+    // non-whitetail species should carry a `speciesCaveat`, and it should
+    // never be silently dropped from bedding, since a dropped caveat renders
+    // a whitetail-only model as fact for an elk property with no warning at
+    // all — the exact regression `docs/EVIDENCE.md` Pass 7 exists to prevent.
+    it('marks bedding — and (today) only bedding — with a species caveat', () => {
+      for (const l of LAYERS) {
+        if (l.id === 'bedding') {
+          expect(l.speciesCaveat, l.id).toBeDefined();
+        } else {
+          expect(l.speciesCaveat, l.id).toBeUndefined();
+        }
+      }
+    });
   });
 
   // Regression guard for the "LiDAR relief" mislabel this fix corrects
@@ -176,7 +266,10 @@ describe('layer catalogue', () => {
       // what the layer *cannot* show; a blurb that names them with no
       // negation anywhere is claiming the opposite, which is the regression.
       const relief = layerById('multiHillshade');
-      expect(relief, 'multiHillshade must stay registered for this guard to mean anything').toBeDefined();
+      expect(
+        relief,
+        'multiHillshade must stay registered for this guard to mean anything',
+      ).toBeDefined();
       const featureTerms = /(logging grade|skid road|micro-?terrain|micro-?bench)/i;
       if (featureTerms.test(relief?.blurb ?? '')) {
         expect(relief?.blurb).toMatch(/\b(not|cannot|does not|doesn't|need (a )?(finer|real))\b/i);
