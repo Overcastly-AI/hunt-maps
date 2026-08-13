@@ -13,8 +13,8 @@ decision should be checked against them:
    Evans–Young curvature, Weiss landform classes, Wood morphometric features
    (saddles!), bench detection, solar insolation, thermal phase, leeward bedding
    likelihood, and anisotropic least-cost movement corridors.
-2. **Saved terrain filters are first-class.** A user's *"12–25°, facing
-   north-through-east, on a midslope bench, leeward on today's wind"* is a
+2. **Saved terrain filters are first-class.** A user's _"12–25°, facing
+   north-through-east, on a midslope bench, leeward on today's wind"_ is a
    named, persisted, shareable object that travels with them offline and can be
    fed into the corridor solver as an attraction field. Competitors ship fixed
    slope bands somebody else chose. This is the moat.
@@ -33,7 +33,7 @@ pavement. Everything below follows from that:
 - **Cache elevation, never rendered layers.** The offline store holds DEM tiles;
   analysis layers are computed on-device on demand. Pre-baking rendered tiles
   would need a variant per layer × per wind × per date. One DEM download unlocks
-  *every* layer, *any* wind, *any* date. Never regress this.
+  _every_ layer, _any_ wind, _any_ date. Never regress this.
 - **The engine is shared, not duplicated.** `@hunt-maps/terrain` is imported by
   both the API and the browser worker. A saved filter must produce identical
   output on the laptop at camp and the phone at the bottom of a draw.
@@ -54,7 +54,7 @@ no layer, because it is trusted.
   and hyperbolic paraboloids with closed-form slope/aspect/curvature. Screenshot
   review proves nothing about a hillshade.
 - **Sign conventions are load-bearing and documented.** `plan`/`profile` follow
-  ESRI; `crossSectional`/`longitudinal` follow Wood — they *disagree* by design.
+  ESRI; `crossSectional`/`longitudinal` follow Wood — they _disagree_ by design.
   There are regression tests pinning this because it was wrong once and nothing
   crashed; the map was just confidently backwards.
 - **Say when you do not know.** Grey out layers whose inputs are unset rather
@@ -114,8 +114,8 @@ so the variable was **defined and empty**, not unset. `demSource.ts` resolved
 it with `?? DEFAULT`, and `??` only falls back on null/undefined — an empty
 string is neither. Every DEM tile URL was `""`; hillshade, slope, aspect,
 landform, bedding and corridors rendered blank in every container ever
-shipped, and nothing threw. Reported as *"I still can't even use it. None of
-the layers are working"* — which was literally true (`454c8f2`). A sibling bug
+shipped, and nothing threw. Reported as _"I still can't even use it. None of
+the layers are working"_ — which was literally true (`454c8f2`). A sibling bug
 hid a correct release behind stale browser cache because `index.html` had no
 `Cache-Control` (`bc95b24`). Both lived in the one configuration nothing
 exercises: CI runs the source tree with the var unset, never builds or runs
@@ -135,7 +135,7 @@ untrustworthy for being silent instead of backwards.
 - **Backend:** NestJS + Prisma + **PostgreSQL/PostGIS**, REST
 - **Frontend:** React + Vite + TypeScript + **MapLibre GL**, PWA via vite-plugin-pwa
 - **Design:** `packages/design` — tokens are the single source of truth, and
-  `tokens.css` is *generated* from `tokens.ts` because the map needs the same
+  `tokens.css` is _generated_ from `tokens.ts` because the map needs the same
   values at runtime for MapLibre paint properties and canvas ramps. A test fails
   CI if the two drift. **No literal colours, sizes or radii outside that package.**
 - **Monorepo:** pnpm workspaces — `apps/api`, `apps/web`, `packages/terrain`,
@@ -181,7 +181,7 @@ docker compose up -d --build    # full dev stack incl. PostGIS. Needs .env
   a SQL aggregate, not a raster pass per row.
 - **Filters are a validated AST, never code.** They are shareable between users;
   a shared filter must be inert data.
-- **Comment the *why*.** The terrain code is dense mathematics with real
+- **Comment the _why_.** The terrain code is dense mathematics with real
   hunting consequences. Explain the decision and the failure it prevents, not
   the mechanics.
 
@@ -204,6 +204,7 @@ Default to delegating and orchestrating. The tooling lives in
 [`.claude/`](./.claude/README.md).
 
 **Agents** (`.claude/agents/`):
+
 - `terrain-scientist` — the DEM/LiDAR engine. Owns correctness of the maths.
 - `map-builder` — MapLibre layers, tile protocols, rendering, cartography.
 - `offline-steward` — PWA, tile storage, sync, conflict handling. Owns the
@@ -217,7 +218,7 @@ Default to delegating and orchestrating. The tooling lives in
 - `analytics-auditor` — guards statistical honesty. Hunts for use-vs-availability
   errors, overclaimed significance, and folklore dressed as a model.
 - `game-biologist` — **large-game domain expert.** The only role with a mandate
-  over whether the *biology* is right, as opposed to whether the code computes
+  over whether the _biology_ is right, as opposed to whether the code computes
   what it claims. Vets every modelled parameter against peer-reviewed
   literature, grades the evidence, and replaces guesses with cited values. Owns
   `docs/EVIDENCE.md`.
@@ -227,7 +228,7 @@ Default to delegating and orchestrating. The tooling lives in
   VISION/ROADMAP/BACKLOG entries. Docs only.
 - `doc-syncer` — cheap-model commit-driven doc reconciler.
 
-**Skills** (`.claude/skills/`) — invoke the matching skill *before* the work.
+**Skills** (`.claude/skills/`) — invoke the matching skill _before_ the work.
 Build process: `brainstorming` → `writing-plans` → `test-driven-development` /
 `subagent-driven-development` → `requesting-code-review` →
 `verification-before-completion` → `finishing-a-development-branch` (vendored
@@ -235,6 +236,7 @@ from [obra/superpowers](https://github.com/obra/superpowers), MIT). Debugging:
 `systematic-debugging`. Parallel work: `dispatching-parallel-agents`.
 
 **Workflows** (`.claude/workflows/`):
+
 - `build-vertical-slice` — one feature: engine → schema → API → map → review → QA.
 - `autonomous-dev-loop` — the org loop: audits → groom → build → repeat on
   completion.
@@ -278,8 +280,24 @@ reporting the work done.
 
 - Prefer a thin vertical slice working end-to-end over broad-but-broken.
 - Commit in logical, working increments. Never push a red build.
-- Develop on the current `claude/*` branch; never push to `main` without
-  explicit permission.
+- **Push to `main`.** Standing instruction from the founder (2026-08-12),
+  replacing the previous "never push to `main` without explicit permission".
+  The reason is testing latency: `main` is what releases, and a release is how
+  the founder actually exercises the product. Work parked on a branch is work
+  nobody can try, and the feedback that has caught the most defects in this
+  repo has come from the founder using the deployed artifact.
+  - **`main` auto-releases.** `.releaserc.json` + `release.yml` publish a
+    version, images and the chart on every push. There is no staging step
+    between a merge and something a hunter can load. Treat every push as a
+    release, because it is one.
+  - **The gates matter more, not less, now that the branch gate is gone.**
+    Never push a red build. `pnpm build` and `pnpm test` green before every
+    push, no exceptions — the branch used to be the place a mistake could sit
+    harmlessly, and that place no longer exists.
+  - Ship behind a flag, or ship the smaller correct slice, rather than
+    holding work back. But when something known-broken goes out, **say so in
+    the same breath** — the founder testing a release deserves to know what
+    is already known wrong in it, or they waste a morning rediscovering it.
 - **When a test fails, first ask whether the test is wrong.** Three of the
   bugs found during the initial build were real defects the tests caught
   (curvature sign inversion, standardise amplifying float noise, sunTimes
